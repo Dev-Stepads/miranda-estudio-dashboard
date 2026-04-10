@@ -1,0 +1,130 @@
+========================================================
+REGRAS DE CONSOLIDAÇÃO — Dashboard Miranda Studio
+========================================================
+Última atualização: 2026-04-10
+
+Este arquivo define como os dados das diferentes fontes
+são tratados e unificados. Toda regra aqui deve ser
+seguida em todas as transformações e views.
+
+--------------------------------------------------------
+1. PERÍODO
+--------------------------------------------------------
+1.1 Timezone oficial do dashboard: America/Sao_Paulo (BRT/BRST)
+    Todo timestamp é convertido para este tz antes de agrupar por dia.
+
+1.2 Data considerada como "data da venda":
+    - Conta Azul: data de emissão da venda (campo a confirmar em T4)
+    - Nuvemshop: created_at do pedido (data de criação — a confirmar
+      se é melhor usar paid_at quando disponível)
+    - Meta Ads: date_start do insight
+
+    DECISÃO em aberto: usar data de pagamento x data de pedido.
+    Registrar em DECISOES.txt quando decidido.
+
+1.3 Períodos de comparação padrão no dashboard:
+    - hoje
+    - últimos 7 dias
+    - últimos 30 dias
+    - mês atual
+    - mês anterior
+    - custom (date_from, date_to)
+
+--------------------------------------------------------
+2. STATUS QUE ENTRAM NO FATURAMENTO
+--------------------------------------------------------
+2.1 Conta Azul — a confirmar em T4. Regra preliminar:
+    INCLUI: vendas com status "pago" ou equivalente
+    EXCLUI: canceladas, devolvidas
+
+2.2 Nuvemshop — a confirmar em T5. Regra preliminar:
+    INCLUI: orders com payment_status = 'paid'
+    EXCLUI: cancelled, refunded, pending
+
+2.3 Faturamento = soma de gross_revenue do que está incluído
+
+--------------------------------------------------------
+3. CONSOLIDAÇÃO DE PRODUTOS ENTRE FONTES
+--------------------------------------------------------
+3.1 Chave primária de matching:
+    Ordem de prioridade:
+      1. SKU (se existir nas duas fontes)
+      2. Nome canônico (normalizado: lowercase, sem acento, trim)
+      3. Tabela de equivalência manual em /docs/producao/equivalencias_produtos.csv
+         (criar quando necessário)
+
+3.2 Quando duas fontes têm o mesmo SKU com nomes diferentes,
+    o canonical_name segue o nome que apareceu primeiro.
+    Alterações manuais são possíveis via tabela products.
+
+3.3 Produtos que existem só em uma fonte ainda aparecem
+    no ranking consolidado, com revenue da outra fonte = 0.
+
+--------------------------------------------------------
+4. DEMOGRAFIA
+--------------------------------------------------------
+4.1 Gênero:
+    Valores canônicos: 'M', 'F', 'unknown'
+    Fallback: 'unknown' quando a fonte não entrega.
+    NÃO inferir gênero a partir de nome próprio (viés + falso positivo).
+
+4.2 Idade:
+    Calculada a partir de data_nascimento na data da compra.
+    Faixas: 18-24 / 25-34 / 35-44 / 45-54 / 55+
+    Menores de 18 → revisar caso a caso (provavelmente erro de cadastro)
+    Sem data_nascimento → 'unknown'
+
+4.3 Estado (Loja Física via DDD):
+    Fallback apenas quando estado direto não estiver disponível.
+    Tabela de DDD → UF deve viver em /src/etl/ddd_to_uf.ts
+    DDD inválido ou telefone ausente → state = NULL, inferred = false
+
+4.4 Estado (Nuvemshop):
+    Vem direto do shipping_address.province. Sem fallback.
+
+--------------------------------------------------------
+5. TICKET MÉDIO
+--------------------------------------------------------
+ticket_medio = faturamento_liquido / numero_de_pedidos_pagos
+
+Não dividir por itens — é por pedido.
+Calculado por fonte e por período independentemente.
+
+--------------------------------------------------------
+6. VISÃO GERAL — REGRAS ESPECÍFICAS
+--------------------------------------------------------
+6.1 Faturamento total = Loja Física + Nuvemshop
+    Meta Ads NÃO soma. Faturamento atribuído do Meta é um
+    recorte informativo que pode coincidir parcialmente com
+    pedidos da Nuvemshop — double-counting proibido.
+
+6.2 Participação por canal:
+    share_loja_fisica = revenue_loja_fisica / total_revenue
+    share_nuvemshop   = revenue_nuvemshop / total_revenue
+    (soma = 100%)
+
+6.3 Ranking consolidado de produtos:
+    Soma quantity e revenue por canonical_name, independente
+    da fonte. Mantém breakdown por canal.
+
+--------------------------------------------------------
+7. META ADS — REGRAS ESPECÍFICAS
+--------------------------------------------------------
+7.1 ROAS reportado:
+    Usar purchase_roas da API quando disponível.
+    Fallback: purchase_value / spend.
+    Nunca calcular ROAS dividindo por 0 — retornar NULL.
+
+7.2 Atribuição window:
+    Definir oficialmente com o cliente e registrar em DECISOES.txt.
+
+7.3 Criativos:
+    Ranking por ROAS. Em empate, desempate por faturamento absoluto.
+
+--------------------------------------------------------
+8. REPROCESSAMENTO
+--------------------------------------------------------
+A ingestão é incremental mas idempotente.
+Reprocessar um período deve chegar ao mesmo resultado.
+Raw tables são append-only; canônicas usam UPSERT por
+(source, source_id).

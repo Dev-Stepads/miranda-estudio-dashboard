@@ -1,0 +1,64 @@
+========================================================
+DECISÕES — Dashboard Miranda Studio
+========================================================
+
+Este arquivo registra decisões técnicas e de negócio
+que afetam o projeto. É APPEND-ONLY: nunca apague uma
+decisão. Se ela for revertida, adicione uma nova entrada
+marcando como "REVERTIDA" e explique o motivo.
+
+Formato de cada entrada:
+  [YYYY-MM-DD] [CATEGORIA] Título curto
+    Contexto: por que essa decisão foi tomada
+    Decisão:  o que foi decidido
+    Impacto:  o que muda no projeto por causa disso
+
+Categorias possíveis:
+  NEGOCIO | ARQUITETURA | DADOS | INTEGRACAO | UX | QA | SEGURANCA
+
+========================================================
+DECISÕES REGISTRADAS
+========================================================
+
+[2026-04-10] [ARQUITETURA] Stack do projeto
+  Contexto: precisávamos definir hospedagem de backend, banco e frontend
+            para um dashboard que consome 3 APIs externas.
+  Decisão:  GitHub (repo) + Supabase (banco + funções) + Vercel (deploy do dashboard).
+            Contas operacionais: dev@stepads.com.br (Supabase + Vercel).
+  Impacto:  Todo o ETL pode rodar em Supabase Edge Functions ou cron jobs.
+            Dashboard será uma SPA/Next.js hospedada na Vercel.
+
+[2026-04-10] [NEGOCIO] Escopo da Visão Geral
+  Contexto: precisávamos definir o que entra no faturamento consolidado.
+  Decisão:  Visão Geral consolida APENAS Loja Física (Conta Azul) +
+            E-commerce (Nuvemshop). Meta Ads NÃO entra no faturamento
+            consolidado — entra apenas como atribuição na aba própria.
+  Impacto:  Evita double-counting. Faturamento atribuído do Meta Ads
+            é um recorte informativo, não soma ao total do negócio.
+
+[2026-04-10] [DADOS] Estado do cliente por DDD na Loja Física
+  Contexto: Conta Azul pode não trazer estado do cliente direto.
+  Decisão:  Derivar estado pelo DDD do telefone quando não houver campo
+            de endereço preenchido. Documentar regra de fallback em
+            /docs/producao/REGRAS_CONSOLIDACAO.txt.
+  Impacto:  Clientes sem telefone ou com DDD inválido entram como
+            "Desconhecido" na análise geográfica da Loja Física.
+
+[2026-04-10] [PROCESSO] Revezamento via HANDOFF.txt
+  Contexto: projeto será tocado por múltiplas pessoas + Claude em sessões
+            distintas, sem memória compartilhada.
+  Decisão:  Todo push relevante exige atualização de HANDOFF.txt.
+            Antes de qualquer alteração, é obrigatório ler HANDOFF +
+            STATUS_ATUAL + mapeamento da fonte envolvida.
+  Impacto:  Zero perda de contexto entre sessões. Cria pequeno overhead
+            em cada push, mas é intencional.
+
+[2026-04-10] [SEGURANCA] Nunca armazenar credenciais em memória ou em git
+  Contexto: credenciais de login (Conta Azul, Nuvemshop) foram
+            compartilhadas em chat durante o setup.
+  Decisão:  Credenciais ficam apenas em .env.local (gitignored) e em
+            gerenciador de senhas. Usuário deve trocar as senhas
+            compartilhadas em chat. Para as APIs, usar OAuth/tokens,
+            nunca login/senha do painel.
+  Impacto:  .gitignore precisa cobrir .env*. Toda nova integração deve
+            usar variáveis de ambiente.

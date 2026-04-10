@@ -1,0 +1,146 @@
+========================================================
+MODELAGEM DE DADOS — Dashboard Miranda Studio
+========================================================
+Status: RASCUNHO INICIAL
+Última atualização: 2026-04-10
+
+--------------------------------------------------------
+PRINCÍPIO GERAL
+--------------------------------------------------------
+Três fontes → camada canônica → views do dashboard.
+
+Fluxo:
+  [Conta Azul] ──┐
+  [Nuvemshop]  ──┼──▶ tabelas brutas ──▶ tabelas canônicas ──▶ views
+  [Meta Ads]   ──┘
+
+--------------------------------------------------------
+TABELAS BRUTAS (staging)
+--------------------------------------------------------
+raw_contaazul_sales        — raw JSON + colunas extraídas
+raw_contaazul_sale_items
+raw_contaazul_customers
+
+raw_nuvemshop_orders
+raw_nuvemshop_customers
+raw_nuvemshop_abandoned_checkouts
+
+raw_meta_insights_campaign
+raw_meta_insights_adset
+raw_meta_insights_ad
+raw_meta_ads_metadata
+
+Regra: tabelas raw são APPEND-ONLY. Nada é atualizado in-place.
+Cada coleta tem ingested_at. Deduplicação acontece na camada canônica.
+
+--------------------------------------------------------
+TABELAS CANÔNICAS
+--------------------------------------------------------
+
+sales (uma linha por pedido)
+  sale_id              pk
+  source               'conta_azul' | 'nuvemshop'
+  source_sale_id       id original na fonte
+  sale_date            timestamptz
+  gross_revenue        numeric — receita bruta
+  net_revenue          numeric — depois de descontos/estornos
+  status               'paid' | 'cancelled' | 'refunded' | 'pending'
+  customer_id          fk → customers
+  payment_method       text
+  ingested_at          timestamptz
+
+sale_items (uma linha por item do pedido)
+  sale_item_id         pk
+  sale_id              fk → sales
+  product_id           fk → products
+  product_name         text — nome como veio da fonte
+  sku                  text — quando disponível
+  quantity             int
+  unit_price           numeric
+  total_price          numeric
+
+products (catálogo consolidado entre fontes)
+  product_id           pk (gerado internamente)
+  canonical_name       text
+  sku                  text unique when not null
+  source_refs          jsonb — {conta_azul: id, nuvemshop: id}
+  created_at
+
+customers
+  customer_id          pk
+  source               'conta_azul' | 'nuvemshop'
+  source_customer_id
+  name                 text
+  gender               'M' | 'F' | 'unknown'
+  age                  int nullable
+  age_range            '18-24' | '25-34' | '35-44' | '45-54' | '55+' | 'unknown'
+  state                uf (2 chars) nullable
+  city                 text nullable
+  inferred_state_from_ddd boolean — rastreabilidade da regra de fallback
+
+abandoned_checkouts (Nuvemshop)
+  checkout_id
+  created_at
+  total_amount
+  customer_id          fk nullable
+
+meta_ads_insights (daily)
+  date                 date
+  level                'campaign' | 'adset' | 'ad'
+  campaign_id          text
+  campaign_name        text
+  adset_id             text nullable
+  adset_name           text nullable
+  ad_id                text nullable
+  ad_name              text nullable
+  spend                numeric
+  impressions          bigint
+  reach                bigint
+  clicks               bigint
+  purchases            int
+  purchase_value       numeric
+  -- KPIs derivados (CTR, CPC, CPM, ROAS, ticket) podem vir de views
+
+--------------------------------------------------------
+VIEWS PARA O DASHBOARD
+--------------------------------------------------------
+
+v_visao_geral_kpis
+  total_revenue, revenue_loja_fisica, revenue_nuvemshop,
+  share_loja_fisica_pct, share_nuvemshop_pct
+
+v_visao_geral_top_produtos
+  product_id, canonical_name, quantity_total, revenue_total,
+  revenue_loja_fisica, revenue_nuvemshop
+
+v_loja_fisica_kpis
+  revenue, orders_count, avg_ticket
+
+v_loja_fisica_produtos
+v_loja_fisica_demografia_genero
+v_loja_fisica_demografia_idade
+v_loja_fisica_estado
+
+v_nuvemshop_kpis
+v_nuvemshop_produtos
+v_nuvemshop_geografia
+v_nuvemshop_genero
+v_nuvemshop_idade
+v_nuvemshop_abandonados
+
+v_meta_kpis_periodo
+v_meta_ranking_criativos
+v_meta_ranking_campanhas
+v_meta_ranking_conjuntos
+
+Todas as views respeitam um filtro padrão de período
+(date_from, date_to) via parâmetros do frontend.
+
+--------------------------------------------------------
+PONTOS ABERTOS
+--------------------------------------------------------
+- Conta Azul: a granularidade de cliente permite demografia?
+  → depende do T4 (mapeamento)
+- Nuvemshop: carrinho abandonado tem cliente identificado sempre?
+  → depende do T5 (mapeamento)
+- Meta Ads: atribuição window definitiva? (confirmar com cliente)

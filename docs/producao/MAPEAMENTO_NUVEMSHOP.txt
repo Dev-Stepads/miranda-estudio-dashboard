@@ -1,0 +1,101 @@
+========================================================
+MAPEAMENTO TÉCNICO — API Nuvemshop
+========================================================
+Status: NÃO INICIADO
+Responsável: (a atribuir)
+Última atualização: 2026-04-10
+
+--------------------------------------------------------
+OBJETIVO
+--------------------------------------------------------
+Confirmar quais dados a API Nuvemshop entrega para
+alimentar a aba Nuvemshop + parte da Visão Geral.
+
+--------------------------------------------------------
+1. AUTENTICAÇÃO
+--------------------------------------------------------
+Tipo: (OAuth / API Key / Access Token)
+Documentação oficial: https://dev.tiendanube.com/docs/api-reference
+Como obter credenciais: (preencher)
+Store ID necessário: ( ) sim  ( ) não
+Como armazenar: .env.local + Supabase vault
+
+--------------------------------------------------------
+2. ENDPOINTS QUE VAMOS USAR
+--------------------------------------------------------
+
+2.1 Orders (pedidos)
+    Método:     GET
+    URL:        /v1/{store_id}/orders
+    Parâmetros: (created_at_min, created_at_max, status, payment_status, page, per_page)
+    Status considerados no faturamento: (preencher — paid? authorized?)
+    Status excluídos: (cancelled, refunded?)
+    Paginação:  (preencher)
+    Rate limit: (preencher)
+
+2.2 Customers
+    Método:     GET
+    URL:        /v1/{store_id}/customers
+    Retorna:    (preencher)
+
+2.3 Abandoned Checkouts
+    Método:     GET
+    URL:        (preencher)
+    Janela:     últimos 30 dias (regra de negócio)
+    Retorna:    (preencher)
+
+2.4 Products (se necessário para enriquecer ranking)
+    URL:        /v1/{store_id}/products
+
+--------------------------------------------------------
+3. CAMPOS DISPONÍVEIS
+--------------------------------------------------------
+
+3.1 Order
+    - id                : (sim/não)
+    - number            : (sim/não)
+    - created_at        : (sim/não)
+    - total             : (sim/não)
+    - subtotal          : (sim/não) ← usar subtotal ou total?
+    - status            : (sim/não)
+    - payment_status    : (sim/não)
+    - shipping_status   : (sim/não)
+    - products[]        : (sim/não)
+        - product_id
+        - name
+        - sku
+        - quantity
+        - price
+    - customer          : (sim/não)
+    - shipping_address  : (cidade/estado/país)
+
+3.2 Customer
+    - name              : (sim/não)
+    - gender            : (sim/não) ← precisamos
+    - birthdate         : (sim/não) ← precisamos para idade
+    - city              : (sim/não)
+    - province          : (sim/não) ← estado
+    - country           : (sim/não)
+
+3.3 Abandoned Checkout
+    - id                : (sim/não)
+    - created_at        : (sim/não)
+    - total             : (sim/não — valor potencial)
+    - items[]           : (sim/não)
+    - customer          : (sim/não)
+
+--------------------------------------------------------
+4. GAPS IDENTIFICADOS
+--------------------------------------------------------
+(preencher)
+
+--------------------------------------------------------
+5. REGRAS DE NEGÓCIO DESCOBERTAS
+--------------------------------------------------------
+(preencher — ex.: "total inclui frete, usar subtotal para
+faturamento de produto")
+
+--------------------------------------------------------
+6. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+--------------------------------------------------------
+(copiar também para /docs/context/DECISOES.txt)

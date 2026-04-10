@@ -1,0 +1,94 @@
+========================================================
+MAPEAMENTO TÉCNICO — API Conta Azul
+========================================================
+Status: NÃO INICIADO
+Responsável: (a atribuir)
+Última atualização: 2026-04-10
+
+--------------------------------------------------------
+OBJETIVO
+--------------------------------------------------------
+Confirmar quais dados a API Conta Azul entrega para
+alimentar a aba Loja Física + parte da Visão Geral.
+
+--------------------------------------------------------
+1. AUTENTICAÇÃO
+--------------------------------------------------------
+Tipo: OAuth 2.0
+Documentação oficial: (preencher com link)
+Endpoint de autorização: (preencher)
+Endpoint de token: (preencher)
+Scopes necessários: (preencher)
+Duração do access_token: (preencher)
+Refresh token suportado: ( ) sim  ( ) não
+Como armazenar: (Supabase? variável de ambiente? cofre?)
+
+--------------------------------------------------------
+2. ENDPOINTS QUE VAMOS USAR
+--------------------------------------------------------
+
+2.1 Vendas por período
+    Método:     GET
+    URL:        (preencher)
+    Parâmetros: (preencher — data_inicio, data_fim, status, paginação)
+    Retorna:    (preencher — estrutura resumida)
+    Paginação:  (preencher — offset/limit ou cursor)
+    Rate limit: (preencher)
+
+2.2 Itens da venda
+    Método:     GET
+    URL:        (preencher)
+    Parâmetros: (preencher)
+    Retorna:    (preencher)
+
+2.3 Clientes
+    Método:     GET
+    URL:        (preencher)
+    Parâmetros: (preencher)
+    Retorna:    (preencher)
+
+--------------------------------------------------------
+3. CAMPOS DISPONÍVEIS
+--------------------------------------------------------
+
+3.1 Venda
+    - id                : (sim/não)
+    - data              : (sim/não)
+    - valor_total       : (sim/não)
+    - status            : (sim/não — quais valores?)
+    - cliente_id        : (sim/não)
+    - forma_pagamento   : (sim/não)
+
+3.2 Item da venda
+    - produto_id        : (sim/não)
+    - produto_nome      : (sim/não)
+    - sku               : (sim/não) ← CRÍTICO para consolidação
+    - quantidade        : (sim/não)
+    - valor_unitario    : (sim/não)
+    - valor_total_item  : (sim/não)
+
+3.3 Cliente — dados demográficos
+    - nome              : (sim/não)
+    - genero            : (sim/não) ← precisamos para demografia
+    - data_nascimento   : (sim/não) ← precisamos para faixa etária
+    - telefone          : (sim/não) ← precisamos para DDD → estado
+    - endereco          : (sim/não)
+    - estado/UF         : (sim/não)
+
+--------------------------------------------------------
+4. GAPS IDENTIFICADOS
+--------------------------------------------------------
+(preencher após investigação — ex.: "gênero não vem na API,
+precisaremos inferir por nome ou deixar como 'desconhecido'")
+
+--------------------------------------------------------
+5. REGRAS DE NEGÓCIO DESCOBERTAS
+--------------------------------------------------------
+(preencher — ex.: "vendas com status 'cancelada' não entram
+no faturamento; devoluções são um status separado")
+
+--------------------------------------------------------
+6. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+--------------------------------------------------------
+(toda decisão relevante deve também ser copiada para
+/docs/context/DECISOES.txt)

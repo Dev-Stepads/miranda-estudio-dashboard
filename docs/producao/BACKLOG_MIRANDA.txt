@@ -1,0 +1,91 @@
+========================================================
+BACKLOG — Dashboard Miranda Studio
+========================================================
+
+Legenda:
+  [ ] pendente    [~] em andamento    [x] concluído    [!] bloqueado
+
+--------------------------------------------------------
+ETAPA 1 — BASE DO PROJETO
+--------------------------------------------------------
+[x] T1  Criar estrutura do repositório e documentação base
+[x] T2  Definir padrão de branch, commit e handoff
+[x] T3  Criar arquivos de contexto no repositório
+[ ] T1a Criar repositório no GitHub (conta SENHAS)
+[ ] T1b Criar projeto Supabase (dev@stepads.com.br)
+[ ] T1c Criar projeto Vercel (dev@stepads.com.br)
+
+--------------------------------------------------------
+ETAPA 2 — DESCOBERTA TÉCNICA DAS FONTES
+--------------------------------------------------------
+[ ] T4  Mapear tecnicamente a API Conta Azul
+         → preencher /docs/producao/MAPEAMENTO_CONTA_AZUL.txt
+[ ] T5  Mapear tecnicamente a API Nuvemshop
+         → preencher /docs/producao/MAPEAMENTO_NUVEMSHOP.txt
+[ ] T6  Mapear tecnicamente a API Meta Ads
+         → preencher /docs/producao/MAPEAMENTO_META_ADS.txt
+
+--------------------------------------------------------
+ETAPA 3 — INTEGRAÇÃO CONTA AZUL
+--------------------------------------------------------
+[ ] T7  Implementar autenticação OAuth 2.0 Conta Azul
+[ ] T8  Implementar coleta de vendas por período
+[ ] T9  Implementar coleta de itens das vendas
+[ ] T10 Criar transformação de faturamento Loja Física
+[ ] T11 Criar transformação de ranking de produtos Loja Física
+[ ] T12 Criar transformação demográfica (gênero/idade/ticket/DDD)
+
+--------------------------------------------------------
+ETAPA 4 — INTEGRAÇÃO NUVEMSHOP
+--------------------------------------------------------
+[ ] T13 Implementar autenticação Nuvemshop
+[ ] T14 Implementar coleta de pedidos por período
+[ ] T15 Implementar coleta de clientes
+[ ] T16 Implementar coleta de abandoned checkouts (janela 30 dias)
+[ ] T17 Criar transformação de faturamento Nuvemshop
+[ ] T18 Criar transformação de ranking de produtos Nuvemshop
+[ ] T19 Criar transformação geográfica (cidade/estado/região)
+[ ] T20 Criar transformação de gênero por compra
+[ ] T21 Criar transformação de faixa etária (18-24 / 25-34 / 35-44 / 45-54 / 55+)
+[ ] T22 Criar transformação de carrinhos abandonados
+
+--------------------------------------------------------
+ETAPA 5 — INTEGRAÇÃO META ADS
+--------------------------------------------------------
+[ ] T23 Implementar autenticação Meta Ads
+[ ] T24 Implementar coleta de métricas (invest/alcance/impressões/cliques/CTR/CPC/CPM)
+[ ] T25 Implementar coleta de conversão (compras/faturamento atribuído/ROAS/ticket)
+[ ] T26 Criar ranking de criativos/campanhas/conjuntos
+
+--------------------------------------------------------
+ETAPA 6 — CONSOLIDAÇÃO
+--------------------------------------------------------
+[ ] T27 Padronizar schema entre fontes
+         Campos canônicos:
+           source, order_date, product_name, sku,
+           quantity_sold, gross_revenue,
+           customer_gender, customer_age_range, customer_state
+[ ] T28 Definir regras de período (timezone, data pedido x pagamento)
+[ ] T29 Definir regras de consolidação de produtos (SKU prioritário, tabela de equivalência)
+[ ] T30 Criar dataset da Visão Geral
+[ ] T33 Criar camada final de consulta (views/endpoints para o frontend)
+
+--------------------------------------------------------
+ETAPA 7 — DASHBOARD
+--------------------------------------------------------
+[ ] T31 Criar aba Visão Geral (faturamento total / donut canal / ranking consolidado)
+[ ] T32 Criar aba Loja Física (faturamento / produtos / demografia)
+[ ] T33 Criar aba Nuvemshop (faturamento / produtos / geografia / gênero / idade / abandonados)
+[ ] T34 Criar aba Meta Ads (KPIs / ranking criativos)
+[ ] T35 Criar filtros globais (período / canal / categoria / gênero)
+
+--------------------------------------------------------
+ETAPA 8 — QA E HOMOLOGAÇÃO
+--------------------------------------------------------
+[ ] T36 Validar faturamento por fonte (API x dashboard)
+[ ] T37 Validar ranking de produtos
+[ ] T38 Validar demografia (gênero/idade/DDD)
+[ ] T39 Validar geografia Nuvemshop
+[ ] T40 Validar KPIs Meta Ads
+[ ] T41 Validar consolidação Visão Geral
+[ ] T42 Atualizar documentação final (decisões / regras / limitações)

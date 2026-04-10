@@ -1,0 +1,89 @@
+========================================================
+STATUS ATUAL — Dashboard Miranda Studio
+========================================================
+Última atualização: 2026-04-10
+
+--------------------------------------------------------
+ETAPA ATUAL
+--------------------------------------------------------
+Etapa 1 — Base do projeto (EM ANDAMENTO)
+
+--------------------------------------------------------
+INFRAESTRUTURA
+--------------------------------------------------------
+[ ] Repositório GitHub        — NÃO CRIADO
+[ ] Supabase do projeto       — NÃO CRIADO
+[ ] Vercel do projeto         — NÃO CRIADO
+[x] Estrutura de pastas local — CRIADA (2026-04-10)
+[x] Arquivos de documentação  — CRIADOS (2026-04-10)
+
+Links (preencher após criação):
+- GitHub:    (pendente)
+- Supabase:  (pendente)
+- Vercel:    (pendente)
+
+--------------------------------------------------------
+INTEGRAÇÕES — progresso por fonte
+--------------------------------------------------------
+
+[CONTA AZUL]
+  [ ] Mapeamento técnico (T4)
+  [ ] Autenticação OAuth (T7)
+  [ ] Coleta de vendas (T8)
+  [ ] Coleta de itens (T9)
+  [ ] Transformação faturamento (T10)
+  [ ] Transformação produtos (T11)
+  [ ] Transformação demografia (T12)
+
+[NUVEMSHOP]
+  [ ] Mapeamento técnico (T5)
+  [ ] Autenticação (T13)
+  [ ] Coleta de pedidos (T14)
+  [ ] Coleta de clientes (T15)
+  [ ] Coleta de carrinhos abandonados (T16)
+  [ ] Transformação faturamento (T17)
+  [ ] Transformação produtos (T18)
+  [ ] Transformação geografia (T19)
+  [ ] Transformação gênero (T20)
+  [ ] Transformação faixa etária (T21)
+  [ ] Transformação carrinhos abandonados (T22)
+
+[META ADS]
+  [ ] Mapeamento técnico (T6)
+  [ ] Autenticação (T23)
+  [ ] Coleta de métricas (T24)
+  [ ] Transformação KPIs (T25)
+  [ ] Ranking criativos/campanhas (T26)
+
+--------------------------------------------------------
+CONSOLIDAÇÃO E DASHBOARD
+--------------------------------------------------------
+[ ] Padronização de campos (T27)
+[ ] Regras de período (T28)
+[ ] Regras de consolidação de produtos (T29)
+[ ] Dataset Visão Geral (T30)
+[ ] Aba Visão Geral (T31)
+[ ] Aba Loja Física (T32)
+[ ] Aba Nuvemshop (T33)
+[ ] Aba Meta Ads (T34)
+[ ] Filtros globais (T35)
+
+--------------------------------------------------------
+QA
+--------------------------------------------------------
+[ ] Validação Conta Azul (T36)
+[ ] Validação Nuvemshop (T37)
+[ ] Validação Meta Ads (T38)
+[ ] Validação consolidação (T39)
+[ ] Documentação final (T40)
+
+--------------------------------------------------------
+BLOQUEIOS ATIVOS
+--------------------------------------------------------
+Nenhum.
+
+--------------------------------------------------------
+PRÓXIMO MARCO
+--------------------------------------------------------
+Finalizar Etapa 1 (infra + mapeamentos técnicos das 3 APIs)
+antes de começar qualquer implementação de código.

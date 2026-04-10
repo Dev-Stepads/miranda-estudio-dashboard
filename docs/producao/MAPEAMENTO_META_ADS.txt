@@ -1,0 +1,89 @@
+========================================================
+MAPEAMENTO TÉCNICO — API Meta Ads (Marketing API)
+========================================================
+Status: NÃO INICIADO
+Responsável: (a atribuir)
+Última atualização: 2026-04-10
+
+--------------------------------------------------------
+OBJETIVO
+--------------------------------------------------------
+Confirmar quais métricas a Marketing API do Meta entrega
+para alimentar a aba Tráfego Pago.
+
+--------------------------------------------------------
+1. AUTENTICAÇÃO
+--------------------------------------------------------
+Tipo: OAuth 2.0 (Facebook Login for Business)
+App necessário: (criar app no developers.facebook.com)
+Permissões necessárias:
+  - ads_read
+  - ads_management (se formos gerenciar)
+  - business_management
+Token tipo: (Long-lived user token → System user token)
+Ad Account ID: act_XXXXXXXX (preencher)
+Business Manager ID: (preencher)
+
+--------------------------------------------------------
+2. ENDPOINTS QUE VAMOS USAR
+--------------------------------------------------------
+
+2.1 Insights de campanha
+    URL: /v{version}/act_{account_id}/insights
+    Level: campaign | adset | ad (precisamos dos 3)
+    Time range: parâmetro "time_range" ou "date_preset"
+    Breakdowns: (age, gender, region — conforme necessidade)
+
+2.2 Campanhas / Conjuntos / Anúncios (metadata)
+    /act_{account_id}/campaigns
+    /act_{account_id}/adsets
+    /act_{account_id}/ads
+
+2.3 Criativos
+    /act_{account_id}/adcreatives
+    (para pegar thumbnail, nome, tipo do criativo no ranking)
+
+--------------------------------------------------------
+3. MÉTRICAS QUE PRECISAMOS
+--------------------------------------------------------
+
+3.1 Visão geral de mídia
+    - spend                    (investimento)
+    - impressions              (impressões)
+    - reach                    (alcance)
+    - clicks                   (cliques)
+    - ctr                      (click-through rate)
+    - cpc                      (custo por clique)
+    - cpm                      (custo por mil impressões)
+
+3.2 Conversão / atribuição
+    - actions (action_type = 'purchase')      → compras
+    - action_values (action_type = 'purchase') → faturamento atribuído
+    - purchase_roas            → ROAS
+    - ticket médio = action_values / actions (calculado)
+
+3.3 Atribuição window
+    - attribution_setting: (ex.: "7d_click_1d_view" — confirmar com o cliente)
+
+--------------------------------------------------------
+4. GRANULARIDADE NECESSÁRIA
+--------------------------------------------------------
+- Campanha: para visão geral
+- Conjunto: para ranking de segmentação
+- Anúncio/criativo: para ranking de criativos
+
+--------------------------------------------------------
+5. GAPS IDENTIFICADOS
+--------------------------------------------------------
+(preencher — ex.: "Meta não entrega dados demográficos dos
+compradores, apenas do público alcançado")
+
+--------------------------------------------------------
+6. RATE LIMITS E PAGINAÇÃO
+--------------------------------------------------------
+(preencher — Meta tem rate limit por ad account e por app)
+
+--------------------------------------------------------
+7. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+--------------------------------------------------------
+(copiar também para /docs/context/DECISOES.txt)

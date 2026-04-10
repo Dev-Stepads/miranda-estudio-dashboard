@@ -1,0 +1,70 @@
+========================================================
+HANDOFF — Dashboard Miranda Studio
+========================================================
+
+PROJETO: Dashboard Miranda Studio
+DATA: 2026-04-10
+RESPONSÁVEL: Matheus (setup inicial via Claude)
+BRANCH: main (repo ainda não criado no GitHub)
+
+--------------------------------------------------------
+1. O que foi feito neste push
+--------------------------------------------------------
+- Criada estrutura de pastas do projeto (/docs, /src)
+- Criados arquivos base de contexto: HANDOFF, STATUS_ATUAL, DECISOES
+- Criados arquivos de produção: BACKLOG_MIRANDA, MAPEAMENTOS (esqueletos), MODELAGEM_DADOS, REGRAS_CONSOLIDACAO
+- Criado CHECKLIST_VALIDACAO em /docs/qa
+- Criado README.md com instruções de revezamento
+- Nenhum código de integração escrito ainda
+
+--------------------------------------------------------
+2. O que está funcionando
+--------------------------------------------------------
+- Estrutura de documentação pronta para ser usada pela equipe
+- Backlog documentado com todas as tasks T1–T45
+
+--------------------------------------------------------
+3. O que ainda não está pronto
+--------------------------------------------------------
+- Repositório GitHub (precisa ser criado na conta registrada em SENHAS)
+- Supabase do projeto (criar com dev@stepads.com.br)
+- Vercel do projeto (criar com dev@stepads.com.br)
+- Mapeamento técnico das 3 APIs (Conta Azul, Nuvemshop, Meta Ads)
+- Toda a implementação de código
+
+--------------------------------------------------------
+4. Bloqueios encontrados
+--------------------------------------------------------
+- Nenhum no momento. Aguardando criação das contas/infra externa.
+
+--------------------------------------------------------
+5. Próximo passo exato para quem assumir
+--------------------------------------------------------
+Executar a Etapa 1 (Base do projeto) nesta ordem:
+
+  1. Criar repositório no GitHub (conta em SENHAS) e subir este diretório
+  2. Criar projeto Supabase (dev@stepads.com.br) e anotar URL + anon key em .env.local
+  3. Criar projeto Vercel (dev@stepads.com.br) e conectar ao repo GitHub
+  4. Atualizar STATUS_ATUAL.txt com links das 3 contas
+  5. Iniciar T4–T6 (mapeamento técnico das 3 APIs) — preencher os arquivos em /docs/producao/MAPEAMENTO_*.txt
+
+Depois disso, seguir com T7 (autenticação Conta Azul).
+
+--------------------------------------------------------
+6. Arquivos principais alterados
+--------------------------------------------------------
+- Toda a estrutura inicial de /docs e /src (primeira vez)
+- README.md
+
+--------------------------------------------------------
+7. Como testar
+--------------------------------------------------------
+- Ainda não há código executável. Validação nesta fase = ler os docs e confirmar que o backlog está claro.
+
+--------------------------------------------------------
+8. Observações para o Claude
+--------------------------------------------------------
+- Contexto importante: projeto será revezado entre várias pessoas. Ler HANDOFF antes de qualquer alteração é OBRIGATÓRIO.
+- Regra de negócio importante: Visão Geral = Loja Física + Nuvemshop consolidados. NÃO inclui Meta Ads no faturamento (Meta Ads é atribuição, não venda).
+- Cuidado ao alterar: não mexer em /docs/context sem ler o que já está lá. DECISOES.txt é append-only — nunca apagar decisões antigas, apenas marcar como revertidas se necessário.
+- Segurança: credenciais de login do Conta Azul e Nuvemshop foram compartilhadas em chat e devem ser trocadas pelo usuário. Nunca commitar .env.

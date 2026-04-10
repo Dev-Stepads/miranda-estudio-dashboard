@@ -1,0 +1,114 @@
+========================================================
+CHECKLIST DE VALIDAÇÃO — Dashboard Miranda Studio
+========================================================
+
+Este checklist é executado antes de qualquer entrega ao
+cliente. Cada item precisa estar [x] com o nome de quem
+validou e a data.
+
+--------------------------------------------------------
+1. CONTA AZUL (Loja Física)
+--------------------------------------------------------
+[ ] Faturamento de 1 dia específico bate com o painel da Conta Azul
+    Validado por: ____    Data: ____
+[ ] Faturamento de 7 dias bate com o painel
+    Validado por: ____    Data: ____
+[ ] Faturamento de 30 dias bate com o painel
+    Validado por: ____    Data: ____
+[ ] Ranking de produtos bate (top 10 iguais ao painel)
+    Validado por: ____    Data: ____
+[ ] Ticket médio calculado corretamente
+    Validado por: ____    Data: ____
+[ ] Demografia por gênero tem proporção plausível
+    Validado por: ____    Data: ____
+[ ] Faixa etária soma 100% dos clientes com idade conhecida
+    Validado por: ____    Data: ____
+[ ] Estado por DDD: amostra manual de 10 clientes confere
+    Validado por: ____    Data: ____
+
+--------------------------------------------------------
+2. NUVEMSHOP
+--------------------------------------------------------
+[ ] Faturamento de 1 dia bate com o admin da Nuvemshop
+    Validado por: ____    Data: ____
+[ ] Faturamento de 7 dias bate
+    Validado por: ____    Data: ____
+[ ] Faturamento de 30 dias bate
+    Validado por: ____    Data: ____
+[ ] Pedidos cancelados NÃO estão somando no faturamento
+    Validado por: ____    Data: ____
+[ ] Ranking de produtos bate com o relatório nativo
+    Validado por: ____    Data: ____
+[ ] Geografia: estados aparecem corretamente
+    Validado por: ____    Data: ____
+[ ] Gênero tem proporção plausível (sem 100% unknown)
+    Validado por: ____    Data: ____
+[ ] Faixa etária soma 100% dos que têm data de nascimento
+    Validado por: ____    Data: ____
+[ ] Carrinhos abandonados: quantidade e valor batem com o admin
+    Validado por: ____    Data: ____
+[ ] Carrinhos abandonados respeitam janela de 30 dias
+    Validado por: ____    Data: ____
+
+--------------------------------------------------------
+3. META ADS
+--------------------------------------------------------
+[ ] Investimento bate com o Ads Manager (1 dia)
+    Validado por: ____    Data: ____
+[ ] Investimento bate (7 dias)
+    Validado por: ____    Data: ____
+[ ] Investimento bate (30 dias)
+    Validado por: ____    Data: ____
+[ ] Impressões, alcance, cliques batem com o Ads Manager
+    Validado por: ____    Data: ____
+[ ] CTR, CPC, CPM calculados corretamente (spot check)
+    Validado por: ____    Data: ____
+[ ] Compras batem com o Ads Manager
+    Validado por: ____    Data: ____
+[ ] Faturamento atribuído bate
+    Validado por: ____    Data: ____
+[ ] ROAS bate
+    Validado por: ____    Data: ____
+[ ] Atribuição window coincide com a definida em DECISOES
+    Validado por: ____    Data: ____
+[ ] Ranking de criativos corresponde ao top do Ads Manager
+    Validado por: ____    Data: ____
+
+--------------------------------------------------------
+4. VISÃO GERAL (consolidação)
+--------------------------------------------------------
+[ ] Faturamento total = Loja Física + Nuvemshop (soma confere)
+    Validado por: ____    Data: ____
+[ ] Participação por canal soma 100%
+    Validado por: ____    Data: ____
+[ ] Ranking consolidado: produto que aparece nas duas fontes
+    tem sua quantidade somada corretamente
+    Validado por: ____    Data: ____
+[ ] Produto que existe só em uma fonte aparece no ranking
+    Validado por: ____    Data: ____
+[ ] Meta Ads NÃO entra no faturamento consolidado
+    Validado por: ____    Data: ____
+
+--------------------------------------------------------
+5. FILTROS DO DASHBOARD
+--------------------------------------------------------
+[ ] Filtro de período altera todos os cards simultaneamente
+[ ] Filtro "mês anterior" usa o mês calendário, não 30 dias
+[ ] Filtro "hoje" respeita timezone America/Sao_Paulo
+[ ] Sem dados no período: UI mostra estado vazio (não crash)
+
+--------------------------------------------------------
+6. RESPONSIVIDADE E PERFORMANCE
+--------------------------------------------------------
+[ ] Dashboard carrega em < 3s com cache quente
+[ ] Dashboard renderiza corretamente em desktop (1440px)
+[ ] Dashboard renderiza em tablet (768px)
+[ ] Dashboard renderiza em mobile (375px)
+
+--------------------------------------------------------
+7. SEGURANÇA
+--------------------------------------------------------
+[ ] Nenhum token/credencial no bundle do frontend
+[ ] .env.local no .gitignore
+[ ] Supabase RLS habilitado nas tabelas sensíveis
+[ ] Endpoints do dashboard autenticados

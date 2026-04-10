@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Environment — NUNCA commitar credenciais
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# Build
+.next/
+dist/
+build/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cache
+.cache/
+.turbo/
+.vercel/
+
+# Supabase local
+supabase/.branches
+supabase/.temp
