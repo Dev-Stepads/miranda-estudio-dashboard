@@ -6,21 +6,25 @@ STATUS ATUAL — Dashboard Miranda Studio
 --------------------------------------------------------
 ETAPA ATUAL
 --------------------------------------------------------
-Etapa 1 — Base do projeto (EM ANDAMENTO)
+Etapa 1 — Base do projeto (EM ANDAMENTO — 2/3 da infra externa feita)
 
 --------------------------------------------------------
 INFRAESTRUTURA
 --------------------------------------------------------
-[ ] Repositório GitHub        — NÃO CRIADO
-[ ] Supabase do projeto       — NÃO CRIADO
+[x] Repositório GitHub        — CRIADO (2026-04-10)
+[x] Supabase do projeto       — CRIADO (2026-04-10)
 [ ] Vercel do projeto         — NÃO CRIADO
 [x] Estrutura de pastas local — CRIADA (2026-04-10)
 [x] Arquivos de documentação  — CRIADOS (2026-04-10)
+[x] .env.local com chaves Supabase — CRIADO (2026-04-10, não commitado)
 
-Links (preencher após criação):
-- GitHub:    (pendente)
-- Supabase:  (pendente)
+Links:
+- GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard
+- Supabase:  https://pntlbaffrelxymiodelj.supabase.co  (projeto: miranda-dashboard, org: dev@stepads.com.br)
 - Vercel:    (pendente)
+
+Observação: verificar se a região do Supabase é South America (São Paulo)
+em Settings → Infrastructure. Importa para latência dos clientes no Brasil.
 
 --------------------------------------------------------
 INTEGRAÇÕES — progresso por fonte

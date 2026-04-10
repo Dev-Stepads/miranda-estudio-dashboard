@@ -15,6 +15,23 @@ BRANCH: main (repo ainda não criado no GitHub)
 - Criados arquivos de produção: BACKLOG_MIRANDA, MAPEAMENTOS (esqueletos), MODELAGEM_DADOS, REGRAS_CONSOLIDACAO
 - Criado CHECKLIST_VALIDACAO em /docs/qa
 - Criado README.md com instruções de revezamento
+- Repositório GitHub criado e primeiro push realizado (T1a concluída)
+  URL: https://github.com/Dev-Stepads/miranda-estudio-dashboard
+- Projeto Supabase criado (T1b concluída)
+  URL: https://pntlbaffrelxymiodelj.supabase.co
+  Nome: miranda-dashboard
+  Org: dev@stepads.com.br
+- .env.local criado localmente com as 3 chaves do Supabase
+  (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY)
+  — confirmado que não é commitado (.gitignore linha 8)
+- Criado CLAUDE.md na raiz do repo com as regras obrigatórias
+  que qualquer Claude (de qualquer pessoa do revezamento) deve
+  seguir: ler HANDOFF antes de mexer, atualizar os 3 docs vivos
+  (BACKLOG + HANDOFF + STATUS_ATUAL) quando estado mudar — com
+  destaque de que o BACKLOG é o mais esquecido — regras de negócio
+  (Visão Geral sem Meta Ads), DECISOES append-only, etc.
+- BACKLOG_MIRANDA.txt: T1b marcada como [x] (estava desmarcada por
+  esquecimento anterior — corrigido).
 - Nenhum código de integração escrito ainda
 
 --------------------------------------------------------
@@ -22,31 +39,40 @@ BRANCH: main (repo ainda não criado no GitHub)
 --------------------------------------------------------
 - Estrutura de documentação pronta para ser usada pela equipe
 - Backlog documentado com todas as tasks T1–T45
+- Repositório GitHub ativo e conectado ao projeto local
+- Projeto Supabase ativo e credenciais configuradas localmente
+- .gitignore protege .env.local (confirmado: não foi commitado)
 
 --------------------------------------------------------
 3. O que ainda não está pronto
 --------------------------------------------------------
-- Repositório GitHub (precisa ser criado na conta registrada em SENHAS)
-- Supabase do projeto (criar com dev@stepads.com.br)
-- Vercel do projeto (criar com dev@stepads.com.br)
+- Vercel do projeto (T1c — criar com dev@stepads.com.br)
+- Confirmar região do Supabase (deve ser South America / São Paulo)
 - Mapeamento técnico das 3 APIs (Conta Azul, Nuvemshop, Meta Ads)
 - Toda a implementação de código
 
 --------------------------------------------------------
 4. Bloqueios encontrados
 --------------------------------------------------------
-- Nenhum no momento. Aguardando criação das contas/infra externa.
+- Nenhum no momento. Aguardando criação de Supabase e Vercel.
 
 --------------------------------------------------------
 5. Próximo passo exato para quem assumir
 --------------------------------------------------------
-Executar a Etapa 1 (Base do projeto) nesta ordem:
+Completar o restante da Etapa 1 nesta ordem:
 
-  1. Criar repositório no GitHub (conta em SENHAS) e subir este diretório
-  2. Criar projeto Supabase (dev@stepads.com.br) e anotar URL + anon key em .env.local
-  3. Criar projeto Vercel (dev@stepads.com.br) e conectar ao repo GitHub
-  4. Atualizar STATUS_ATUAL.txt com links das 3 contas
-  5. Iniciar T4–T6 (mapeamento técnico das 3 APIs) — preencher os arquivos em /docs/producao/MAPEAMENTO_*.txt
+  1. T1c — Criar projeto Vercel (dev@stepads.com.br)
+     - importar o repo Dev-Stepads/miranda-estudio-dashboard
+     - adicionar as 3 env vars do Supabase em Environment Variables:
+         SUPABASE_URL=https://pntlbaffrelxymiodelj.supabase.co
+         SUPABASE_ANON_KEY=(copiar do .env.local local)
+         SUPABASE_SERVICE_ROLE_KEY=(copiar do .env.local local)
+  2. Verificar região do Supabase (Settings → Infrastructure).
+     Deve ser South America (São Paulo). Se não for, avaliar recriar
+     antes de popular o banco.
+  3. Atualizar STATUS_ATUAL.txt com URL da Vercel quando pronta.
+  4. Iniciar T4–T6 (mapeamento técnico das 3 APIs) — preencher os arquivos
+     em /docs/producao/MAPEAMENTO_*.txt
 
 Depois disso, seguir com T7 (autenticação Conta Azul).
 

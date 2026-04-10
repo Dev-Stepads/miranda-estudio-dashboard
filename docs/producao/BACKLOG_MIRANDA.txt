@@ -11,8 +11,14 @@ ETAPA 1 — BASE DO PROJETO
 [x] T1  Criar estrutura do repositório e documentação base
 [x] T2  Definir padrão de branch, commit e handoff
 [x] T3  Criar arquivos de contexto no repositório
-[ ] T1a Criar repositório no GitHub (conta SENHAS)
-[ ] T1b Criar projeto Supabase (dev@stepads.com.br)
+[x] T1a Criar repositório no GitHub (conta Dev-Stepads) — 2026-04-10
+        https://github.com/Dev-Stepads/miranda-estudio-dashboard
+[x] T1b Criar projeto Supabase (dev@stepads.com.br) — 2026-04-10
+        https://pntlbaffrelxymiodelj.supabase.co
+        projeto: miranda-dashboard
+        chaves copiadas para .env.local (SUPABASE_URL, SUPABASE_ANON_KEY,
+        SUPABASE_SERVICE_ROLE_KEY). Verificar região em Settings →
+        Infrastructure (deve ser South America / São Paulo).
 [ ] T1c Criar projeto Vercel (dev@stepads.com.br)
 
 --------------------------------------------------------
