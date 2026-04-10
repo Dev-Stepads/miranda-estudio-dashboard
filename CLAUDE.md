@@ -89,7 +89,50 @@ URLs específicas e estado atual ficam em `STATUS_ATUAL.txt` (fonte da verdade),
 
 ---
 
-## 6. O que NÃO fazer
+## 6. Setup inicial em máquina nova
+
+Pra uma pessoa do revezamento começar a trabalhar no projeto pela primeira vez:
+
+1. **Clonar o repo**
+   ```
+   git clone https://github.com/Dev-Stepads/miranda-estudio-dashboard.git
+   cd miranda-estudio-dashboard
+   ```
+
+2. **Criar o `.env.local` a partir do template**
+   ```
+   cp .env.example .env.local
+   ```
+   O arquivo `.env.local` está no `.gitignore` — ele só existe na máquina local, nunca vai pro repo.
+
+3. **Preencher as credenciais do `.env.local`**
+   Todas as credenciais do projeto ficam no cofre de senhas da Stepads (1Password / Bitwarden — confirmar com o Matheus qual está em uso), no item:
+   > **"Miranda Dashboard — .env.local"**
+
+   Copiar o conteúdo do item e colar direto no `.env.local`. **Não logar no Supabase só pra pegar chave** — o cofre é a fonte de verdade e está sempre atualizado (em caso de rotação de chaves, quem rotaciona atualiza o cofre e avisa a equipe).
+
+   Se o item ainda não existir no cofre, pedir pro Matheus criar antes de começar.
+
+4. **Ler o contexto atual do projeto** (obrigatório — ver regra 2.1)
+   - `docs/context/HANDOFF.txt`
+   - `docs/context/STATUS_ATUAL.txt`
+   - `docs/context/DECISOES.txt`
+   - `docs/producao/BACKLOG_MIRANDA.txt`
+
+5. **Quando houver código executável**, rodar a stack local seguindo o README.
+
+### Rotação de credenciais
+Quando for necessário rotacionar qualquer chave (Supabase, Conta Azul, Nuvemshop, Meta Ads):
+1. Rotacionar no painel do serviço.
+2. Atualizar o item no cofre de senhas.
+3. Avisar a equipe para cada pessoa atualizar seu `.env.local` local.
+4. Só depois, revogar a chave antiga.
+
+Nunca colar chaves em chat, email, Slack, Discord ou qualquer canal não-cofre. Se acontecer, rotacionar na hora.
+
+---
+
+## 7. O que NÃO fazer
 
 - Não criar arquivos de documentação novos em `docs/` sem necessidade clara. O conjunto atual é suficiente.
 - Não refatorar estrutura de pastas sem alinhar via `DECISOES.txt`.

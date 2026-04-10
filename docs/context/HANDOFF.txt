@@ -32,6 +32,13 @@ BRANCH: main (repo ainda não criado no GitHub)
   (Visão Geral sem Meta Ads), DECISOES append-only, etc.
 - BACKLOG_MIRANDA.txt: T1b marcada como [x] (estava desmarcada por
   esquecimento anterior — corrigido).
+- CLAUDE.md ganhou a seção 6 "Setup inicial em máquina nova":
+  instruções para quem chega no projeto preencher o .env.local a
+  partir do cofre de senhas da Stepads (item "Miranda Dashboard —
+  .env.local") em vez de logar no Supabase. Também documenta o
+  fluxo de rotação de credenciais.
+  AÇÃO PENDENTE DO MATHEUS: criar esse item no cofre (1Password/
+  Bitwarden) antes da equipe começar a trabalhar à tarde.
 - Nenhum código de integração escrito ainda
 
 --------------------------------------------------------
@@ -59,7 +66,14 @@ BRANCH: main (repo ainda não criado no GitHub)
 --------------------------------------------------------
 5. Próximo passo exato para quem assumir
 --------------------------------------------------------
-Completar o restante da Etapa 1 nesta ordem:
+ANTES DE COMEÇAR (setup por pessoa, ver CLAUDE.md seção 6):
+  - git pull
+  - cp .env.example .env.local
+  - Pegar as credenciais no cofre Stepads, item "Miranda Dashboard
+    — .env.local", e colar no .env.local local.
+  - Se o item ainda não existir no cofre, pedir pro Matheus criar.
+
+Depois, completar o restante da Etapa 1 nesta ordem:
 
   1. T1c — Criar projeto Vercel (dev@stepads.com.br)
      - importar o repo Dev-Stepads/miranda-estudio-dashboard
