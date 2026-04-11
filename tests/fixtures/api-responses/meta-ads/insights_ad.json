@@ -1,0 +1,85 @@
+{
+  "_note": "Fixture sintético — GET https://graph.facebook.com/v25.0/act_0000000000/insights?level=ad&date_preset=last_7d&fields=...",
+  "_reference": "docs/producao/MAPEAMENTO_META_ADS.txt §4.2, §5.1-5.3",
+  "data": [
+    {
+      "account_id": "0000000000",
+      "account_name": "Miranda Estúdio (fake)",
+      "campaign_id": "23847562341",
+      "campaign_name": "Coleção Outono 2026",
+      "adset_id": "23847562342",
+      "adset_name": "Feminino 25-44 SP",
+      "ad_id": "23847562343",
+      "ad_name": "Vídeo Coleção 15s",
+      "date_start": "2026-04-10",
+      "date_stop": "2026-04-10",
+      "spend": "80.00",
+      "impressions": "2500",
+      "reach": "2000",
+      "frequency": "1.250000",
+      "clicks": "40",
+      "inline_link_clicks": "33",
+      "ctr": "1.600000",
+      "cpc": "2.000000",
+      "cpm": "32.000000",
+      "actions": [
+        { "action_type": "link_click", "value": "33" },
+        { "action_type": "video_view", "value": "850" },
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "2" },
+        { "action_type": "purchase", "value": "2" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "360.00" },
+        { "action_type": "purchase", "value": "360.00" }
+      ],
+      "purchase_roas": [
+        { "action_type": "omni_purchase", "value": "4.500000" }
+      ],
+      "video_play_actions": [
+        { "action_type": "video_view", "value": "850" }
+      ],
+      "video_p100_watched_actions": [
+        { "action_type": "video_view", "value": "230" }
+      ]
+    },
+    {
+      "account_id": "0000000000",
+      "account_name": "Miranda Estúdio (fake)",
+      "campaign_id": "23847562341",
+      "campaign_name": "Coleção Outono 2026",
+      "adset_id": "23847562344",
+      "adset_name": "Feminino 18-34 Nacional",
+      "ad_id": "23847562345",
+      "ad_name": "Carrossel 5 peças",
+      "date_start": "2026-04-10",
+      "date_stop": "2026-04-10",
+      "spend": "70.00",
+      "impressions": "2000",
+      "reach": "1700",
+      "frequency": "1.176471",
+      "clicks": "35",
+      "inline_link_clicks": "29",
+      "ctr": "1.750000",
+      "cpc": "2.000000",
+      "cpm": "35.000000",
+      "actions": [
+        { "action_type": "link_click", "value": "29" },
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "1" },
+        { "action_type": "purchase", "value": "1" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "180.00" },
+        { "action_type": "purchase", "value": "180.00" }
+      ],
+      "purchase_roas": [
+        { "action_type": "omni_purchase", "value": "2.571429" }
+      ]
+    }
+  ],
+  "paging": {
+    "cursors": {
+      "before": "MAZDZD",
+      "after": "MjQZD"
+    }
+  }
+}

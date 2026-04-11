@@ -1,0 +1,75 @@
+{
+  "_note": "Fixture sintético — GET https://graph.facebook.com/v25.0/act_0000000000/insights?level=campaign&date_preset=last_7d&fields=account_id,account_name,campaign_id,campaign_name,date_start,date_stop,spend,impressions,reach,frequency,clicks,inline_link_clicks,ctr,cpc,cpm,actions,action_values,purchase_roas",
+  "_reference": "docs/producao/MAPEAMENTO_META_ADS.txt §4.2, §5.1-5.3",
+  "_attribution": "default: 7d_click + 1d_view (7d_view e 28d_view foram removidos em 2026-01-12)",
+  "data": [
+    {
+      "account_id": "0000000000",
+      "account_name": "Miranda Estúdio (fake)",
+      "campaign_id": "23847562341",
+      "campaign_name": "Coleção Outono 2026",
+      "date_start": "2026-04-10",
+      "date_stop": "2026-04-10",
+      "spend": "150.00",
+      "impressions": "4500",
+      "reach": "3700",
+      "frequency": "1.216216",
+      "clicks": "75",
+      "inline_link_clicks": "62",
+      "ctr": "1.666667",
+      "cpc": "2.000000",
+      "cpm": "33.333333",
+      "actions": [
+        { "action_type": "link_click", "value": "62" },
+        { "action_type": "offsite_conversion.fb_pixel_view_content", "value": "48" },
+        { "action_type": "offsite_conversion.fb_pixel_add_to_cart", "value": "9" },
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "3" },
+        { "action_type": "purchase", "value": "3" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "540.00" },
+        { "action_type": "purchase", "value": "540.00" }
+      ],
+      "purchase_roas": [
+        { "action_type": "omni_purchase", "value": "3.600000" }
+      ]
+    },
+    {
+      "account_id": "0000000000",
+      "account_name": "Miranda Estúdio (fake)",
+      "campaign_id": "23847562341",
+      "campaign_name": "Coleção Outono 2026",
+      "date_start": "2026-04-09",
+      "date_stop": "2026-04-09",
+      "spend": "135.00",
+      "impressions": "4100",
+      "reach": "3400",
+      "frequency": "1.205882",
+      "clicks": "68",
+      "inline_link_clicks": "55",
+      "ctr": "1.658537",
+      "cpc": "1.985294",
+      "cpm": "32.926829",
+      "actions": [
+        { "action_type": "link_click", "value": "55" },
+        { "action_type": "offsite_conversion.fb_pixel_view_content", "value": "41" },
+        { "action_type": "offsite_conversion.fb_pixel_add_to_cart", "value": "6" },
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "2" },
+        { "action_type": "purchase", "value": "2" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "350.00" },
+        { "action_type": "purchase", "value": "350.00" }
+      ],
+      "purchase_roas": [
+        { "action_type": "omni_purchase", "value": "2.592593" }
+      ]
+    }
+  ],
+  "paging": {
+    "cursors": {
+      "before": "MAZDZD",
+      "after": "MjQZD"
+    }
+  }
+}

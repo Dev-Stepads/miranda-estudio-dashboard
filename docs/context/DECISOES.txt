@@ -275,3 +275,98 @@ DECISÕES REGISTRADAS
             mas obriga rotina de revisão. Alternativa seria pinar em
             envvar para trocar sem deploy, mas por simplicidade,
             fica hardcoded com comentário indicando data de revisão.
+
+[2026-04-11] [DADOS] Convenções do schema inicial do Supabase
+  Contexto: primeira migration cria as tabelas raw_* (staging) e
+            canônicas (sales, sale_items, products, customers,
+            abandoned_checkouts, meta_ads_insights). Várias escolhas
+            de tipo e convenção afetam tudo que vem depois.
+  Decisão:  1) PKs são bigserial (bigint auto-incrementado), NÃO
+               uuid. É mais denso, mais rápido pra joins, e o
+               workload não precisa de IDs imprevisíveis publicamente.
+               IDs de fonte externa (source_sale_id etc.) ficam em
+               coluna separada tipo text.
+            2) Enums são text + CHECK constraint, NÃO tipo ENUM
+               nativo do PG. Motivo: adicionar valor num ENUM nativo
+               exige ALTER TYPE, enquanto CHECK é alterado em uma
+               migration comum. As APIs que consumimos podem
+               introduzir status novo a qualquer momento.
+            3) Raw tables guardam o payload completo da API em uma
+               coluna jsonb + algumas colunas pulled-out (source_id,
+               date) pra indexar. Append-only. Isso permite reprocessar
+               o canônico a partir do histórico sem precisar rechamar
+               as APIs.
+            4) Todos os timestamps são timestamptz (UTC on disk).
+               Conversão pra America/Sao_Paulo acontece na view ou
+               aplicação. Datas puras (Meta insights diários) usam date.
+            5) Valores monetários são numeric(14,2). Suficiente pra
+               999 bi com centavo — overkill, mas sem custo.
+            6) RLS habilitado em TODAS as tabelas desde o início,
+               sem policies. Resultado: anon/authenticated são negados
+               por padrão; ETL usa service_role que tem bypass. Quando
+               o frontend começar a ler dados, policies de leitura
+               entram em views dedicadas, nunca nas tabelas raw.
+            7) SKU em products é único só quando não-nulo (partial
+               unique index). Produtos sem SKU podem coexistir, o
+               que é comum no catálogo da Miranda.
+            8) meta_ads_insights tem unique (date, level, campaign_id,
+               coalesce(adset_id,''), coalesce(ad_id,'')) — truque
+               pra unique com colunas nullable.
+  Impacto:  Define o "jeito Miranda" de modelar. Qualquer tabela
+            nova deve seguir esse padrão (RLS on, timestamptz, bigserial,
+            numeric pra dinheiro, CHECK pra enum). Migrations futuras
+            podem referenciar esta decisão em vez de reargumentar.
+
+[2026-04-11] [DADOS] Views do dashboard — granularidade e convenções
+  Contexto: precisávamos decidir o shape das 14 views que alimentam
+            as 4 abas do dashboard. Duas opções principais: views
+            single-row com KPIs agregados (uma view por card) ou
+            views granulares (diário/por entidade) com frontend
+            agregando. Também: como lidar com filtro de período,
+            timezone e segurança.
+  Decisão:  1) GRANULARIDADE DIÁRIA OU POR ENTIDADE.
+               Todas as views retornam linhas granulares (por dia,
+               por produto, por estado, por gênero, etc.), NUNCA
+               single-row KPIs. Razão: PostgreSQL views não aceitam
+               parâmetros — se a view agregasse "total do período",
+               o período teria que ser hardcoded ou virar function.
+               Com granular + WHERE no frontend, o mesmo dataset
+               serve "hoje", "últimos 7d", "mês atual" etc. PostgREST
+               (camada Supabase) faz o pushdown automático.
+            2) KPIs SINGLE-VALUE SÃO CALCULADOS NO FRONTEND.
+               total_revenue, avg_ticket, share_canal_pct, ROAS
+               consolidado, etc., são derivados das agregações
+               diárias via SUM/AVG no client. Menos views, mais
+               flexibilidade de filtro.
+            3) TIMEZONE APLICADO NA VIEW.
+               `(sale_date at time zone 'America/Sao_Paulo')::date`
+               transforma timestamptz em date no fuso correto. O
+               frontend consome só `day date` e nunca precisa se
+               preocupar com conversão.
+            4) FILTRO DE REVENUE = status='paid' APENAS.
+               'cancelled', 'refunded', 'pending' ficam de fora.
+               'partially_paid' da Nuvemshop já é mapeado pra 'paid'
+               na canônica (ver REGRAS §2.2). Se o representante
+               definir diferente, o filtro muda SÓ nas views — ETL
+               e schema ficam iguais.
+            5) META ADS: apenas level='campaign' no v_meta_campanha_daily.
+               Adset e ad têm views de ranking próprias. Misturar níveis
+               causaria double-counting (adset já soma em campaign).
+            6) VISÃO GERAL NÃO INCLUI META.
+               v_visao_geral_* só consulta `sales` (Loja Física +
+               Nuvemshop). Meta Ads tem views próprias na aba dela.
+               Reforça a decisão de 2026-04-10 sobre escopo da
+               Visão Geral.
+            7) SEGURANÇA POSTERGADA.
+               Views são criadas sem policies de RLS. O service_role
+               tem bypass e é o único que consulta por enquanto.
+               Quando o frontend começar a consumir via anon/
+               authenticated, avaliar: (a) expor views diretamente
+               (dados agregados não são PII, pode ser aceitável) ou
+               (b) criar policies explícitas. Decisão fica pra quando
+               o frontend existir.
+  Impacto:  14 views criadas em 20260411130000_dashboard_views.sql.
+            Frontend fica simples: seleciona view, aplica WHERE de
+            período, agrega com SUM/AVG conforme o card. Adicionar
+            uma nova aba = nova view + novo WHERE clause, sem mexer
+            em schema nem no ETL.

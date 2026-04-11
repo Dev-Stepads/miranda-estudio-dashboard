@@ -3,13 +3,87 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-10
+DATA: 2026-04-11
 RESPONSÁVEL: Matheus (setup inicial via Claude)
 BRANCH: main
 
 --------------------------------------------------------
 1. O que foi feito neste push
 --------------------------------------------------------
+- T30 + T33 (primeira ocorrência) CONCLUÍDAS: 14 views do dashboard
+  criadas em supabase/migrations/20260411130000_dashboard_views.sql.
+  * Visão Geral (2): v_visao_geral_daily, v_visao_geral_top_produtos
+  * Loja Física (3): v_loja_fisica_daily, v_loja_fisica_produtos,
+    v_loja_fisica_estado
+  * Nuvemshop (5): v_nuvemshop_daily, v_nuvemshop_produtos,
+    v_nuvemshop_geografia, v_nuvemshop_genero, v_nuvemshop_idade,
+    v_nuvemshop_abandonados
+  * Meta Ads (4): v_meta_campanha_daily, v_meta_ranking_campanhas,
+    v_meta_ranking_conjuntos, v_meta_ranking_criativos
+  Convenções (ver DECISOES.txt 2026-04-11 — Views do dashboard):
+    - Granularidade DIÁRIA ou por entidade. Single-row KPIs
+      ficam a cargo do frontend (SUM/AVG com WHERE de período).
+    - Timezone America/Sao_Paulo aplicado na view via
+      `(sale_date at time zone 'America/Sao_Paulo')::date`.
+    - Filtro de revenue = status='paid' apenas. partially_paid
+      da Nuvemshop já é mapeado pra 'paid' no canônico.
+    - Visão Geral NÃO inclui Meta Ads (reforça decisão 2026-04-10).
+    - Meta Ads: v_meta_campanha_daily só usa level='campaign' pra
+      evitar double-counting (adset/ad somariam em cima do total).
+    - Segurança postergada: views sem policies, só service_role
+      consulta por enquanto. Revisitar quando o frontend existir.
+  Validações sugeridas na migration (comentadas no fim do arquivo).
+  Migration ainda precisa ser aplicada no Supabase remoto.
+
+- SEEDS e FIXTURES criados para trabalho offline:
+  * supabase/seed.sql — dev seed destrutivo (TRUNCATE RESTART
+    IDENTITY CASCADE) com 10 produtos, 12 clientes, 20 vendas
+    (12 CA + 8 NS), 35 sale_items, 5 abandoned_checkouts, 35
+    meta_ads_insights (1 campanha × 2 adsets × 2 ads × 7 dias).
+    Nicho fictício: boutique de moda/acessórios. Datas relativas
+    a now() — seed continua "fresco" conforme o tempo passa.
+    Aplicar via SQL Editor do Supabase ou `supabase db reset`.
+  * tests/fixtures/api-responses/ — 11 arquivos JSON imitando
+    respostas reais das 3 APIs (shapes baseados nos MAPEAMENTO
+    §5). Usáveis por msw/nock nos testes dos HTTP clients:
+      conta-azul/    sales_list, sale_detail, customer_detail
+      nuvemshop/     orders_list, order_detail, customer_detail,
+                     abandoned_checkout, product_detail
+      meta-ads/      insights_campaign, insights_adset, insights_ad
+    IDs e nomes são consistentes com o seed.sql — a mesma
+    camiseta aparece nos dois, facilita rastreio raw → canônico.
+
+- T27 CONCLUÍDA: schema inicial do Supabase criado em
+  supabase/migrations/20260411120000_initial_schema.sql.
+  - 10 tabelas raw_* (staging, append-only) cobrindo Conta Azul,
+    Nuvemshop e Meta Ads. Padrão: id bigserial + source_id +
+    payload jsonb + ingested_at.
+  - 6 tabelas canônicas: products, customers, sales, sale_items,
+    abandoned_checkouts, meta_ads_insights. FKs entre elas,
+    CHECK constraints pros enums (status, gender, age_range, level),
+    unique (source, source_id) pra idempotência de UPSERT.
+  - RLS habilitado em TODAS as 16 tabelas, sem policies
+    (default deny pra anon/authenticated). ETL vai rodar com
+    service_role que tem bypass.
+  - Índices pras queries previstas (sales por data, meta_ads por
+    dia/nível, sale_items por sale_id/sku).
+  - Unique index no meta_ads_insights usa coalesce pra lidar com
+    adset_id/ad_id nullable (truque necessário pq PG trata null
+    como "diferente de null" em unique constraint).
+  - supabase/README.md criado com instruções de aplicar via CLI
+    ou SQL Editor.
+  - 8 convenções de modelagem registradas em DECISOES.txt
+    (2026-04-11 — Convenções do schema inicial). Qualquer migration
+    nova deve seguir o mesmo padrão.
+
+- CONTEXTO DA SESSÃO: cliente informou que as autenticações das 3
+  fontes (Conta Azul, Nuvemshop, Meta Ads) vão demorar pra chegar.
+  Decidido adiantar tudo que NÃO depende de credencial real:
+  começar pelo schema, depois seeds/fixtures, depois types/clients/
+  auth handlers (testados com mocks), depois ETL de consolidação,
+  depois views, depois frontend com mock. Ordem validada com o
+  usuário. Ver próximo passo em §5.
+
 - T1c CONCLUÍDA: projeto Vercel criado e vinculado ao repositório
   Dev-Stepads/miranda-estudio-dashboard.
   URL de produção: https://miranda-estudio-dashboard.vercel.app
@@ -199,7 +273,43 @@ ANTES DE COMEÇAR (setup por pessoa, ver CLAUDE.md seção 6):
     — .env.local", e colar no .env.local local.
   - Se o item ainda não existir no cofre, pedir pro Matheus criar.
 
-PRÓXIMO PASSO IMEDIATO — Consolidação pós-descoberta
+PRÓXIMO PASSO IMEDIATO — Aplicar migration + continuar trabalho offline
+
+  CONTEXTO: cliente vai demorar pra liberar credenciais das 3 APIs.
+  Estratégia atual é adiantar tudo que não depende de credencial real,
+  na ordem: schema → seeds → types → clients/auth → ETL → views →
+  frontend. O schema (T27) já está pronto em disco, falta aplicar.
+
+  1. [MATHEUS] Aplicar a migration de views no Supabase remoto:
+       SQL Editor do painel → colar supabase/migrations/
+       20260411130000_dashboard_views.sql → Run.
+       É NÃO-destrutivo (só CREATE VIEW) — seguro.
+       Validar depois rodando as queries comentadas no fim da
+       migration. Primeiro teste crítico:
+         SELECT source, sum(gross_revenue)
+         FROM v_visao_geral_daily GROUP BY source;
+       Esperado: conta_azul ~2149.40, nuvemshop ~1549.50.
+
+  2. PRÓXIMO PASSO DE CÓDIGO: decidir entre Caminho A (scaffolding
+     Next.js completo) ou Caminho B (só types + API clients).
+     Discussão e trade-offs no último handoff com o Matheus em
+     2026-04-11. Contexto: Supabase agora tem schema + dados + views
+     prontos, então scaffolding do frontend passa a ser o maior
+     bloqueio pra ver valor real.
+
+  3. GATES PENDENTES (mesmos de antes): aprovação do escopo reduzido
+     da Loja Física, checkout NS pede gênero?, custom field birthday,
+     partially_paid no faturamento, attribution window Meta.
+
+  4. GATES PENDENTES COM O REPRESENTANTE (não bloqueiam o trabalho
+     offline, mas precisam ser resolvidos antes da ETAPA 8/QA):
+     - aba Loja Física sem gênero/idade (aprovação)
+     - checkout Nuvemshop pede gênero?
+     - custom field de birthday na Nuvemshop?
+     - partially_paid entra no faturamento?
+     - attribution window do Meta Ads
+
+PRÓXIMO PASSO HISTÓRICO — Consolidação pós-descoberta (pré-schema)
 
   ETAPA 2 (Descoberta técnica) está CONCLUÍDA. T4, T5, T6 fechadas.
   Todos os 3 mapeamentos têm visão clara dos endpoints, campos,

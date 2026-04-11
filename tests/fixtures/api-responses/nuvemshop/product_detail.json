@@ -1,0 +1,78 @@
+{
+  "_note": "Fixture sintético — GET https://api.nuvemshop.com.br/2025-03/0000000/products/70001",
+  "_reference": "docs/producao/MAPEAMENTO_NUVEMSHOP.txt §4.6 e §5.6",
+  "_sku_warning": "SKU vive em variants[], não no produto. Produto com 3 tamanhos = 3 SKUs distintos.",
+  "id": 70001,
+  "name": {
+    "pt": "Camiseta Básica Branca",
+    "en": "Basic White T-Shirt"
+  },
+  "description": {
+    "pt": "<p>Camiseta 100% algodão, modelagem básica unissex.</p>",
+    "en": "<p>100% cotton basic unisex t-shirt.</p>"
+  },
+  "handle": {
+    "pt": "camiseta-basica-branca",
+    "en": "basic-white-t-shirt"
+  },
+  "brand": "Miranda",
+  "categories": [501, 502],
+  "tags": "camiseta,basica,branca,algodao",
+  "attributes": [
+    { "pt": "Tamanho" },
+    { "pt": "Cor" }
+  ],
+  "variants": [
+    {
+      "id": 70101,
+      "product_id": 70001,
+      "price": "49.90",
+      "promotional_price": null,
+      "cost": "18.50",
+      "stock": 42,
+      "weight": "0.180",
+      "width": "22.00",
+      "height": "2.00",
+      "depth": "28.00",
+      "sku": "CAMISETA-BR-P",
+      "barcode": "7890000010015",
+      "values": [{ "pt": "P" }, { "pt": "Branca" }]
+    },
+    {
+      "id": 70102,
+      "product_id": 70001,
+      "price": "49.90",
+      "promotional_price": null,
+      "cost": "18.50",
+      "stock": 37,
+      "weight": "0.200",
+      "width": "24.00",
+      "height": "2.00",
+      "depth": "30.00",
+      "sku": "CAMISETA-BR-M",
+      "barcode": "7890000010022",
+      "values": [{ "pt": "M" }, { "pt": "Branca" }]
+    }
+  ],
+  "images": [
+    {
+      "id": 90001,
+      "product_id": 70001,
+      "src": "https://fake-cdn.example.com/products/70001-front.jpg",
+      "position": 1,
+      "alt": ["Camiseta Básica Branca — frente"]
+    }
+  ],
+  "published": true,
+  "free_shipping": false,
+  "requires_shipping": true,
+  "video_url": null,
+  "seo_title": {
+    "pt": "Camiseta Básica Branca | Miranda Estúdio"
+  },
+  "seo_description": {
+    "pt": "Camiseta 100% algodão nos tamanhos P, M e G."
+  },
+  "created_at": "2025-09-14T11:22:30-0300",
+  "updated_at": "2026-04-01T08:15:00-0300"
+}

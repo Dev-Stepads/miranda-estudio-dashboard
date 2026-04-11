@@ -121,15 +121,40 @@ ETAPA 5 — INTEGRAÇÃO META ADS
 --------------------------------------------------------
 ETAPA 6 — CONSOLIDAÇÃO
 --------------------------------------------------------
-[ ] T27 Padronizar schema entre fontes
-         Campos canônicos:
-           source, order_date, product_name, sku,
-           quantity_sold, gross_revenue,
-           customer_gender, customer_age_range, customer_state
+[x] T27 Padronizar schema entre fontes — 2026-04-11
+         → supabase/migrations/20260411120000_initial_schema.sql
+           Criadas 10 tabelas raw (staging, append-only) + 6 canônicas
+           (products, customers, sales, sale_items, abandoned_checkouts,
+           meta_ads_insights). RLS habilitado em todas, CHECK constraints
+           pros enums, índices pras consultas comuns. Convenções
+           registradas em DECISOES.txt (2026-04-11 — Convenções do
+           schema inicial do Supabase).
+           Campos canônicos finais:
+             source, sale_date, product_name, sku,
+             quantity, unit_price, total_price, gross_revenue,
+             net_revenue, status, customer_gender, customer_age_range,
+             customer_state, customer_city
+           Ainda pendente: aplicar a migration no Supabase remoto
+           (CLI `supabase db push` ou SQL Editor). Ver supabase/README.md.
 [ ] T28 Definir regras de período (timezone, data pedido x pagamento)
+         ↗ Parcialmente codificado: views aplicam TZ America/Sao_Paulo
+           via AT TIME ZONE (2026-04-11). Falta implementar no ETL
+           quando este existir.
 [ ] T29 Definir regras de consolidação de produtos (SKU prioritário, tabela de equivalência)
-[ ] T30 Criar dataset da Visão Geral
-[ ] T33 Criar camada final de consulta (views/endpoints para o frontend)
+[x] T30 Criar dataset da Visão Geral — 2026-04-11
+         → supabase/migrations/20260411130000_dashboard_views.sql
+           Views v_visao_geral_daily e v_visao_geral_top_produtos criadas
+           e validadas contra o seed. Frontend agrega totais/shares a
+           partir da granularidade diária. Decisão completa em
+           DECISOES.txt (2026-04-11 — Views do dashboard).
+[x] T33 Criar camada final de consulta (views/endpoints para o frontend) — 2026-04-11
+         → supabase/migrations/20260411130000_dashboard_views.sql
+           14 views criadas no total: Visão Geral (2), Loja Física (3),
+           Nuvemshop (5), Meta Ads (4). Endpoints propriamente ditos
+           virão quando o frontend/Next.js existir — as views já são
+           consumíveis via PostgREST do Supabase. Convenção: granularidade
+           diária, KPIs agregados no client, TZ São Paulo aplicado na view,
+           filtro de revenue = status='paid'.
 
 --------------------------------------------------------
 ETAPA 7 — DASHBOARD

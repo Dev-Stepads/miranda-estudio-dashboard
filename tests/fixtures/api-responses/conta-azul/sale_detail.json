@@ -1,0 +1,61 @@
+{
+  "_note": "Fixture sintético — GET https://api.contaazul.com/v1/sales/ca-sale-16003?expand=items",
+  "_reference": "docs/producao/MAPEAMENTO_CONTA_AZUL.txt §3.2 e §4.1/4.2",
+  "_assumption": "Assumindo que a API nova aceita ?expand=items e retorna itens inline (gap a confirmar na T7).",
+  "id": "ca-sale-16003",
+  "number": 16003,
+  "emission_date": "2026-04-08",
+  "status": "COMMITTED",
+  "customer": {
+    "id": "ca-c-2003",
+    "name": "Helena Rocha",
+    "document_number": "123.456.789-01",
+    "email": "helena.rocha@example.com.br",
+    "phone": "+5511998765432"
+  },
+  "seller_responsible": "LOJA FÍSICA",
+  "total": 289.80,
+  "discount": 0.00,
+  "net_total": 289.80,
+  "payment_method": "CARD_CREDIT",
+  "created_at": "2026-04-08T16:48:02-03:00",
+  "updated_at": "2026-04-08T16:48:02-03:00",
+  "items": [
+    {
+      "id": "ca-item-50001",
+      "product": {
+        "id": "ca-p-007",
+        "name": "Moletom Canguru Cinza M",
+        "type": "PRODUCT"
+      },
+      "description": null,
+      "quantity": 1,
+      "unit_price": 199.90,
+      "subtotal": 199.90
+    },
+    {
+      "id": "ca-item-50002",
+      "product": {
+        "id": "ca-p-009",
+        "name": "Cinto Couro Marrom M",
+        "type": "PRODUCT"
+      },
+      "description": null,
+      "quantity": 1,
+      "unit_price": 89.90,
+      "subtotal": 89.90
+    }
+  ],
+  "installments": [
+    {
+      "number": 1,
+      "due_date": "2026-05-08",
+      "payment_method": "CARD_CREDIT",
+      "financial_account": "Cartão Visa",
+      "amount": 289.80,
+      "received": 289.80,
+      "open_amount": 0.00,
+      "status": "RECEBIDO"
+    }
+  ]
+}

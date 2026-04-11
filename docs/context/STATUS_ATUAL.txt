@@ -1,15 +1,23 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Última atualização: 2026-04-10
+Última atualização: 2026-04-11
 
 --------------------------------------------------------
 ETAPA ATUAL
 --------------------------------------------------------
 Etapa 1 — Base do projeto ✅ CONCLUÍDA (2026-04-10)
 Etapa 2 — Descoberta técnica ✅ CONCLUÍDA (2026-04-10)
-Etapa 3+ — Implementação: AGUARDANDO validação de gates da Nuvemshop
-         (gênero + birthday custom field) antes de iniciar T7.
+Etapa 6 — Consolidação: EM ANDAMENTO
+         [x] T27 schema canônico criado em migration (2026-04-11)
+         [x] migration aplicada no Supabase remoto (2026-04-11)
+         [x] T30 dataset Visão Geral via views (2026-04-11)
+         [x] T33 views do dashboard criadas em migration (2026-04-11)
+         [ ] migration de views aplicada no Supabase remoto
+Etapa 3-5 — Integrações: em pausa aguardando credenciais das 3 APIs.
+         Estratégia: adiantar trabalho offline (seeds → types →
+         clients → ETL → views → frontend com mock) até as
+         credenciais chegarem.
 
 --------------------------------------------------------
 INFRAESTRUTURA
@@ -21,6 +29,13 @@ INFRAESTRUTURA
 [x] Estrutura de pastas local — CRIADA (2026-04-10)
 [x] Arquivos de documentação  — CRIADOS (2026-04-10)
 [x] .env.local com chaves Supabase — CRIADO (2026-04-10, não commitado)
+[x] Migration inicial do schema — CRIADA em disco (2026-04-11)
+[x] Migration inicial aplicada no Supabase remoto — 2026-04-11
+[x] Dev seed canônico (supabase/seed.sql) — CRIADO (2026-04-11)
+[x] Dev seed aplicado no Supabase remoto — 2026-04-11
+[x] JSON fixtures das 3 APIs (tests/fixtures/) — CRIADOS (2026-04-11)
+[x] Migration de views do dashboard — CRIADA em disco (2026-04-11)
+[ ] Migration de views aplicada no Supabase remoto — PENDENTE
 
 Links:
 - GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard
@@ -70,13 +85,14 @@ INTEGRAÇÕES — progresso por fonte
 --------------------------------------------------------
 CONSOLIDAÇÃO E DASHBOARD
 --------------------------------------------------------
-[ ] Padronização de campos (T27)
-[ ] Regras de período (T28)
+[x] Padronização de campos (T27) — 2026-04-11
+[ ] Regras de período (T28) — TZ codificado nas views; ETL pendente
 [ ] Regras de consolidação de produtos (T29)
-[ ] Dataset Visão Geral (T30)
+[x] Dataset Visão Geral (T30) — 2026-04-11 (via views)
+[x] Camada de consulta / views do dashboard (T33 views) — 2026-04-11
 [ ] Aba Visão Geral (T31)
 [ ] Aba Loja Física (T32)
-[ ] Aba Nuvemshop (T33)
+[ ] Aba Nuvemshop (T33 aba) — NOTA: T33 duplicado no backlog
 [ ] Aba Meta Ads (T34)
 [ ] Filtros globais (T35)
 
@@ -97,5 +113,11 @@ Nenhum.
 --------------------------------------------------------
 PRÓXIMO MARCO
 --------------------------------------------------------
-Finalizar Etapa 1 (infra + mapeamentos técnicos das 3 APIs)
-antes de começar qualquer implementação de código.
+1. Aplicar supabase/migrations/20260411130000_dashboard_views.sql
+   no Supabase remoto (SQL Editor → colar → Run). NÃO-destrutivo,
+   só CREATE VIEW. Validar com queries comentadas no fim do arquivo.
+2. Decidir direção: Caminho A (scaffolding Next.js completo para
+   destravar o frontend imediatamente) ou Caminho B (só types +
+   HTTP clients das APIs testados com mocks).
+3. Gates pendentes com o representante da Miranda continuam em
+   aberto, mas não bloqueiam o trabalho offline.
