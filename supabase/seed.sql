@@ -246,8 +246,10 @@ COMMIT;
 -- VALIDAÇÕES (rodar após o seed pra conferir)
 -- ============================================================
 -- SELECT source, count(*), sum(gross_revenue) FROM sales WHERE status='paid' GROUP BY source;
---   conta_azul → 11 vendas, ~R$ 2.149
---   nuvemshop  → 7  vendas, ~R$ 1.549
+--   conta_azul → 11 vendas, R$ 1857.70  (1 venda cancelled CA-1006 de 129.90 excluída)
+--   nuvemshop  → 7  vendas, R$ 1548.70  (1 venda pending NS-2006 de 189.90 excluída)
+--   (valores corrigidos em 2026-04-11 após validação contra a view —
+--    estimativas anteriores de ~2149/~1549 estavam imprecisas)
 -- SELECT level, count(*) FROM meta_ads_insights GROUP BY level;
 --   campaign → 7, adset → 14, ad → 14
 -- SELECT count(*) FROM abandoned_checkouts;

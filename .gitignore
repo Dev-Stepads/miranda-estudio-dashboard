@@ -10,6 +10,21 @@ node_modules/
 .env.development
 .env.production
 
+# Rascunhos locais e "cofres" que NÃO são o cofre oficial — NUNCA commitar
+# (regra defensiva: evita que um arquivo de nome arbitrário com credenciais
+# acabe no Git. O cofre oficial é o 1Password/Bitwarden da Stepads,
+# NUNCA um arquivo local.)
+cofre.*
+secrets.*
+credentials.*
+scratch.*
+notes.local.*
+/onde*.txt
+/onde*.yaml
+/onde*.yml
+/onde*.md
+/onde*.0
+
 # Build
 .next/
 dist/
@@ -49,3 +64,23 @@ debug_screenshots/
 /Captura de tela*.jpg
 /Captura de tela*.jpeg
 /Captura de tela*.png
+
+# Pastas de prints/screenshots gerais — defensivo. Mesmo motivo dos debug_screenshots.
+# Captura recebida em qualquer subpasta cai aqui.
+prints*/
+screenshots*/
+**/Captura de tela*.jpg
+**/Captura de tela*.jpeg
+**/Captura de tela*.png
+
+# Imagens soltas no root — defensivo.
+# Bloqueia qualquer .jpg/.jpeg/.png/.gif no diretório raiz do projeto pra
+# evitar que prints de portais (Conta Azul, Nuvemshop, Meta) com credenciais,
+# CNPJ ou dados sensíveis acabem comitados acidentalmente. Imagens
+# legítimas (logo, mockups, etc.) devem ficar em /public, /assets ou
+# subpasta dedicada — não no root.
+/*.jpg
+/*.jpeg
+/*.png
+/*.gif
+/*.webp

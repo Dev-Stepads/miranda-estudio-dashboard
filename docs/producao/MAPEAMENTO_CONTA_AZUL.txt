@@ -1,9 +1,238 @@
 ========================================================
 MAPEAMENTO TÉCNICO — API Conta Azul
 ========================================================
-Status: PREENCHIDO (research via docs públicas)
+Status: PREENCHIDO (research via docs públicas) + VALIDADO EM PARTE
+        via exploração ao vivo da API com token real (2026-04-11)
 Responsável: Matheus (via Claude, sessão 2026-04-10)
-Última atualização: 2026-04-10
+Última atualização: 2026-04-11 (appendix live-exploration abaixo)
+
+========================================================
+APPENDIX 2026-04-11 — LIVE API EXPLORATION
+========================================================
+Durante a sessão de 2026-04-11, após obter refresh_token real
+da conta Conta Azul da Miranda via fluxo OAuth completo, foram
+feitas chamadas HTTP reais pra confirmar / corrigir o que o
+restante deste doc supôs. As descobertas abaixo SUBSTITUEM o
+texto original em caso de divergência. O doc original é mantido
+como histórico da pesquisa.
+
+## A1. Base URL — CORRIGIDA
+
+CORRETO:   https://api-v2.contaazul.com/v1/
+ANTIGO:    https://api.contaazul.com/v1/  (sem "-v2")
+
+O texto original (seção 2) foi deduzido de fontes terceiras
+sem confirmação visual. O portal do dev, ao emitir o access_token
+de teste, mostra o curl com "api-v2". Confirmado via 200 OK em
+chamadas reais.
+
+## A2. Scopes — CORRIGIDA (Cognito, não granular)
+
+CORRETO:   openid profile aws.cognito.signin.user.admin
+ANTIGO:    sales:read, customers:read, products:read  (suposição)
+
+O Conta Azul usa AWS Cognito por baixo (issuer
+cognito-idp.sa-east-1.amazonaws.com/sa-east-1_Vp83J11wA,
+extraído do JWT). Scopes são FIXOS de identidade Cognito, sem
+granularidade por recurso. A autorização efetiva do que o app
+pode ler vem do PERFIL DO ERP USER que loga no fluxo OAuth.
+
+Impacto no código: passa esses 3 scopes literais na URL de
+authorize. Não tente pedir scopes de recurso — eles não existem
+no Cognito pool deles.
+
+## A3. Endpoints confirmados (HTTP status real em 2026-04-11)
+
+TESTADO e FUNCIONANDO (200 OK):
+  [OK] GET /v1/categorias                      — 165 categorias (Miranda)
+  [OK] GET /v1/produtos?tamanho_pagina={10..1000}  — 2.909 produtos com variações
+  [OK] GET /v1/pessoas?tamanho_pagina={10..1000}   — 7.778 pessoas TOTAIS
+  [OK] GET /v1/notas-fiscais?tamanho_pagina={X}
+          &data_inicial=YYYY-MM-DD
+          &data_final=YYYY-MM-DD              — lista NF-e (requer as 2 datas)
+
+TESTADO e 404 (NOME ERRADO):
+  /v1/vendas, /v1/sales, /v1/pedidos, /v1/pedido-venda,
+  /v1/clientes, /v1/contatos, /v1/nfe, /v1/nota-fiscal
+
+TESTADO e 502/405 (existe mas não aceita GET):
+  /v1/venda  — retorna 405 wrapped em 502. Provavelmente POST pra
+               criar venda. NÃO é o endpoint de listagem.
+
+AINDA NÃO ENCONTRADO (a descobrir durante T7/T8):
+  - Endpoint de DETALHE de uma nota fiscal (pra pegar valor total,
+    items, formas de pagamento). O /v1/notas-fiscais de listagem
+    só retorna metadata (data_emissao, nome_destinatario, numero_nota,
+    chave_acesso, status). Precisa de um endpoint tipo
+    /v1/notas-fiscais/{id} ou /v1/notas-fiscais/{chave_acesso}.
+    Doc oficial via developers.contaazul.com (portal protegido por
+    WAF — WebFetch retorna 403).
+
+## A4. ⚠ PEGADINHA CRÍTICA — /v1/pessoas NÃO é só clientes
+
+O endpoint retorna TUDO que tem cadastro de pessoa no Conta Azul,
+incluindo fornecedores, transportadoras, funcionários, clientes.
+
+Campo discriminador: `perfis` (array<string>).
+
+Valores de "perfis" observados:
+  - "Fornecedor"      (4 primeiros itens da lista da Miranda são TODOS disso)
+  - "Cliente"         (a maioria — precisa filtrar)
+  - "Transportadora"  (poucos)
+  - "Funcionário"     (poucos)
+
+ETL action: FILTRAR por `"Cliente" in perfis` antes de inserir
+na canonical `customers`. Sem esse filtro, vai poluir o canonical
+com 4.000+ registros de CNPJs de fornecedores.
+
+## A5. ⚠ Paginação — 3 wrappers diferentes na mesma API
+
+A Conta Azul tem INCONSISTÊNCIA de schema entre endpoints:
+
+  /v1/categorias       → { "itens_totais": N, "itens":  [...] }   (PT-BR)
+  /v1/produtos         → { "totalItems":  N, "items":  [...] }    (EN)
+  /v1/pessoas          → { "totalItems":  N, "items":  [...] }    (EN)
+  /v1/notas-fiscais    → { "itens":  [...] }                      (sem total!)
+
+Impacto no código: o HTTP client do Conta Azul precisa de um
+"normalizador de paginação" que aceita os 3 formatos e devolve
+uma interface interna única { total, items }. Provavelmente via
+um schema Zod com discriminated union, ou um switch no mapper.
+
+Valores aceitos pelo param `tamanho_pagina` (para os 3 endpoints
+paginados) são um ENUM fechado:
+  10, 20, 50, 100, 200, 500, 1000
+Qualquer outro valor → 400 "O tamanho da página deve ser um dos
+seguintes valores...". Nada de per_page=1 pra smoke test.
+
+## A6. Schemas reais observados
+
+### /v1/produtos (item pai + variações nested)
+
+  {
+    "id":                             UUID,
+    "id_legado":                      integer (ID da API antiga),
+    "nome":                           string,
+    "codigo":                         string (← SKU interno! resolve GAP do T4),
+    "tipo":                           "PRODUCT_VARIATION" | "PRODUTO",
+    "status":                         "ATIVO" (outros a confirmar),
+    "saldo":                          integer (estoque físico),
+    "valor_venda":                    number (preço BRL),
+    "custo_medio":                    number,
+    "contagem_agregacao":             integer,
+    "nivel_estoque":                  "PADRAO",
+    "estoque_minimo":                 integer,
+    "estoque_maximo":                 integer,
+    "movido":                         boolean,
+    "integracao_ecommerce_ativada":   boolean,
+    "ean":                            string (código de barras, pode ser ""),
+    "ultima_atualizacao":             ISO 8601 UTC,
+    "produtos_variacao":              [                     ← sub-produtos
+      {
+        "id":                          UUID,
+        "id_legado":                   integer,
+        "nome":                        string (inclui sufixo da variação),
+        "codigo":                      string (SKU da variação),
+        "ean":                         string,
+        "tipo":                        "PRODUTO",
+        "status":                      "ATIVO",
+        "saldo":                       integer,
+        "valor_venda":                 number,
+        "custo_medio":                 number,
+        "aggregationCount":            integer (⚠ camelCase, diferente do pai!),
+        "nivel_estoque":               string,
+        "estoque_minimo":              integer,
+        "estoque_maximo":              integer,
+        "movido":                      boolean,
+        "id_produto_pai_variacao":     UUID,                ← FK pro pai
+        "integracao_ecommerce_ativada": boolean
+      }
+    ]
+  }
+
+### /v1/pessoas
+
+  {
+    "id":              UUID,
+    "nome":            string      ⚠ PII,
+    "documento":       string (CPF 11 dígitos | CNPJ 14 dígitos)  ⚠ PII,
+    "email":           string (pode ser "")   ⚠ PII,
+    "telefone":        string (pode ser "")   ⚠ PII,
+    "ativo":           boolean,
+    "id_legado":       integer (0 se não existir),
+    "uuid_legado":     UUID ("00000000-..." se não houver),
+    "perfis":          array<"Fornecedor"|"Cliente"|"Transportadora"|"Funcionário">,
+    "tipo_pessoa":     "Jurídica" | "Física",
+    "data_criacao":    ISO 8601 (sem TZ indicada — assumir UTC),
+    "data_alteracao":  ISO 8601
+  }
+
+### /v1/notas-fiscais (listagem — MINIMALISTA)
+
+  {
+    "data_emissao":       ISO 8601 UTC (⚠ pode vir "0001-01-01T00:00:00Z"
+                          como placeholder de "data não definida"
+                          — equivalente a null, tratar como tal),
+    "nome_destinatario":  string   ⚠ PII (nome do cliente),
+    "numero_nota":        integer (sequencial, ordenado descendente no retorno),
+    "chave_acesso":       string 44-char (contém CNPJ do emissor),
+    "status":             "EMITIDA" (outros a confirmar:
+                          "CANCELADA", "CORRIGIDA COM SUCESSO")
+  }
+
+  Campos NÃO retornados na listagem (mas que vamos precisar):
+    - valor_total / valor_produtos
+    - items (produtos da NF)
+    - forma_pagamento
+    - vendedor_responsavel  ← crítico! É o filtro de canal "LOJA FÍSICA"
+    - id (UUID)
+
+  → Esses campos devem estar num endpoint de DETALHE que ainda
+  não descobrimos. Durante T7/T8, começar por tentar
+  GET /v1/notas-fiscais/{numero_nota} ou
+  GET /v1/notas-fiscais/por-chave/{chave_acesso}
+
+### /v1/categorias
+
+  {
+    "id":                     UUID,
+    "versao":                 integer (optimistic locking),
+    "nome":                   string,
+    "categoria_pai":          UUID (hierárquico),
+    "tipo":                   "DESPESA" | "RECEITA",
+    "entrada_dre":            "DESPESAS_ADMINISTRATIVAS" | null | outros,
+    "considera_custo_dre":    boolean
+  }
+
+## A7. CNPJ da Miranda extraído da chave_acesso
+
+O campo `chave_acesso` da NF-e tem formato:
+  {UF}{AAMM}{CNPJ}{MODELO}{SERIE}{NF}{CNF}{DV}
+
+Extraindo da primeira chave observada
+(29260430938298000146550010000037631416089300):
+  UF: 29 (Bahia, código IBGE)
+  AAMM: 2604 (abril/2026 = data de emissão)
+  CNPJ Miranda Estúdio: 30938298000146
+  Modelo: 55 (NF-e)
+  Série: 001
+  Número: 000003763 (= numero_nota)
+
+## A8. Refresh token real bindado à Miranda
+
+Em 2026-04-11, o usuário aloalo@mirandaestudio.com.br autorizou
+a app PROD "Miranda Dashboard" (client_id 8ha8nfoprvms3hlcpn0dlmk2c)
+via fluxo authorization_code completo. O refresh_token resultante
+está salvo como CONTA_AZUL_REFRESH_TOKEN no .env.local e permite
+renovar o access_token a cada expiração (1h).
+
+⚠ REFRESH TOKEN É SINGLE-USE + 2 SEMANAS. Cada refresh devolve um
+novo refresh_token que DEVE substituir o anterior. Esquecer isso
+quebra o acesso depois de 14 dias. Ver DECISOES.txt 2026-04-10.
+
+========================================================
+FIM DO APPENDIX 2026-04-11
+========================================================
 
 IMPORTANTE SOBRE NÍVEIS DE CONFIANÇA:
 Todo item neste doc tem um marcador:

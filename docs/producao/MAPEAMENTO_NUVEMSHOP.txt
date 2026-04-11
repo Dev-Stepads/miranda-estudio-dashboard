@@ -1,9 +1,198 @@
 ========================================================
 MAPEAMENTO TÉCNICO — API Nuvemshop
 ========================================================
-Status: PREENCHIDO (research via docs públicas)
+Status: PREENCHIDO (research via docs públicas) + VALIDADO
+        via exploração ao vivo da API com token real (2026-04-11)
 Responsável: Matheus (via Claude, sessão 2026-04-10)
-Última atualização: 2026-04-10
+Última atualização: 2026-04-11 (appendix live-exploration abaixo)
+
+========================================================
+APPENDIX 2026-04-11 — LIVE API EXPLORATION
+========================================================
+Após instalar a app "Miranda Dashboard" (app_id 29599) na loja
+real Miranda Estúdio (store_id 1124025) e obter access_token
+não-expirante, foram feitas chamadas HTTP reais pra confirmar
+o que o restante deste doc supôs. As descobertas abaixo
+SUBSTITUEM o texto original em caso de divergência.
+
+## A1. Access confirmado
+
+  store_id (user_id) real:   1124025
+  store name:                Miranda Estúdio
+  access_token salvo em:     NUVEMSHOP_ACCESS_TOKEN (.env.local)
+  scopes concedidos:         read_content, read_products,
+                             read_customers, read_orders
+
+## A2. Plano da Miranda — CONFIRMADO = básico
+
+Rate limit observado em resposta real:
+  x-rate-limit-limit: 40
+  x-rate-limit-remaining: 39 (após 1 request)
+  x-rate-limit-reset: 1000 (ms — equivalente a 1 req/s drain)
+
+→ Confirma plano básico (40/2rps leaky bucket), NÃO Next/Evolution
+(que seria 400/20rps). ETL precisa respeitar esse orçamento.
+
+## A3. Totais na loja Miranda
+
+  products:    431
+  orders:      5.925 (5925)
+  customers:   4.910 (4910)
+  checkouts:   42 (abandoned checkouts ativos)
+
+Implicação de coleta full inicial (T14, T15, T16, T18):
+  products:   com per_page=200 → 3 páginas, <2s @ 2rps
+  orders:     com per_page=200 → 30 páginas, ~15s @ 2rps
+  customers:  com per_page=200 → 25 páginas, ~13s @ 2rps
+  checkouts:  1 página
+
+Total estimado coleta full: ~30-40s respeitando o rate limit.
+Muito abaixo do timeout default de cron jobs. Não precisa de
+estratégia incremental complicada pra primeira carga.
+
+## A4. Endpoints confirmados (200 OK, 2026-04-11)
+
+  [OK] GET /products?per_page={1..200}         — 431 registros
+  [OK] GET /orders?per_page={1..200}           — 5925 registros
+  [OK] GET /customers?per_page={1..200}        — 4910 registros
+  [OK] GET /checkouts?per_page={1..200}        — 42 registros
+
+Base URL completa usada nos testes:
+  https://api.nuvemshop.com.br/2025-03/1124025/{resource}
+
+## A5. Paginação via headers (vs wrapper do Conta Azul)
+
+Diferente do Conta Azul, a Nuvemshop retorna:
+- Body: ARRAY cru ([{...},{...}]), sem wrapper de pagination
+- Headers:
+    x-total-count:       5925
+    link:                <...?page=2>; rel="next",
+                         <...?page=5925>; rel="last"
+    x-rate-limit-*:      (todos os 3)
+
+Estratégia de pagination recomendada: seguir o header `link`
+rel="next" até ele sumir. Mais robusto que calcular offsets
+manualmente com x-total-count.
+
+## A6. Authentication header — CONFIRMADO (pegadinha)
+
+O header de auth é literalmente:
+  Authentication: bearer {access_token}
+
+NÃO é "Authorization: Bearer" (padrão OAuth) — é
+"Authentication: bearer" (tudo minúsculo no "bearer"). Essa
+pegadinha foi DOCUMENTADA no texto original (seção 2) e agora
+VALIDADA com 200 OK.
+
+Código típico vai errar na primeira tentativa se copiar de um
+exemplo genérico de OAuth 2.0. Deixar isso MUITO explícito no
+tipo do HTTP client.
+
+Header User-Agent também validado:
+  User-Agent: Miranda Dashboard (dev@stepads.com.br)
+
+Formato "{NomeDaApp} ({email_de_contato})".
+
+## A7. Schemas reais observados
+
+### /products (parcial — primeira resposta de produto)
+
+Campos observados no primeiro item retornado:
+  id, name (objeto { pt: "..." }),
+  description (objeto { pt: "...HTML..." }),
+  handle (objeto { pt: "slug" }),
+  attributes (array de objetos { pt: "..." }),
+  published (boolean),
+  free_shipping, requires_shipping (booleans),
+  canonical_url (string),
+  video_url (nullable),
+  seo_title, seo_description (objetos localizados),
+  brand (string: "Miranda Estúdio")
+  [truncated — mais campos: variants[], images[], categories[], etc.
+   pra confirmar no T14]
+
+⚠ Campos multilíngue: `name`, `description`, `handle`, `seo_*`
+vêm como objetos { pt: "...", es: "..." } porque a Nuvemshop
+suporta lojas multi-idioma. A Miranda é só em `pt` (header
+`x-main-language: pt` confirma). ETL deve extrair sempre `.pt`.
+
+### /orders (parcial — primeiro campo da listagem)
+
+Campos observados:
+  id, token, store_id,
+  contact_email, contact_name, contact_phone,     ⚠ PII
+  contact_identification (CPF),                    ⚠ PII (11 dígitos)
+  billing_name, billing_phone, billing_address,    ⚠ PII
+  [truncado — mais campos esperados: total, subtotal, shipping,
+   payment_status, status, products[], paid_at, created_at,
+   cancelled_at, customer{}, currency, etc.]
+
+O shape completo precisa ser re-explorado durante T14 com
+filtros mais específicos e extração só de keys. Abandoning full
+response echoing por cautela com PII.
+
+### /customers (parcial)
+
+Campos observados:
+  id, name, email, identification (CPF, nullable), phone
+  [truncado — mais campos: addresses[], default_address{}, extra{},
+   note, total_spent, last_order_id, birthdate (custom field?),
+   gender (extra.gender?) — NÃO CONFIRMADO se Miranda tem]
+
+⚠ Gate N#1 e N#2 (genero + birthday) ainda PENDENTE.
+Precisa testar um pedido específico e ver se os campos
+`default_address.province`, `extra.gender` e o custom_field
+de birthday vêm preenchidos. Só saberemos quando Miranda
+responder se o checkout dela pede esses dados.
+
+### /checkouts (abandoned)
+
+Testado, 200 OK, 42 registros totais — schema não extraído
+em detalhe pra economizar PII. Explorar no T16.
+
+## A8. HOST / infra observada nos headers
+
+  Server:           cloudflare
+  CF-RAY:           *-GRU (São Paulo)
+  cf-cache-status:  DYNAMIC
+  x-version:        200..233 (interno, pode mudar)
+
+Nuvemshop roda atrás da Cloudflare em região GRU (São Paulo),
+mesmo datacenter do Supabase. Latência loopback deve ser baixa.
+Zero geo-blocking — ETL pode rodar de qualquer região.
+
+## A9. LGPD webhooks CADASTRADOS como placeholder
+
+Na configuração da app no Partners Portal (2026-04-11), foram
+cadastradas 3 URLs placeholder obrigatórias de compliance LGPD:
+
+  store redact:           /api/webhooks/nuvemshop/lgpd/store-redact
+  customers redact:       /api/webhooks/nuvemshop/lgpd/customers-redact
+  customers data request: /api/webhooks/nuvemshop/lgpd/customers-data-request
+
+Todas apontam pra https://miranda-estudio-dashboard.vercel.app/.
+**AS ROTAS NÃO EXISTEM NO VERCEL AINDA** — quando a Nuvemshop
+pingar, vai dar 404. Por enquanto OK (não há eventos pendentes
+de LGPD), mas é DÍVIDA TÉCNICA que entra no backlog como
+T44 — Implementar webhooks LGPD, prazo: antes de o dashboard
+ir pra produção real com dados fluindo.
+
+## A10. App "Para os seus clientes" (privada) validada
+
+Tela de consentimento da Miranda confirmou:
+- Nome da app correto: "Miranda Dashboard"
+- 4 permissões listadas exatamente como pedimos:
+    "Apenas leitura de suas páginas de conteúdo"
+    "Apenas leitura dos produtos e categorias"
+    "Apenas leitura dos dados dos seus clientes"
+    "Apenas leitura das vendas da sua loja"
+- NENHUMA permissão de write/delete
+- Aviso azul "app não verificado pela Nuvemshop" presente —
+  esperado pra app privada.
+
+========================================================
+FIM DO APPENDIX 2026-04-11
+========================================================
 
 IMPORTANTE SOBRE NÍVEIS DE CONFIANÇA:
 Todo item neste doc tem um marcador:
