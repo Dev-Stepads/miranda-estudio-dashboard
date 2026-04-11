@@ -208,9 +208,10 @@ PRÓXIMO PASSO IMEDIATO — Consolidação pós-descoberta
 
   Ações que PRECEDEM qualquer linha de código da Etapa 3:
 
-  1. [MATHEUS] Fechar OperaGX em modo debug
-     (usado na T4, ainda pode estar com --remote-debugging-port=9222
-     aberto). Simples higiene de segurança.
+  1. [x] [MATHEUS] Fechar OperaGX em modo debug — RESOLVIDO (2026-04-11)
+     Verificado nesta sessão: porta 9222 não tem listener, nenhum
+     processo opera.exe está rodando com --remote-debugging-port.
+     Higiene de segurança concluída.
 
   2. [MATHEUS → REPRESENTANTE] Repassar ao representante da Miranda:
      a) DECISÃO: aba "Loja Física" do dashboard NÃO terá gênero nem
