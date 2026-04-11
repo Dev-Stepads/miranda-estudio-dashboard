@@ -317,6 +317,74 @@ DECISÕES REGISTRADAS
             numeric pra dinheiro, CHECK pra enum). Migrations futuras
             podem referenciar esta decisão em vez de reargumentar.
 
+[2026-04-11] [INTEGRACAO] Conta Azul — autenticação é AWS Cognito, não OAuth com scopes granulares
+  Contexto: durante o registro da app de produção no portal
+            developers-portal.contaazul.com (sessão 2026-04-11),
+            descobrimos que o que o Conta Azul chama de "OAuth 2.0" é,
+            na prática, um wrapper sobre AWS Cognito (issuer
+            cognito-idp.sa-east-1.amazonaws.com/sa-east-1_Vp83J11wA,
+            confirmado decodificando o JWT do access_token).
+            Os scopes não são "sales:read", "customers:read" como o
+            MAPEAMENTO_CONTA_AZUL.txt §1 supôs ([VER]). Os REAIS são:
+              openid profile aws.cognito.signin.user.admin
+            Não há tela de seleção de scopes no portal — é fixo.
+  Decisão:  - Aceitar que a autorização granular vem do PERFIL DO ERP
+              USER que loga no fluxo OAuth, não dos scopes. Ou seja,
+              o que a app pode ler depende das permissões do usuário
+              da Miranda que autorizar a app, não do que a gente pediu.
+            - Atualizar MAPEAMENTO_CONTA_AZUL.txt §1 (passar de [VER]
+              pra [OK] com os scopes Cognito reais).
+            - No código (T7), passar exatamente esses 3 scopes na URL
+              de authorize: openid+profile+aws.cognito.signin.user.admin
+  Impacto:  Não dá pra restringir privilégios da app via scopes. A
+            única "defesa" é orientar a Miranda a autorizar com um
+            usuário ERP que tenha só permissão de leitura. Documentar
+            isso no checklist de onboarding do cliente quando a app
+            for pra produção real.
+
+[2026-04-11] [INTEGRACAO] Conta Azul — base URL real é api-v2.contaazul.com
+  Contexto: o curl de exemplo que o portal fornece após gerar o
+            access_token aponta pra https://api-v2.contaazul.com/v1/
+            Nosso MAPEAMENTO_CONTA_AZUL.txt §2 dizia
+            https://api.contaazul.com/v1/ (deduzido de fontes
+            terceiras, sem confirmação visual no portal oficial).
+  Decisão:  Base URL canônica do código é
+              https://api-v2.contaazul.com/v1
+            Persistido em CONTA_AZUL_API_BASE no .env.local.
+            MAPEAMENTO_CONTA_AZUL.txt §2 será atualizado.
+  Impacto:  Todas as chamadas HTTP do client Conta Azul devem usar
+            essa base. O subdomínio "api-v2" sugere que existe uma
+            "api-v1" antiga deprecada — ficar atento se aparecer
+            notícia de migração v2→v3 no futuro.
+
+[2026-04-11] [INTEGRACAO] Conta Azul — estratégia DEV app + PROD app (1 redirect por app)
+  Contexto: o portal do Conta Azul permite apenas UM redirect_uri
+            por aplicação registrada (verificado visualmente em
+            2026-04-11). Não há campo "+ adicionar outra URL".
+            A gente precisa de redirects diferentes pra
+            desenvolvimento local (localhost) e produção (Vercel).
+  Decisão:  Usar DUAS aplicações distintas:
+            (1) App DEV — auto-criada pelo portal quando você se
+                cadastra. Vem com redirect_uri https://contaazul.com
+                (placeholder pra dev copiar o ?code= manualmente da
+                barra de endereço) e um ERP user de teste com trial
+                de ~3 dias. Credenciais salvas como
+                CONTA_AZUL_DEV_* no .env.local. Usada para testar
+                o fluxo OAuth durante o desenvolvimento do código.
+            (2) App PROD — "Miranda Dashboard" criada manualmente
+                em 2026-04-11. CNPJ Stepads (32.972.296/0001-07).
+                redirect_uri =
+                  https://miranda-estudio-dashboard.vercel.app/api/auth/contaazul/callback
+                Credenciais salvas como CONTA_AZUL_* (sem _DEV).
+                Usada quando a Miranda autorizar de verdade (T7+).
+  Impacto:  Código do client OAuth Conta Azul deve ler as variáveis
+            CONTA_AZUL_DEV_* em modo dev e CONTA_AZUL_* em prod
+            (controlado por NODE_ENV ou flag explícita). Mappers,
+            HTTP base e tipos são iguais — só client_id, secret e
+            redirect_uri trocam. Cliente secret do Conta Azul é
+            visível livremente ao reabrir a app no portal (não é
+            one-shot), o que reduz o stress operacional.
+
 [2026-04-11] [DADOS] Views do dashboard — granularidade e convenções
   Contexto: precisávamos decidir o shape das 14 views que alimentam
             as 4 abas do dashboard. Duas opções principais: views
@@ -370,3 +438,117 @@ DECISÕES REGISTRADAS
             período, agrega com SUM/AVG conforme o card. Adicionar
             uma nova aba = nova view + novo WHERE clause, sem mexer
             em schema nem no ETL.
+
+[2026-04-11] [ARQUITETURA] Stack do código das integrações (Caminho B)
+  Contexto: a sessão da noite de 2026-04-11 começou o Caminho B
+            (bases de code TS pré-ETL). Várias escolhas de stack
+            precisavam ser travadas antes de criar o primeiro arquivo.
+  Decisão:  Stack travada (testada com 109 unit tests passando):
+            - Linguagem: TypeScript 5.7+ (strict + noUncheckedIndexedAccess
+              + noUnusedLocals + noUnusedParameters)
+            - Module system: ESM nativo ("type": "module" no package.json)
+            - Runtime target: Node 24+ (usa fetch global, sem undici/axios)
+            - Module resolution: Bundler (permite imports sem extensão .js)
+            - Test runner: Vitest 2.x (globals: false — imports explícitos)
+            - Mock HTTP: MSW 2.x (setupFiles com onUnhandledRequest: 'error')
+            - Validação runtime: Zod 3.x com .passthrough() em tudo
+            - Dependencias runtime: só zod (e playwright-core legado)
+            - Dev deps: typescript, @types/node, vitest, msw
+  Impacto:  tsconfig.json com noEmit: true (vitest handles TS diretamente).
+            Qualquer integração futura (Meta Ads, outras fontes) segue
+            esse mesmo padrão: src/integrations/{fonte}/{schemas,types,
+            client,mapper,index}.ts + tests/integrations/{fonte}/*.test.ts.
+            Migrar pra outra stack custa mais que manter.
+
+[2026-04-11] [ARQUITETURA] Dependency Injection em todos os clients HTTP
+  Contexto: os clients NuvemshopClient e ContaAzulClient poderiam ler
+            credenciais direto de process.env, mas isso gera 3 problemas:
+            (a) testes precisariam mockar process.env,
+            (b) multi-store/multi-tenant fica impossível,
+            (c) código de runtime fica acoplado ao ambiente.
+  Decisão:  Zero leitura de process.env dentro dos clients. Constructor
+            recebe um objeto de config com accessToken, userAgent, storeId
+            (se aplicável). Quem instancia o client é responsável por ler
+            env vars e passar.
+  Impacto:  Tests ficam triviais (config fake inline), multi-store é
+            1 linha (new Client({ ... })), e o código reaproveita em
+            Edge Functions, Vercel serverless, scripts, tudo igual.
+            O ContaAzulTokenManager segue o mesmo pattern — recebe
+            clientId/clientSecret/refreshToken como config e uma callback
+            onRefresh pra persistência injetada pelo caller.
+
+[2026-04-11] [DADOS] PartialContaAzulSale com discriminator __partial
+  Contexto: o endpoint /v1/notas-fiscais do Conta Azul (lista) só
+            retorna metadata básico (data, numero, chave_acesso, nome,
+            status). NÃO retorna valor total, items, forma de pagamento,
+            vendedor_responsavel. Pra ter esses dados, precisa do
+            endpoint de DETALHE por NF-e — que ainda não descobrimos
+            durante live exploration (portal de docs bloqueado por WAF).
+  Decisão:  Em vez de mapear prematuramente para CanonicalSale com 0
+            de valor e items=[] (o que poluiria o banco com linhas
+            incompletas), criamos um tipo separado PartialContaAzulSale
+            com a flag `__partial: true` que o TypeScript impede de
+            casar com CanonicalSale.
+              interface PartialContaAzulSale {
+                __partial: true;
+                source: 'conta_azul';
+                source_id: string;  // = chave_acesso
+                sale_date: string | null;  // "0001-01-01" vira null
+                status: SaleStatus;
+                customer_name: string;
+                numero_nota: number;
+                chave_acesso: string;
+              }
+            O ETL futuro (T8) vai:
+              1. Listar NF-e → partial sales
+              2. Pra cada partial, chamar o endpoint de detalhe
+              3. Merge partial + detail → CanonicalSale completo
+              4. Inserir em `sales`
+  Impacto:  Impossível inserir venda incompleta no banco por acidente.
+            Custo: T7/T8 precisam primeiro DESCOBRIR o endpoint de
+            detalhe (task T45 nova no backlog), depois escrever o merge.
+
+[2026-04-11] [SEGURANCA] .env.local como fonte da verdade interina (até cofre existir)
+  Contexto: a regra do CLAUDE.md §6 manda usar cofre 1P/BW como fonte
+            da verdade de credenciais. Mas o cofre ainda não foi
+            configurado, e durante a sessão de 2026-04-11 foram obtidas
+            credenciais reais (Conta Azul PROD refresh_token, Nuvemshop
+            access_token, store_id Miranda). Ficar esperando o cofre
+            existir pra poder salvar esses valores era pior.
+  Decisão:  Aceitar o .env.local local (gitignored) como cofre interino.
+            O .gitignore foi blindado defensivamente (cofre.*, secrets.*,
+            prints*/, /*.jpg, etc.) pra proteger contra vazamentos
+            acidentais via git.
+            ⚠ TRACK aberta: credenciais que passaram pelo chat durante
+            a sessão (CONTA_AZUL_CLIENT_SECRET PROD, CONTA_AZUL_REFRESH_TOKEN,
+            NUVEMSHOP_CLIENT_SECRET, NUVEMSHOP_ACCESS_TOKEN) devem ser
+            rotacionadas ANTES do dashboard ir pra produção real com
+            tráfego de usuário — task T47 nova no backlog.
+  Impacto:  Próxima sessão PRECISA decidir: Bitwarden free (recomendo)
+            ou 1Password family (pago). Sem isso, o sócio não consegue
+            puxar credenciais na máquina dele sem passar tudo pelo chat
+            de novo — multiplicando o risco de exposição. Task T46.
+
+[2026-04-11] [ARQUITETURA] NF-e detail endpoint — discovery deferred para T8
+  Contexto: durante live exploration do Conta Azul, várias variantes
+            foram testadas pra listagem de vendas:
+              /v1/vendas, /v1/sales, /v1/pedidos, /v1/pedido-venda  → 404
+              /v1/venda  → 502 (405 internal, provavelmente POST-only)
+              /v1/notas-fiscais  → 400 sem data, 200 com data_inicial+final
+            O endpoint /v1/notas-fiscais funciona mas retorna metadata
+            minimalista. O endpoint de DETALHE (que teria valor_total,
+            items, vendedor_responsavel) não foi encontrado via brute-force.
+            Tentamos docs oficiais via WebFetch e web search — portal
+            developers.contaazul.com bloqueia WebFetch com 403 (WAF).
+  Decisão:  Não gastar mais ciclos descobrindo na sessão de scaffolding.
+            Quando começar T7/T8 (ETL real Conta Azul), o dev humano
+            abre a doc no navegador (evita WAF) e descobre o endpoint
+            correto. Possíveis suspeitos para testar primeiro:
+              GET /v1/notas-fiscais/{chave_acesso}
+              GET /v1/notas-fiscais/{numero_nota}
+              GET /v1/notas-fiscais?chave_acesso={...}
+              GET /v1/vendas/{id} (algum outro UUID?)
+  Impacto:  Caminho B do Conta Azul ficou com um PartialContaAzulSale
+            em vez de CanonicalSale completo. T7/T8 precisam resolver
+            isso antes de popular o canonical `sales` com dados reais
+            do Conta Azul.

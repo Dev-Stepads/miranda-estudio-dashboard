@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Última atualização: 2026-04-11
+Última atualização: 2026-04-11 (sessão monstro tarde/noite)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -13,11 +13,37 @@ Etapa 6 — Consolidação: EM ANDAMENTO
          [x] migration aplicada no Supabase remoto (2026-04-11)
          [x] T30 dataset Visão Geral via views (2026-04-11)
          [x] T33 views do dashboard criadas em migration (2026-04-11)
-         [ ] migration de views aplicada no Supabase remoto
-Etapa 3-5 — Integrações: em pausa aguardando credenciais das 3 APIs.
-         Estratégia: adiantar trabalho offline (seeds → types →
-         clients → ETL → views → frontend com mock) até as
-         credenciais chegarem.
+         [x] migration de views aplicada no Supabase remoto (2026-04-11)
+
+Etapa 3-5 — Integrações: DESBLOQUEADAS EM 2 DE 3 FONTES (2026-04-11)
+
+  ✅ AUTH & CREDENCIAIS (2026-04-11):
+         [x] Conta Azul app PROD registrada no portal
+         [x] Conta Azul app DEV auto-criada (trial ERP de 3 dias)
+         [x] Conta Azul refresh_token real bindado a aloalo@mirandaestudio.com.br
+         [x] Nuvemshop app #29599 registrada no Partners Portal
+         [x] Nuvemshop app INSTALADA na loja real Miranda Estúdio (store 1124025)
+         [x] Nuvemshop access_token NÃO-EXPIRANTE salvo
+         [ ] Meta Ads — aguardando validação da conta Facebook dev +
+             resposta da Miranda com BM ID / Ad Account ID / acesso BM
+
+  ✅ CAMINHO B — base TypeScript pré-ETL (2026-04-11):
+         [x] Stack travada: TS + ESM + vitest + msw + zod + Node 24
+         [x] tsconfig.json strict + noUncheckedIndexedAccess
+         [x] src/lib/ (errors, http, i18n) — 3 arquivos
+         [x] src/canonical/ (types de Sale/Customer/Product/Abandoned)
+         [x] src/integrations/nuvemshop/ — client + mapper + schemas + 54 tests
+         [x] src/integrations/conta-azul/ — client + mapper + auth + schemas + 55 tests
+         [x] 109 unit tests verdes (npm test = 1.01s)
+         [x] ContaAzulTokenManager com rotação automática do refresh_token
+         [ ] Meta Ads Caminho B — aguardando desbloqueio humano
+
+  ⏸ ETL REAL (polling, workers, inserts no canonical):
+         [ ] Conta Azul T7/T8 — precisa descobrir endpoint de DETALHE
+             de NF-e (T45 nova) antes de completar
+         [ ] Nuvemshop T14-T22 — plug direto no código Caminho B, mais fácil
+         [ ] Meta Ads T23-T26 — bloqueado por humanos
+         [ ] LGPD webhook stubs T44 — crítica antes de produção real
 
 --------------------------------------------------------
 INFRAESTRUTURA
@@ -35,7 +61,21 @@ INFRAESTRUTURA
 [x] Dev seed aplicado no Supabase remoto — 2026-04-11
 [x] JSON fixtures das 3 APIs (tests/fixtures/) — CRIADOS (2026-04-11)
 [x] Migration de views do dashboard — CRIADA em disco (2026-04-11)
-[ ] Migration de views aplicada no Supabase remoto — PENDENTE
+[x] Migration de views aplicada no Supabase remoto — 2026-04-11
+    (aplicada pelo sócio junto com o push 5e949da; confirmado via
+     pg_views retornando as 14 views esperadas em 2026-04-11)
+[x] .env.local populado com tokens reais (CONTA_AZUL_* PROD + DEV +
+    refresh_token + NUVEMSHOP_* incluindo access_token + store_id) — 2026-04-11
+[x] .gitignore blindado contra vazamento (cofre.*, /*.jpg, prints*/,
+    secrets.*, credentials.*, scratch.*, /onde*) — 2026-04-11
+[x] package.json ESM + zod + vitest + msw + typescript + @types/node — 2026-04-11
+[x] tsconfig.json strict mode + noUncheckedIndexedAccess — 2026-04-11
+[x] vitest.config.ts com msw setup global — 2026-04-11
+[x] src/ com 15 arquivos de código (lib + canonical + 2 integrações) — 2026-04-11
+[x] tests/ com 5 test files, 109 tests verdes — 2026-04-11
+[x] 141 deps npm instaladas (1 runtime + 4 dev) — 2026-04-11
+[ ] Cofre de senhas Stepads (1P ou Bitwarden) — PENDENTE (task T46)
+[ ] Rotação de secrets que passaram pelo chat — PENDENTE (task T47, pré-prod)
 
 Links:
 - GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard
@@ -55,30 +95,45 @@ INTEGRAÇÕES — progresso por fonte
 
 [CONTA AZUL]
   [x] Mapeamento técnico (T4) — 2026-04-10
-  [ ] Autenticação OAuth (T7)
-  [ ] Coleta de vendas (T8)
-  [ ] Coleta de itens (T9)
-  [ ] Transformação faturamento (T10)
-  [ ] Transformação produtos (T11)
-  [ ] Transformação demografia (T12)
+  [x] Mapeamento APPENDIX via live exploration — 2026-04-11
+  [~] Autenticação OAuth (T7) — auth.ts + tokenManager prontos,
+      refresh_token real salvo, FALTA loop de refresh automático
+      plugado num scheduler real
+  [~] Coleta de vendas (T8) — client.listNotasFiscais pronto, FALTA
+      descoberta do endpoint de DETALHE (T45) + loop de polling
+  [ ] Coleta de itens (T9) — depende de T8 detail endpoint
+  [ ] Transformação faturamento (T10) — mapper parcial pronto
+      (PartialContaAzulSale), FALTA merge com detail
+  [~] Transformação produtos (T11) — mapper pronto (pai + variações),
+      FALTA loop de coleta + inserts
+  [~] Transformação demografia (T12) — mapper pronto (sempre unknown
+      para gênero/idade por decisão), FALTA extração de state/city
+      do endpoint de detalhe
 
 [NUVEMSHOP]
   [x] Mapeamento técnico (T5) — 2026-04-10
-  [ ] Autenticação (T13)
-  [ ] Coleta de pedidos (T14)
-  [ ] Coleta de clientes (T15)
-  [ ] Coleta de carrinhos abandonados (T16)
-  [ ] Transformação faturamento (T17)
-  [ ] Transformação produtos (T18)
-  [ ] Transformação geografia (T19)
-  [ ] Transformação gênero (T20)
-  [ ] Transformação faixa etária (T21)
-  [ ] Transformação carrinhos abandonados (T22)
+  [x] Mapeamento APPENDIX via live exploration — 2026-04-11
+  [x] Autenticação (T13) — app registrada, instalada na loja real,
+      access_token não-expirante obtido e salvo — 2026-04-11
+  [~] Coleta de pedidos (T14) — client.listOrders pronto, FALTA loop
+      de polling + inserts no canonical
+  [~] Coleta de clientes (T15) — client.listCustomers pronto, FALTA loop
+  [~] Coleta de carrinhos abandonados (T16) — client.listAbandonedCheckouts
+      pronto, FALTA loop (janela 30 dias pela retenção da API)
+  [~] Transformação faturamento (T17) — mapOrderToCanonicalSale pronto
+  [~] Transformação produtos (T18) — mapProductToCanonical pronto
+  [~] Transformação geografia (T19) — extraído em mapCustomerToCanonical
+      (default_address.province/city)
+  [~] Transformação gênero (T20) — mapGender pronto (Gate N#1 pendente)
+  [ ] Transformação faixa etária (T21) — Gate N#2 pendente (birthday)
+  [~] Transformação carrinhos abandonados (T22) — mapCheckoutToCanonicalAbandoned pronto
 
 [META ADS]
   [x] Mapeamento técnico (T6) — 2026-04-10
-  [ ] Autenticação (T23)
-  [ ] Coleta de métricas (T24)
+  [ ] Autenticação (T23) — BLOQUEADO: conta dev@stepads.com.br em
+      validação no developers.facebook.com + Miranda precisa fornecer
+      BM ID, Ad Account ID, acesso ao BM
+  [ ] Coleta de métricas (T24) — depende de T23
   [ ] Transformação KPIs (T25)
   [ ] Ranking criativos/campanhas (T26)
 
@@ -108,16 +163,41 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
-Nenhum.
+- META ADS (bloqueio humano): conta dev@stepads.com.br no
+  developers.facebook.com está em "período de validação", E a
+  Miranda ainda não respondeu com BM ID / Ad Account ID / acesso ao BM.
+  Sem um dos dois, impossível mexer.
+- COFRE DE SENHAS STEPADS (bloqueio operacional): a próxima pessoa
+  do revezamento não consegue puxar credenciais sem pedir ao Matheus.
+  Task T46 — configurar Bitwarden/1P e migrar o .env.local pra lá.
 
 --------------------------------------------------------
 PRÓXIMO MARCO
 --------------------------------------------------------
-1. Aplicar supabase/migrations/20260411130000_dashboard_views.sql
-   no Supabase remoto (SQL Editor → colar → Run). NÃO-destrutivo,
-   só CREATE VIEW. Validar com queries comentadas no fim do arquivo.
-2. Decidir direção: Caminho A (scaffolding Next.js completo para
-   destravar o frontend imediatamente) ou Caminho B (só types +
-   HTTP clients das APIs testados com mocks).
-3. Gates pendentes com o representante da Miranda continuam em
-   aberto, mas não bloqueiam o trabalho offline.
+4 frentes abertas, todas independentes umas das outras:
+
+1. 🅰 Nuvemshop ETL real (FRENTE 2 — RECOMENDAÇÃO FORTE):
+   * Plug-and-play no código Caminho B que já existe
+   * Adicionar @supabase/supabase-js como dep
+   * Escrever scheduler incremental (created_at_min/max)
+   * Implementar stubs LGPD (T44) no Vercel
+   * Gratificação rápida: dados reais da Miranda no Supabase
+     em uma sessão só
+
+2. 🅱 Conta Azul ETL real (FRENTE 1):
+   * PRECONDIÇÃO: descobrir endpoint de DETALHE de NF-e (T45)
+     via navegador humano (WAF bloqueia WebFetch)
+   * Depois: merge partial + detail → CanonicalSale completo
+   * Loop de polling com janelas data_inicial/data_final
+   * Coordenar refresh_token rotation no scheduler
+
+3. 🅲 Frontend Next.js (Caminho A — FRENTE 3):
+   * Next.js 15 + App Router + Tailwind + shadcn/ui + Recharts
+   * Consume via @supabase/supabase-js → as 14 views existentes
+   * Funciona contra seed + dados de ETL indistintamente
+   * Pode começar em paralelo com FRENTE 1 ou 2
+
+4. 🟡 Meta Ads (FRENTE 4) — AGUARDANDO HUMANOS
+
+5. ⚠ Cofre de senhas Stepads (T46) — resolver ANTES da próxima
+   pessoa do revezamento precisar puxar credenciais
