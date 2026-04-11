@@ -1,27 +1,34 @@
 {
   "name": "miranda---stepads",
   "version": "1.0.0",
-  "description": "Dashboard consolidado da Miranda Studio com três origens de dados:\r - **Conta Azul** — vendas da loja física\r - **Nuvemshop** — e-commerce\r - **Meta Ads** — tráfego pago",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "description": "Dashboard consolidado da Miranda Studio com três origens de dados: Conta Azul, Nuvemshop e Meta Ads",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Dev-Stepads/miranda-estudio-dashboard.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "author": "Stepads",
+  "license": "UNLICENSED",
   "bugs": {
     "url": "https://github.com/Dev-Stepads/miranda-estudio-dashboard/issues"
   },
   "homepage": "https://github.com/Dev-Stepads/miranda-estudio-dashboard#readme",
   "dependencies": {
-    "playwright-core": "^1.59.1"
+    "playwright-core": "^1.59.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "msw": "^2.7.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

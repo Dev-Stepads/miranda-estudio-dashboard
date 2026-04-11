@@ -1,0 +1,204 @@
+/**
+ * Nuvemshop raw → canonical mappers.
+ *
+ * These are PURE functions — no I/O, no global state, no side effects.
+ * They take a raw type (validated by Zod in the client) and return a
+ * canonical type that matches the Supabase schema.
+ *
+ * Design notes:
+ * - All money arrives as strings in Nuvemshop. We parseFloat here, once,
+ *   so downstream code never has to. Invalid numbers → 0 (defensive).
+ * - `sale_date` prefers `paid_at` per DECISOES.txt 2026-04-10. Falls back
+ *   to `created_at`.
+ * - `partially_paid` is mapped to `paid` per REGRAS_CONSOLIDACAO §2.2.
+ * - Gender extraction is forgiving (accepts PT and EN variants).
+ * - Product names extract the `pt` locale (Miranda is pt-only).
+ */
+
+import type {
+  RawNuvemshopOrder,
+  RawNuvemshopCustomer,
+  RawNuvemshopProduct,
+  RawNuvemshopCheckout,
+} from './types.ts';
+import type {
+  CanonicalSale,
+  CanonicalSaleItem,
+  CanonicalCustomer,
+  CanonicalProduct,
+  CanonicalAbandonedCheckout,
+  SaleStatus,
+  Gender,
+} from '../../canonical/types.ts';
+import { extractLocalized } from '../../lib/i18n.ts';
+
+// ------------------------------------------------------------
+// Sales
+// ------------------------------------------------------------
+
+/**
+ * Map a raw Nuvemshop order to a canonical sale.
+ *
+ * If the order has no `products` array (summary endpoint), `items`
+ * will be empty — the caller is responsible for calling `getOrder(id)`
+ * to load the full detail when needed.
+ */
+export function mapOrderToCanonicalSale(raw: RawNuvemshopOrder): CanonicalSale {
+  const items: CanonicalSaleItem[] = (raw.products ?? []).map((p) => ({
+    product_name: p.name,
+    sku: p.sku,
+    quantity: p.quantity,
+    unit_price: safeParseMoney(p.price),
+    total_price: safeParseMoney(p.total),
+  }));
+
+  return {
+    source: 'nuvemshop',
+    source_id: String(raw.id),
+    sale_date: raw.paid_at ?? raw.created_at,
+    total_gross: safeParseMoney(raw.total),
+    total_net: safeParseMoney(raw.subtotal),
+    status: mapPaymentStatus(raw.payment_status),
+    customer_source_id:
+      raw.customer_id !== undefined && raw.customer_id !== null
+        ? String(raw.customer_id)
+        : null,
+    payment_method: firstNonEmpty(raw.gateway_name, raw.gateway),
+    items,
+  };
+}
+
+/**
+ * Map Nuvemshop `payment_status` to canonical `SaleStatus`.
+ *
+ * DECISÕES:
+ * - `partially_paid` → `paid` (REGRAS §2.2).
+ * - `voided` and `cancelled` → `cancelled`.
+ * - Anything unknown → `pending` (safer than throwing).
+ */
+export function mapPaymentStatus(paymentStatus: string): SaleStatus {
+  switch (paymentStatus) {
+    case 'paid':
+    case 'partially_paid':
+      return 'paid';
+    case 'cancelled':
+    case 'voided':
+      return 'cancelled';
+    case 'refunded':
+      return 'refunded';
+    case 'pending':
+    case 'authorized':
+    case 'in_process':
+    case 'abandoned':
+      return 'pending';
+    default:
+      return 'pending';
+  }
+}
+
+// ------------------------------------------------------------
+// Customers
+// ------------------------------------------------------------
+
+/**
+ * Map a raw Nuvemshop customer to a canonical customer.
+ *
+ * GATE N#1 (gender) and GATE N#2 (birthday/age) are PENDING until
+ * Miranda confirms checkout settings. For now, gender best-effort
+ * via `extra.gender` and age always null.
+ */
+export function mapCustomerToCanonical(raw: RawNuvemshopCustomer): CanonicalCustomer {
+  const addr = raw.default_address ?? raw.addresses?.[0] ?? null;
+
+  return {
+    source: 'nuvemshop',
+    source_id: String(raw.id),
+    name: raw.name,
+    gender: mapGender(raw.extra?.gender),
+    age: null, // TODO(T21): extract from custom_fields birthday when available
+    age_range: 'unknown',
+    state: nullIfEmpty(addr?.province),
+    city: nullIfEmpty(addr?.city),
+    email: nullIfEmpty(raw.email),
+    phone: nullIfEmpty(raw.phone),
+    document: nullIfEmpty(raw.identification),
+  };
+}
+
+export function mapGender(raw: string | undefined): Gender {
+  if (raw === undefined || raw === null || raw === '') return 'unknown';
+  const lower = raw.toLowerCase();
+  if (lower === 'male' || lower === 'masculino' || lower === 'm') return 'male';
+  if (lower === 'female' || lower === 'feminino' || lower === 'f') return 'female';
+  if (lower === 'other' || lower === 'outro' || lower === 'o') return 'other';
+  return 'unknown';
+}
+
+// ------------------------------------------------------------
+// Products
+// ------------------------------------------------------------
+
+/**
+ * Map a raw Nuvemshop product to a canonical product.
+ *
+ * Uses the first variant's SKU and price as the "representative" values.
+ * For multi-variant products, the ETL should handle all variants
+ * separately when that's required — this mapper targets the single-SKU
+ * dashboard view (REGRAS §3).
+ */
+export function mapProductToCanonical(raw: RawNuvemshopProduct): CanonicalProduct {
+  const firstVariant = raw.variants?.[0];
+  return {
+    source: 'nuvemshop',
+    source_id: String(raw.id),
+    name: extractLocalized(raw.name, 'pt'),
+    sku: firstVariant?.sku ?? null,
+    price: firstVariant !== undefined ? safeParseMoney(firstVariant.price) : 0,
+  };
+}
+
+// ------------------------------------------------------------
+// Abandoned Checkouts
+// ------------------------------------------------------------
+
+export function mapCheckoutToCanonicalAbandoned(
+  raw: RawNuvemshopCheckout,
+): CanonicalAbandonedCheckout {
+  const customerId = raw.customer?.id;
+  return {
+    source: 'nuvemshop',
+    source_id: String(raw.id),
+    customer_source_id:
+      customerId !== undefined && customerId !== null ? String(customerId) : null,
+    total_value: safeParseMoney(raw.total),
+    abandoned_at: raw.updated_at,
+    items_count: raw.products?.length ?? 0,
+  };
+}
+
+// ------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------
+
+/**
+ * Parse a money string to a number. Returns 0 for invalid/empty input
+ * instead of NaN, because propagating NaN through SUM aggregates poisons
+ * the whole dataset.
+ */
+export function safeParseMoney(value: string | null | undefined): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nullIfEmpty(value: string | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return value;
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const v of values) {
+    if (v !== null && v !== undefined && v !== '') return v;
+  }
+  return null;
+}
