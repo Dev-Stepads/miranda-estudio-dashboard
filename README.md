@@ -10,7 +10,7 @@ Dashboard consolidado da Miranda Studio com três origens de dados:
 O dashboard é dividido em quatro abas:
 
 1. **Visão Geral** — consolida loja física + e-commerce: faturamento total, participação por canal, ranking de produtos.
-2. **Loja Física** — faturamento, produtos, demografia (gênero, idade, ticket médio, estado por DDD).
+2. **Loja Física** — faturamento, produtos, ticket médio, distribuição por estado. (Sem análise por gênero ou faixa etária — ver `docs/context/DECISOES.txt` 2026-04-10: o Conta Azul usado pela Miranda não coleta esses dados.)
 3. **Nuvemshop** — faturamento, produtos, geografia, gênero, faixa etária, carrinhos abandonados.
 4. **Meta Ads** — investimento, faturamento atribuído, ROAS, CTR, CPC, CPM, alcance, impressões, cliques, ranking de criativos.
 

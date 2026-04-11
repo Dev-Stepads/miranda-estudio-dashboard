@@ -19,17 +19,72 @@ ETAPA 1 — BASE DO PROJETO
         chaves copiadas para .env.local (SUPABASE_URL, SUPABASE_ANON_KEY,
         SUPABASE_SERVICE_ROLE_KEY). Verificar região em Settings →
         Infrastructure (deve ser South America / São Paulo).
-[ ] T1c Criar projeto Vercel (dev@stepads.com.br)
+[x] T1c Criar projeto Vercel (dev@stepads.com.br) — 2026-04-10
+        https://miranda-estudio-dashboard.vercel.app
+        Repositório Dev-Stepads/miranda-estudio-dashboard importado e
+        vinculado. Primeiro deploy sem código de app (esperado).
+        PENDENTE: adicionar as 3 env vars do Supabase em Environment
+        Variables (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY)
+        — será feito na Parte 2 (link Supabase ↔ Vercel).
 
 --------------------------------------------------------
 ETAPA 2 — DESCOBERTA TÉCNICA DAS FONTES
 --------------------------------------------------------
-[ ] T4  Mapear tecnicamente a API Conta Azul
-         → preencher /docs/producao/MAPEAMENTO_CONTA_AZUL.txt
-[ ] T5  Mapear tecnicamente a API Nuvemshop
-         → preencher /docs/producao/MAPEAMENTO_NUVEMSHOP.txt
-[ ] T6  Mapear tecnicamente a API Meta Ads
-         → preencher /docs/producao/MAPEAMENTO_META_ADS.txt
+[x] T4  Mapear tecnicamente a API Conta Azul — 2026-04-10
+         → /docs/producao/MAPEAMENTO_CONTA_AZUL.txt preenchido via
+           research de docs públicas + validação visual direta no
+           dashboard real da Miranda (via Playwright/CDP no OperaGX).
+           Decisões tomadas e registradas em DECISOES.txt:
+             - API nova (v1, OAuth 2.0), não a legada
+             - ETL 100% polling (sem webhooks)
+             - Aba Loja Física NÃO terá gênero nem faixa etária
+               (dados inexistentes no Conta Azul da Miranda)
+             - Filtrar canal via campo vendedor_responsavel
+           Itens que NÃO foram validados nesta rodada (ficam pra T7):
+             - Existência de SKU no cadastro de produto
+             - Lista completa de valores de vendedor_responsavel
+             - Suporte a expand=items em /v1/sales
+             - Status da API no menu Integrações do Conta Azul
+[x] T5  Mapear tecnicamente a API Nuvemshop — 2026-04-10
+         → /docs/producao/MAPEAMENTO_NUVEMSHOP.txt preenchido via
+           research de docs públicas (WebFetch funcionou desta vez,
+           doc oficial é acessível em tiendanube.github.io/api-documentation).
+           Descobertas principais:
+             - OAuth 2.0 com access_token que NÃO EXPIRA
+             - Base URL versionada: /2025-03/{store_id}/...
+             - Webhooks SUPORTADOS (usa híbrido webhook + polling)
+             - SKU existe nos itens do pedido e em variants dos produtos
+             - Gender é campo padrão em customer.extra.gender
+             - Birthday é CUSTOM FIELD (loja precisa configurar)
+             - Rate limit generoso (40 req, 2 rps leaky bucket)
+             - Retenção de carrinhos abandonados: 30 dias via API
+           Gaps críticos que PRECISAM validação no painel da Miranda
+           antes de T13:
+             - Checkout pede gênero?
+             - Existe custom field de birthday configurado?
+             - Qual o plano da loja (afeta rate limit)?
+[x] T6  Mapear tecnicamente a API Meta Ads — 2026-04-10
+         → /docs/producao/MAPEAMENTO_META_ADS.txt preenchido via
+           research das docs oficiais do Meta for Developers.
+           Descobertas principais:
+             - Marketing API v25.0 (travada até revisão trimestral)
+             - Auth via System User Token (não expira)
+             - ETL 100% polling de 30 em 30 min (webhook não cobre
+               métricas, só eventos de estado)
+             - Coleta defensiva de 7 dias com UPSERT porque Meta
+               recalcula histórico
+             - Attribution window: 7d_click + 1d_view (default,
+               7d_view e 28d_view foram removidos em 2026-01-12)
+             - Rate limit BUC (Business Use Case) — quota
+               compartilhada por ad account
+             - Demografia do Meta = público alcançado, NÃO
+               compradores (clareza nos labels do dashboard)
+           Gaps pra T23 (o cliente Miranda precisa fornecer):
+             - Business Manager ID
+             - Ad Account ID (act_XXXXXXXXX)
+             - Criar System User + acesso à ad account
+             - Confirmar attribution window usado na conta deles
+             - Confirmar action_type do Pixel
 
 --------------------------------------------------------
 ETAPA 3 — INTEGRAÇÃO CONTA AZUL

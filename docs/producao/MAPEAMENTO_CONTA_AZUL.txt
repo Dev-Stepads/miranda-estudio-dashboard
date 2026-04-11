@@ -1,9 +1,16 @@
 ========================================================
 MAPEAMENTO TÉCNICO — API Conta Azul
 ========================================================
-Status: NÃO INICIADO
-Responsável: (a atribuir)
+Status: PREENCHIDO (research via docs públicas)
+Responsável: Matheus (via Claude, sessão 2026-04-10)
 Última atualização: 2026-04-10
+
+IMPORTANTE SOBRE NÍVEIS DE CONFIANÇA:
+Todo item neste doc tem um marcador:
+  [OK]    confirmado em doc oficial ou fonte confiável
+  [INF]   inferido a partir de evidências indiretas
+  [VER]   precisa VERIFICAR com acesso ao dashboard / portal /
+          chamada real antes de escrever código de produção
 
 --------------------------------------------------------
 OBJETIVO
@@ -12,83 +19,517 @@ Confirmar quais dados a API Conta Azul entrega para
 alimentar a aba Loja Física + parte da Visão Geral.
 
 --------------------------------------------------------
-1. AUTENTICAÇÃO
+0. CONTEXTO CRÍTICO — EXISTEM DUAS APIs
 --------------------------------------------------------
-Tipo: OAuth 2.0
-Documentação oficial: (preencher com link)
-Endpoint de autorização: (preencher)
-Endpoint de token: (preencher)
-Scopes necessários: (preencher)
-Duração do access_token: (preencher)
-Refresh token suportado: ( ) sim  ( ) não
-Como armazenar: (Supabase? variável de ambiente? cofre?)
+[OK] A Conta Azul mantém (mantinha) DUAS APIs em paralelo:
+
+  (A) API LEGADA — "api.contaazul.com.br/pub/..."
+      Autenticação: ExternalApplicationToken + CompanyToken em headers
+      Status: em processo de deprecação.
+      Prazo oficial de migração para a nova API: 2025-11-05.
+      Como hoje é 2026-04-10, a API legada pode estar desligada ou
+      prestes a ser. NÃO DEVEMOS usar.
+
+  (B) API NOVA — "api.contaazul.com/v1/..."
+      Lançada em março/2025. OAuth 2.0 padrão.
+      Portal de credenciais: https://developers-portal.contaazul.com/
+      É esta que vamos usar.
+
+DECISÃO: usar EXCLUSIVAMENTE a nova API (v1) com OAuth 2.0.
+         Registrada em /docs/context/DECISOES.txt em 2026-04-10.
 
 --------------------------------------------------------
-2. ENDPOINTS QUE VAMOS USAR
+1. AUTENTICAÇÃO (API nova)
+--------------------------------------------------------
+[OK] Tipo: OAuth 2.0 — fluxo Authorization Code
+[OK] Portal para criar aplicação e obter credenciais:
+        https://developers-portal.contaazul.com/#/login
+     (exige 2FA: Google/Microsoft Authenticator ou Authy)
+
+[OK] Credenciais emitidas pelo portal:
+        client_id        — público
+        client_secret    — SECRETO, vai pro .env.local / cofre Stepads
+
+[OK] Endpoint de token:
+        POST https://auth.contaazul.com/oauth2/token
+
+     Headers obrigatórios no POST /oauth2/token:
+        Authorization: Basic base64(client_id:client_secret)
+        Content-Type:  application/x-www-form-urlencoded
+
+     Body (grant_type=authorization_code):
+        grant_type=authorization_code
+        code=<authorization_code_recebido>
+        redirect_uri=<mesma_url_registrada_no_portal>
+
+     Body (grant_type=refresh_token):
+        grant_type=refresh_token
+        refresh_token=<refresh_token_atual>
+
+[VER] Endpoint de autorização (tela de consentimento do usuário):
+      Provavelmente https://auth.contaazul.com/oauth2/authorize
+      com params: response_type=code, client_id, redirect_uri,
+      scope, state.
+      CONFIRMAR exatamente no portal do dev quando o Matheus/equipe
+      registrar a aplicação pela primeira vez (T7).
+
+[OK] Duração dos tokens:
+        access_token:  1 hora
+        refresh_token: 2 semanas, SINGLE-USE
+        → cada vez que usamos o refresh_token, a resposta traz um
+          NOVO refresh_token. Precisamos persistir o novo e descartar
+          o anterior. Esquecer isso quebra tudo depois de 2 semanas.
+
+[VER] Scopes disponíveis: a lista exata só é visível no portal do dev.
+      Scopes esperados para nosso caso:
+        - leitura de vendas (sales:read ou similar)
+        - leitura de clientes (customers:read ou similar)
+        - leitura de produtos (products:read ou similar)
+      Pedir APENAS escopos de leitura. Nunca pedir :write.
+
+--------------------------------------------------------
+2. BASE URL E ESTRUTURA DA API NOVA
+--------------------------------------------------------
+[OK] Base URL:      https://api.contaazul.com/v1/
+[OK] Formato:       REST + JSON
+[OK] Autenticação por chamada: header
+        Authorization: Bearer <access_token>
+
+[OK] Rate limits:
+        600 requisições por minuto por conta ERP conectada
+         10 requisições por segundo (pico)
+        Os detalhes vêm em HEADERS da resposta HTTP (X-RateLimit-*
+        ou similar — verificar nomes exatos nos headers quando
+        começarmos a chamar).
+
+[OK] Paginação: OBRIGATÓRIA. Consultas sem paginação podem dar timeout.
+[VER] Nomes exatos dos params de paginação (limit/offset vs page/per_page)
+      só serão confirmados ao fazer as primeiras chamadas — documentação
+      pública está protegida e não foi possível extrair via WebFetch.
+
+[OK] Sandbox: NÃO HÁ ambiente dedicado de sandbox.
+     Ao registrar uma app nova no portal, é criada automaticamente
+     uma "conta de teste" válida por 3 dias. Extensível via
+     api@contaazul.com. Depois disso, só produção.
+
+[OK] Webhooks: NÃO SUPORTADOS pela API pública.
+     Consequência direta para nós: sincronização será 100% POLLING.
+     ETL precisa rodar em cron job (Supabase Edge Function + pg_cron
+     ou Vercel Cron) coletando por janelas de tempo.
+
+[OK] Geo-restrição: a API é bloqueada fora do Brasil em alguns cenários.
+     Importa quando formos rodar o ETL: Supabase São Paulo ✅ ok,
+     Vercel Functions dependendo da região pode ter problema.
+     VER seção 7 (riscos).
+
+--------------------------------------------------------
+3. ENDPOINTS QUE VAMOS USAR
 --------------------------------------------------------
 
-2.1 Vendas por período
+3.1 Listar vendas por período                               [OK nome / VER params]
     Método:     GET
-    URL:        (preencher)
-    Parâmetros: (preencher — data_inicio, data_fim, status, paginação)
-    Retorna:    (preencher — estrutura resumida)
-    Paginação:  (preencher — offset/limit ou cursor)
-    Rate limit: (preencher)
+    URL:        https://api.contaazul.com/v1/sales
+    Parâmetros esperados:
+        - filtro por data (provavelmente "emitted_on" ou "date_from"/"date_to")
+        - filtro por status (ex.: COMMITTED para vendas efetivadas)
+        - paginação (limit/offset ou cursor)
+    [VER] Nomes exatos dos query params precisam ser validados
+          no portal do dev ou numa chamada real.
+    Retorna:    array de Sale objects (ver seção 4.1)
 
-2.2 Itens da venda
+3.2 Detalhe de uma venda específica                        [OK]
     Método:     GET
-    URL:        (preencher)
-    Parâmetros: (preencher)
-    Retorna:    (preencher)
+    URL:        https://api.contaazul.com/v1/sales/{id}
+    Uso:        puxar detalhes que podem não estar no /sales listagem.
+                Provavelmente evitaremos usar em larga escala (custa
+                1 request por venda — rate limit de 600/min vira gargalo).
 
-2.3 Clientes
+3.3 Itens de uma venda                                      [OK]
     Método:     GET
-    URL:        (preencher)
-    Parâmetros: (preencher)
-    Retorna:    (preencher)
+    URL:        https://api.contaazul.com/v1/sales/{id}/items
+    ATENÇÃO: itens vêm em endpoint SEPARADO na API nova.
+    Isso é crítico pro nosso ETL:
+      - N vendas no período = 1 chamada /sales/?limit=N
+      - + N chamadas /sales/{id}/items para os itens de cada uma
+      - = N+1 chamadas por ciclo de coleta
+    Alternativa: verificar se o endpoint /sales já inclui items
+    inline quando se passa algum query param tipo "expand=items".
+    [VER] Testar se "expand" ou "include" existe — economia
+          gigantesca de rate limit se sim.
+
+3.4 Listar clientes                                         [OK nome]
+    Método:     GET
+    URL:        https://api.contaazul.com/v1/customers
+    Uso:        coletar base de clientes para JOIN com vendas
+                (demografia: idade, gênero, estado via DDD).
+    [VER] Nome exato do endpoint pode ser /customers ou /contacts
+          (API legada era /contact/customer/). Confirmar.
+
+3.5 Listar produtos                                         [OK nome]
+    Método:     GET
+    URL:        https://api.contaazul.com/v1/products
+    Uso:        catálogo base para consolidação de SKUs entre
+                Conta Azul e Nuvemshop (REGRAS_CONSOLIDACAO.txt §3).
+
+3.6 Categorias de produto                                   [OK]
+    Método:     GET
+    URL:        https://api.contaazul.com/v1/product-categories
+    Uso:        permitir filtro por categoria na aba Loja Física.
 
 --------------------------------------------------------
-3. CAMPOS DISPONÍVEIS
+4. CAMPOS DISPONÍVEIS (com confiança por campo)
 --------------------------------------------------------
 
-3.1 Venda
-    - id                : (sim/não)
-    - data              : (sim/não)
-    - valor_total       : (sim/não)
-    - status            : (sim/não — quais valores?)
-    - cliente_id        : (sim/não)
-    - forma_pagamento   : (sim/não)
+4.1 Sale (venda)
+    VALIDADO VIA SCREENSHOT DIRETO DO DASHBOARD (2026-04-10, venda #16138).
 
-3.2 Item da venda
-    - produto_id        : (sim/não)
-    - produto_nome      : (sim/não)
-    - sku               : (sim/não) ← CRÍTICO para consolidação
-    - quantidade        : (sim/não)
-    - valor_unitario    : (sim/não)
-    - valor_total_item  : (sim/não)
+    [OK-VALID]  id                     — ex: "16138" (número sequencial
+                                         visível como "Detalhes da venda
+                                         16138"). Provavelmente o
+                                         source_sale_id no nosso schema.
+    [OK-VALID]  status / situação      — enum CONFIRMADO (3 valores
+                                         visíveis nos totalizadores da
+                                         listagem + situação na venda):
+                                           "Cancelados"   (CANCELED)
+                                           "Previstos"    (PENDING)
+                                           "Aprovados"    (COMMITTED)
+                                         [VER] se existe "Devolvida" /
+                                         "Estornada" / outros.
+    [OK-VALID]  data_da_venda          — campo "Data de venda"
+                                         (ex: "31/03/2026")
+                                         [VER] nome exato na API
+    [OK-VALID]  cliente                — objeto Cliente referenciado
+                                         (ex: "Cláudia Gomides")
+                                         OU o literal
+                                         "Consumidor Final - Venda de
+                                         Consumidor" para vendas PDV
+                                         sem cliente identificado.
+                                         🚨 Grande parte das vendas da
+                                         loja física NÃO tem cliente
+                                         vinculado.
 
-3.3 Cliente — dados demográficos
-    - nome              : (sim/não)
-    - genero            : (sim/não) ← precisamos para demografia
-    - data_nascimento   : (sim/não) ← precisamos para faixa etária
-    - telefone          : (sim/não) ← precisamos para DDD → estado
-    - endereco          : (sim/não)
-    - estado/UF         : (sim/não)
+    🚨 [OK-VALID-NOVO]  vendedor_responsavel
+                             — CAMPO CRÍTICO descoberto na validação.
+                               Ex visto: "LOJA FÍSICA"
+                               USO NO ETL: filtrar vendas por este
+                               campo é a forma de separar canal de
+                               venda. A Miranda usa "LOJA FÍSICA" como
+                               vendedor catch-all para PDV da loja.
+                               [VER] se existem outros valores usados
+                               (vendedores individuais para comissão,
+                               "NUVEMSHOP" ou similar para vendas
+                               importadas do e-commerce, etc.). A
+                               investigar na próxima rodada de amostras.
+
+    [OK-VALID]  total_da_venda         — soma bruta dos itens
+                                         (ex: R$ 31,81)
+    [OK-VALID]  descontos              — campo separado
+                                         (R$ 0,00 no exemplo)
+    [OK-VALID]  total_liquido          — após descontos
+    [OK-VALID]  itens                  — tabela inline na tela da venda.
+                                         SE a API nova trouxer items
+                                         inline no GET /sales/{id},
+                                         elimina o N+1 que eu preocupei
+                                         na seção 3.3.
+                                         [VER] testar expand=items na T7.
+    [OK-VALID]  parcelas (tabela
+                financeira)            — Cada parcela tem colunas:
+                                           vencimento
+                                           numero_parcela
+                                           forma_de_pagamento
+                                           conta (financial account
+                                                  onde cai o recebimento)
+                                           valor
+                                           recebido
+                                           em_aberto
+                                           situacao (enum por parcela)
+    [OK-VALID]  forma_pagamento        — descrita como texto no topo
+                                         da seção financeira (ex:
+                                         "A vista ou Cartão de Crédito
+                                          via Link"). Provável enum
+                                         na API: PIX, CARD_CREDIT,
+                                         CARD_DEBIT, CASH, BOLETO,
+                                         CHECK, PIX_LINK, CARD_LINK...
+                                         [VER] lista exata.
+    [OK-VALID]  notas_fiscais          — seção "Informações fiscais"
+                                         presente. Não é dado que nos
+                                         interessa direto no dashboard,
+                                         mas é útil saber que existe.
+    [OK]   payment_status (nas parcelas) — enum com valores conhecidos:
+             PENDENTE         (= EM_ABERTO)
+             QUITADO          (= RECEBIDO)
+             RECEBIDO_PARCIAL
+             ATRASADO
+             CANCELADO
+             RENEGOCIADO
+             PERDIDO
+
+4.2 Sale Item (item da venda)
+    VALIDADO PARCIALMENTE VIA SCREENSHOT (venda #16138 tem só 1 item
+    e era uma taxa de entrega — limita a validação).
+
+    Colunas da tabela de itens vistas na tela:
+    [OK-VALID]  produto_nome         — ex: "Taxa de Entrega PAC"
+    [OK-VALID]  tipo                 — "Produto" ou "Serviço"
+                                       (enum binário aparente)
+    [OK-VALID]  detalhes             — campo texto livre / descrição
+    [OK-VALID]  quantidade           — número
+    [OK-VALID]  valor_unitario       — numeric
+    [OK-VALID]  subtotal             — numeric (qty × unit)
+
+    ❌ [VALID-GAP]  sku / código     — NÃO APARECE na tabela de itens
+                                       da venda. Só o nome do produto
+                                       é visível.
+                                       [VER] se SKU existe como campo
+                                       no cadastro de produto
+                                       (módulo Produtos / Estoque).
+                                       Se existir lá mas não vier na
+                                       venda, a consolidação precisa
+                                       fazer JOIN produto por ID.
+                                       Se NÃO existir nem no cadastro,
+                                       consolidação com Nuvemshop
+                                       precisa ser por nome canônico
+                                       (lowercase, sem acento, trim).
+
+    [VER]  product_id                — relação de FK com catálogo
+                                       de produtos. Provável que exista
+                                       internamente mas não é visível
+                                       na UI de venda.
+
+4.3 Customer (cliente)
+    VALIDADO VIA SCREENSHOT DO DASHBOARD REAL DA MIRANDA (2026-04-10).
+    Ficha da cliente Adriana Amadio usada como exemplo canônico.
+
+    [OK-VALID]  id                    — identificador interno CA
+    [OK-VALID]  name                  — "Adriana Amadio" (sempre presente)
+    [OK-VALID]  email                 — 1 ou mais emails marcados como
+                                        principal ("1 Selecionado" no UI)
+    [OK-VALID]  documentNumber (CPF)  — "183.378.928-89" (formatado
+                                        com máscara no painel)
+    [OK-VALID]  tipoPapel / kind      — "Cliente" visível no UI
+    [OK-VALID]  telefone_comercial    — campo separado
+    [OK-VALID]  telefone_celular      — campo separado (opcional)
+                                        ⚠ FORMATO: exemplo visto mistura
+                                        código do país com DDD:
+                                        "(55) 11945-259593" — parser
+                                        precisa extrair DDD real (11)
+                                        separado do código de país (55).
+                                        Tratar na T8.
+    [OK-VALID]  endereço (texto livre estruturado)
+                                      — "Rua Sincorá, 498 - Jardim
+                                        Umuarama, São Paulo - SP,
+                                        04650000 - Brasil"
+                                        Tudo em uma linha, mas os
+                                        componentes (logradouro, número,
+                                        bairro, cidade, UF, CEP, país)
+                                        aparecem separados. Precisamos
+                                        confirmar se a API entrega
+                                        CAMPOS separados ou só string
+                                        agregada. [VER-API]
+    [OK-VALID]  cidade                — "São Paulo"
+    [OK-VALID]  state / UF            — "SP" — VEM DIRETO!
+                                        🟢 IMPACTO POSITIVO: o fallback
+                                        DDD→UF que estava no GAP #3 vira
+                                        edge case, não regra principal.
+                                        Só cai no fallback quando o
+                                        endereço estiver vazio.
+    [OK-VALID]  CEP                   — "04650000"
+    [OK-VALID]  código_do_cliente     — campo existe mas está VAZIO no
+                                        exemplo. Miranda não usa.
+                                        Ignorar no ETL (pode virar coluna
+                                        metadata se quisermos).
+    [OK-VALID]  cadastroCriadoEm      — "14/11/2025"
+                                        → data de criação do cliente,
+                                        não da primeira compra.
+
+    ❌ GAP CONFIRMADO POR EVIDÊNCIA DIRETA — genero / gender
+       Campo NÃO EXISTE na ficha de cadastro do Conta Azul usado pela
+       Miranda. Nenhum lugar na tela principal nem nas abas.
+       Miranda também NÃO usa campos personalizados / "Informações
+       adicionais" (confirmado vazio pelo Matheus em 2026-04-10).
+       CONSEQUÊNCIA: aba Loja Física → demografia por gênero fica
+       tecnicamente INVIÁVEL com os dados atuais. Precisa decisão
+       de negócio — ver seção 5 GAP #1 atualizado.
+
+    ❌ GAP CONFIRMADO POR EVIDÊNCIA DIRETA — data_nascimento / birth_date
+       Campo NÃO EXISTE. Nenhum lugar na ficha.
+       CONSEQUÊNCIA: aba Loja Física → faixa etária fica INVIÁVEL.
+       Ver seção 5 GAP #2 atualizado.
 
 --------------------------------------------------------
-4. GAPS IDENTIFICADOS
+5. GAPS IDENTIFICADOS (CRÍTICOS para as abas do dashboard)
 --------------------------------------------------------
-(preencher após investigação — ex.: "gênero não vem na API,
-precisaremos inferir por nome ou deixar como 'desconhecido'")
+
+GAP #1 — Gênero do cliente ❌ INVIÁVEL — DECIDIDO (2026-04-10)
+  Evidência: screenshot da ficha de cliente real da Miranda não
+  mostra nenhum campo de gênero, em nenhuma aba. Miranda confirmou
+  NÃO usar campos personalizados.
+  DECISÃO FINAL (Matheus, 2026-04-10): aba Loja Física NÃO terá
+  análise de gênero. Fica concentrada na aba Nuvemshop.
+  Registrada em /docs/context/DECISOES.txt.
+
+GAP #2 — Data de nascimento / idade ❌ INVIÁVEL — DECIDIDO (2026-04-10)
+  Evidência: mesma de GAP #1. Campo inexistente.
+  DECISÃO FINAL (Matheus, 2026-04-10): aba Loja Física NÃO terá
+  análise de faixa etária. Fica concentrada na aba Nuvemshop.
+  Registrada em /docs/context/DECISOES.txt.
+
+GAP #3 — Estado do cliente sem endereço preenchido ✅ RESOLVIDO/DESPRIORIZADO
+  (2026-04-10) Estado VEM DIRETO no cadastro de cliente do Conta Azul:
+  o campo de endereço já traz cidade + UF estruturados ("São Paulo -
+  SP" no exemplo validado). O fallback DDD→UF vira portanto um EDGE
+  CASE (só usado quando o endereço não estiver preenchido), não a
+  regra principal.
+  Ação: ainda vale implementar o fallback como defensivo — alguns
+  clientes cadastrados pelo caixa às pressas podem não ter endereço.
+  Manter DECISOES.txt §3 (regra original) válida. Prioridade de
+  implementação fica mais baixa.
+
+GAP #4 — Ausência de webhooks
+  Impacto: latência do dashboard = intervalo de polling
+  Solução: cron job agendado. Sugestão inicial:
+    - Ingestão incremental a cada 30 min em horário comercial
+    - Ingestão completa do dia anterior uma vez ao dia (2h da manhã)
+  Ação: definir janela final com o cliente durante Etapa 7.
+
+GAP #5 — Nomes exatos de alguns campos/params não confirmados
+  Impacto: o primeiro sprint de código precisa de 1-2 horas
+  de exploração no playground / primeira chamada real.
+  Ação: marcar os [VER] deste doc como tarefa da T7
+  (primeira chamada autenticada).
 
 --------------------------------------------------------
-5. REGRAS DE NEGÓCIO DESCOBERTAS
+6. REGRAS DE NEGÓCIO DESCOBERTAS
 --------------------------------------------------------
-(preencher — ex.: "vendas com status 'cancelada' não entram
-no faturamento; devoluções são um status separado")
+
+6.1 Status de venda que entram no faturamento da Loja Física:
+    REGRA: COMMITTED é o status que representa venda efetivada.
+    Portanto:
+      INCLUI:  status = COMMITTED (venda aprovada/realizada)
+      EXCLUI:  status = PENDING   (aguardando review, não é venda real)
+      EXCLUI:  status = CANCELED  (se existir)
+    [VER] Confirmar a lista completa de status quando fizermos a
+          primeira chamada real a /v1/sales.
+
+6.2 Status de parcela para considerar venda "paga":
+    REGRA: olhar payment_status das parcelas (installments/payments).
+    Considerar "pago" quando a maioria das parcelas estiver em:
+      QUITADO (= RECEBIDO) ou RECEBIDO_PARCIAL
+    Vendas com parcelas CANCELADO/PERDIDO entram como perdidas.
+    [VER] Decidir com o cliente: vendas parceladas com apenas
+          parte das parcelas quitadas contam pro faturamento do
+          mês da venda ou do mês do recebimento?
+    → Essa decisão vai entrar em DECISOES.txt quando resolvida
+      com o Matheus / cliente.
+
+6.3 Tipo de cliente:
+    Só clientes INDIVIDUAL (PF) entram nas análises demográficas.
+    Clientes ENTITY (PJ) entram no faturamento mas não na
+    demografia/gênero/idade/estado (DDD).
+
+6.4 Duplicidade de cliente:
+    Cliente novo cadastrado manualmente no caixa pode não ter
+    documentNumber. Deduplicar usando (name + phone) como
+    fallback — regra a ser afinada na T12.
 
 --------------------------------------------------------
-6. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+7. RISCOS TÉCNICOS A CONHECER
 --------------------------------------------------------
-(toda decisão relevante deve também ser copiada para
-/docs/context/DECISOES.txt)
+
+R1. Migração legada → nova API já deveria ter sido feita até
+    2025-11-05. Se a aplicação do cliente Miranda ainda estiver
+    usando a API legada, pode haver atrito (ex.: tokens legados
+    não funcionam mais). Confirmar com Matheus se a Miranda já
+    migrou do lado deles — NÃO é necessariamente automático.
+
+R2. Refresh token single-use exige persistência transacional.
+    Se duas cron jobs tentarem renovar o token simultaneamente,
+    uma vai falhar. Solução: usar lock no Supabase (advisory lock
+    ou coluna token_locked_at com TTL).
+
+R3. Rate limit 600/min × N itens de venda puxados 1 a 1 é o maior
+    risco de performance. Investigar na T7 se há endpoint bulk
+    de items ou param "expand".
+
+R4. Geo-bloqueio fora do Brasil: Vercel Functions podem rodar em
+    região diferente e serem bloqueadas. Duas opções:
+      a) Rodar ETL no Supabase Edge Functions (São Paulo).
+      b) Configurar Vercel Function com região "gru1" (São Paulo).
+    Preferir (a) para ficar colocalizado com o banco.
+
+R5. Sem sandbox. Toda integração testada vai mexer em dados reais
+    da conta de teste de 3 dias ou direto na produção do cliente.
+    Criar cuidado extra nos endpoints de escrita (não é nosso caso
+    imediato — só leitura — mas vale anotar).
+
+--------------------------------------------------------
+8. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+--------------------------------------------------------
+
+D1. [2026-04-10] [INTEGRACAO] Usar nova API Conta Azul (v1), não a legada.
+    Copiada para /docs/context/DECISOES.txt.
+
+D2. [2026-04-10] [INTEGRACAO] ETL da Conta Azul será 100% via polling
+    (webhooks indisponíveis). Cron a cada 30 min + ingestão completa
+    do dia anterior 1x/dia.
+    Copiada para /docs/context/DECISOES.txt.
+
+D3. [2026-04-10] [ESCOPO] ✅ DECIDIDO pelo Matheus
+    Aba "Loja Física" do dashboard NÃO terá métricas de gênero nem
+    faixa etária. Análise demográfica fica concentrada na aba
+    Nuvemshop, onde os dados de fato existem.
+    Registrada em /docs/context/DECISOES.txt como decisão oficial.
+
+D4. [2026-04-10] [INTEGRACAO] Campo "vendedor_responsavel" como
+    separador de canal de venda.
+    A Miranda usa o campo "Vendedor responsável" como etiqueta de
+    canal. Vendas da loja física aparecem como "LOJA FÍSICA" neste
+    campo. O ETL vai filtrar por este campo para separar vendas
+    da loja física de eventuais outras origens.
+    Status: validado em 1 venda (#16138). A lista completa de
+    valores possíveis desse campo precisa ser mapeada na T7/T8
+    (primeiras chamadas reais), incluindo se há variações tipo
+    "LOJA FÍSICA - CAIXA 1" ou vendedores individuais.
+    Registrada em /docs/context/DECISOES.txt.
+
+--------------------------------------------------------
+9. PRÓXIMA AÇÃO PRÁTICA (para T7 — autenticação)
+--------------------------------------------------------
+
+Antes de começar T7, o Matheus precisa:
+
+  1. Criar conta no portal do dev:
+     https://developers-portal.contaazul.com/#/login
+     (exige 2FA — ter o Google Authenticator / Authy preparado)
+
+  2. Registrar uma aplicação "Miranda Dashboard":
+     - nome:        Miranda Dashboard
+     - redirect_uri: definir URL de callback
+         DEV:  http://localhost:3000/api/auth/contaazul/callback
+         PROD: https://miranda-estudio-dashboard.vercel.app/api/auth/contaazul/callback
+     - marcar apenas scopes de LEITURA
+
+  3. Guardar client_id e client_secret no cofre Stepads, no item
+     "Miranda Dashboard — .env.local", como variáveis:
+        CONTAAZUL_CLIENT_ID=
+        CONTAAZUL_CLIENT_SECRET=
+        CONTAAZUL_REDIRECT_URI=
+
+  4. Conectar a conta da Miranda (cliente real) ao app DEPOIS do
+     fluxo OAuth estar funcionando em dev. Enquanto isso, usar
+     a conta trial de 3 dias para testes.
+
+--------------------------------------------------------
+10. FONTES CONSULTADAS
+--------------------------------------------------------
+- developers.contaazul.com (portal oficial — WebFetch bloqueado por 403,
+  informações obtidas via resumo de search engine)
+- developers-portal.contaazul.com (novo portal do dev, registrado como
+  URL de credenciais)
+- ajuda.contaazul.com → FAQ de integração API para devs
+- github.com/jnettome/contaazul_docs (docs não-oficiais da API LEGADA —
+  útil para inferir schema de customer e estrutura de entidades que
+  provavelmente foi mantida na API nova)
+- github.com/Ailtontuk/api-examples (exemplos oficiais de Java/Node/Go
+  da Conta Azul)
+- developers.linkapi.solutions/docs/contaazul (integrador terceiro)

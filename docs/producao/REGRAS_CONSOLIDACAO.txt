@@ -13,14 +13,17 @@ seguida em todas as transformações e views.
 1.1 Timezone oficial do dashboard: America/Sao_Paulo (BRT/BRST)
     Todo timestamp é convertido para este tz antes de agrupar por dia.
 
-1.2 Data considerada como "data da venda":
-    - Conta Azul: data de emissão da venda (campo a confirmar em T4)
-    - Nuvemshop: created_at do pedido (data de criação — a confirmar
-      se é melhor usar paid_at quando disponível)
-    - Meta Ads: date_start do insight
-
-    DECISÃO em aberto: usar data de pagamento x data de pedido.
-    Registrar em DECISOES.txt quando decidido.
+1.2 Data considerada como "data da venda" (decidido em 2026-04-10):
+    - Conta Azul: "Data de venda" (campo já visto na UI, nome exato
+                   do campo na API a confirmar em T7)
+    - Nuvemshop:  paid_at quando payment_status ∈ {paid, partially_paid}
+                   FALLBACK para created_at nos casos pending/authorized
+                   Quando a venda transita para "paid", o registro
+                   canônico é reescrito com a nova paid_at (o ETL
+                   trata essa mudança idempotentemente).
+    - Meta Ads:   date_start do insight
+    Timezone de agrupamento diário: America/Sao_Paulo (§1.1).
+    Ver /docs/context/DECISOES.txt 2026-04-10.
 
 1.3 Períodos de comparação padrão no dashboard:
     - hoje
@@ -33,13 +36,28 @@ seguida em todas as transformações e views.
 --------------------------------------------------------
 2. STATUS QUE ENTRAM NO FATURAMENTO
 --------------------------------------------------------
-2.1 Conta Azul — a confirmar em T4. Regra preliminar:
-    INCLUI: vendas com status "pago" ou equivalente
-    EXCLUI: canceladas, devolvidas
+2.1 Conta Azul — validado em T4 (2026-04-10):
+    Status vistos na UI (totalizadores e ficha de venda):
+      "Aprovados" (= COMMITTED) → INCLUI no faturamento
+      "Previstos" (= PENDING)   → EXCLUI (aguardando confirmação)
+      "Cancelados" (= CANCELED) → EXCLUI
+    [VER] confirmar se existem status adicionais (Devolvida / Estornada)
+          na primeira chamada real à API em T7.
+    Filtro adicional: vendedor_responsavel ∈ {valores de "loja física"}
+    para limitar ao canal correto. Lista completa de valores válidos
+    a ser descoberta na T7/T8.
 
-2.2 Nuvemshop — a confirmar em T5. Regra preliminar:
-    INCLUI: orders com payment_status = 'paid'
-    EXCLUI: cancelled, refunded, pending
+2.2 Nuvemshop — validado em T5 (2026-04-10):
+    Enum completo de payment_status:
+      pending, authorized, paid, partially_paid, abandoned,
+      refunded, partially_refunded, voided
+    INCLUI: payment_status ∈ {paid, partially_paid}
+      (partially_paid inclui parcelamentos onde a 1ª parcela caiu)
+    EXCLUI: pending, authorized, abandoned, refunded,
+            partially_refunded, voided, cancelled
+    [VER] confirmar com o representante da Miranda se partially_paid
+          deve entrar — nossa recomendação é sim, porque a venda
+          já aconteceu. Registrar em DECISOES.txt quando confirmado.
 
 2.3 Faturamento = soma de gross_revenue do que está incluído
 
@@ -63,21 +81,43 @@ seguida em todas as transformações e views.
 --------------------------------------------------------
 4. DEMOGRAFIA
 --------------------------------------------------------
+4.0 DISPONIBILIDADE POR FONTE (atualizado 2026-04-10):
+    +--------------------+-----------+------------+
+    |                    | Gênero    | Idade      |
+    +--------------------+-----------+------------+
+    | Conta Azul (Loja)  | ❌ NÃO    | ❌ NÃO     |
+    | Nuvemshop          | ✅ SIM    | ✅ SIM     |
+    +--------------------+-----------+------------+
+    Consequência: a aba "Loja Física" do dashboard NÃO tem análises
+    por gênero ou faixa etária. Essas análises existem SOMENTE na
+    aba Nuvemshop. Ver /docs/context/DECISOES.txt (2026-04-10).
+
 4.1 Gênero:
     Valores canônicos: 'M', 'F', 'unknown'
-    Fallback: 'unknown' quando a fonte não entrega.
+    Fonte disponível: APENAS Nuvemshop.
+    Para source = 'conta_azul': sempre 'unknown' (campo não coletado).
+    Fallback geral: 'unknown' quando a fonte não entrega.
     NÃO inferir gênero a partir de nome próprio (viés + falso positivo).
 
 4.2 Idade:
-    Calculada a partir de data_nascimento na data da compra.
     Faixas: 18-24 / 25-34 / 35-44 / 45-54 / 55+
-    Menores de 18 → revisar caso a caso (provavelmente erro de cadastro)
-    Sem data_nascimento → 'unknown'
+    Calculada a partir de data_nascimento na data da compra.
+    Fonte disponível: APENAS Nuvemshop.
+    Para source = 'conta_azul': sempre 'unknown' (campo não coletado).
+    Menores de 18 → revisar caso a caso (provavelmente erro de cadastro).
+    Sem data_nascimento → 'unknown'.
 
-4.3 Estado (Loja Física via DDD):
-    Fallback apenas quando estado direto não estiver disponível.
+4.3 Estado (Loja Física — Conta Azul):
+    Estado vem DIRETO do endereço estruturado do cliente (cidade + UF)
+    na maioria dos casos — validado via screenshot em 2026-04-10.
+    Fallback DDD → UF: aplicado APENAS quando o endereço do cliente
+    estiver ausente OU quando a venda for para "Consumidor Final -
+    Venda de Consumidor" (cliente anônimo do PDV).
     Tabela de DDD → UF deve viver em /src/etl/ddd_to_uf.ts
     DDD inválido ou telefone ausente → state = NULL, inferred = false
+    Atenção ao parse do telefone: a Miranda cadastra com código do
+    país junto ("(55) 11945-259593"). Parser precisa extrair DDD real
+    separando do 55 (país).
 
 4.4 Estado (Nuvemshop):
     Vem direto do shipping_address.province. Sem fallback.
@@ -116,7 +156,13 @@ Calculado por fonte e por período independentemente.
     Nunca calcular ROAS dividindo por 0 — retornar NULL.
 
 7.2 Atribuição window:
-    Definir oficialmente com o cliente e registrar em DECISOES.txt.
+    Decidido em 2026-04-10 (ver DECISOES.txt):
+      action_attribution_windows=['7d_click','1d_view']
+    Esse é o default atual do Meta (em 2026, depois que 7d_view e
+    28d_view foram removidos em 2026-01-12). Os números do dashboard
+    vão bater com o Ads Manager da Miranda.
+    [VER] validar com o representante da Miranda antes de T25 que
+    eles não usam uma janela diferente (ex: só 1d_click).
 
 7.3 Criativos:
     Ranking por ROAS. Em empate, desempate por faturamento absoluto.

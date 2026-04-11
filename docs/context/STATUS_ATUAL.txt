@@ -6,14 +6,18 @@ STATUS ATUAL — Dashboard Miranda Studio
 --------------------------------------------------------
 ETAPA ATUAL
 --------------------------------------------------------
-Etapa 1 — Base do projeto (EM ANDAMENTO — 2/3 da infra externa feita)
+Etapa 1 — Base do projeto ✅ CONCLUÍDA (2026-04-10)
+Etapa 2 — Descoberta técnica ✅ CONCLUÍDA (2026-04-10)
+Etapa 3+ — Implementação: AGUARDANDO validação de gates da Nuvemshop
+         (gênero + birthday custom field) antes de iniciar T7.
 
 --------------------------------------------------------
 INFRAESTRUTURA
 --------------------------------------------------------
 [x] Repositório GitHub        — CRIADO (2026-04-10)
 [x] Supabase do projeto       — CRIADO (2026-04-10)
-[ ] Vercel do projeto         — NÃO CRIADO
+[x] Vercel do projeto         — CRIADO (2026-04-10)
+[x] Env vars do Supabase na Vercel — ADICIONADAS (2026-04-10)
 [x] Estrutura de pastas local — CRIADA (2026-04-10)
 [x] Arquivos de documentação  — CRIADOS (2026-04-10)
 [x] .env.local com chaves Supabase — CRIADO (2026-04-10, não commitado)
@@ -21,17 +25,21 @@ INFRAESTRUTURA
 Links:
 - GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard
 - Supabase:  https://pntlbaffrelxymiodelj.supabase.co  (projeto: miranda-dashboard, org: dev@stepads.com.br)
-- Vercel:    (pendente)
+- Vercel:    https://miranda-estudio-dashboard.vercel.app  (produção)
+             Painel: https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
+             Team slug: dev-1871s-projects  (conta dev@stepads.com.br, confirmado 2026-04-10)
+             Repo importado via collaborator studiocode1020 + login connection Dev-Stepads
 
-Observação: verificar se a região do Supabase é South America (São Paulo)
-em Settings → Infrastructure. Importa para latência dos clientes no Brasil.
+Observações pendentes:
+- (nenhuma) Região do Supabase CONFIRMADA em South America / São Paulo
+  (verificado pelo Matheus em 2026-04-10).
 
 --------------------------------------------------------
 INTEGRAÇÕES — progresso por fonte
 --------------------------------------------------------
 
 [CONTA AZUL]
-  [ ] Mapeamento técnico (T4)
+  [x] Mapeamento técnico (T4) — 2026-04-10
   [ ] Autenticação OAuth (T7)
   [ ] Coleta de vendas (T8)
   [ ] Coleta de itens (T9)
@@ -40,7 +48,7 @@ INTEGRAÇÕES — progresso por fonte
   [ ] Transformação demografia (T12)
 
 [NUVEMSHOP]
-  [ ] Mapeamento técnico (T5)
+  [x] Mapeamento técnico (T5) — 2026-04-10
   [ ] Autenticação (T13)
   [ ] Coleta de pedidos (T14)
   [ ] Coleta de clientes (T15)
@@ -53,7 +61,7 @@ INTEGRAÇÕES — progresso por fonte
   [ ] Transformação carrinhos abandonados (T22)
 
 [META ADS]
-  [ ] Mapeamento técnico (T6)
+  [x] Mapeamento técnico (T6) — 2026-04-10
   [ ] Autenticação (T23)
   [ ] Coleta de métricas (T24)
   [ ] Transformação KPIs (T25)

@@ -117,9 +117,15 @@ v_loja_fisica_kpis
   revenue, orders_count, avg_ticket
 
 v_loja_fisica_produtos
-v_loja_fisica_demografia_genero
-v_loja_fisica_demografia_idade
 v_loja_fisica_estado
+
+-- REMOVIDAS em 2026-04-10:
+-- v_loja_fisica_demografia_genero e v_loja_fisica_demografia_idade
+-- foram removidas do escopo porque a Conta Azul usada pela Miranda
+-- não coleta gênero nem data de nascimento no cadastro de cliente.
+-- Decisão registrada em /docs/context/DECISOES.txt.
+-- Essas análises continuam existindo SÓ na aba Nuvemshop
+-- (v_nuvemshop_genero, v_nuvemshop_idade).
 
 v_nuvemshop_kpis
 v_nuvemshop_produtos
@@ -140,7 +146,13 @@ Todas as views respeitam um filtro padrão de período
 PONTOS ABERTOS
 --------------------------------------------------------
 - Conta Azul: a granularidade de cliente permite demografia?
-  → depende do T4 (mapeamento)
+  ✅ RESOLVIDO em 2026-04-10 (T4): NÃO. Conta Azul da Miranda não
+     coleta gênero nem data de nascimento. Aba Loja Física não terá
+     essas análises. Ver DECISOES.txt.
+- Conta Azul: existe campo SKU no cadastro de produto?
+  → PENDENTE — não foi validado nesta rodada da T4. Precisa ser
+     verificado na T7 (primeira chamada real ao endpoint /v1/products)
+     ou numa segunda rodada de exploração do dashboard.
 - Nuvemshop: carrinho abandonado tem cliente identificado sempre?
   → depende do T5 (mapeamento)
 - Meta Ads: atribuição window definitiva? (confirmar com cliente)

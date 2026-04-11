@@ -1,0 +1,27 @@
+{
+  "name": "miranda---stepads",
+  "version": "1.0.0",
+  "description": "Dashboard consolidado da Miranda Studio com três origens de dados:\r - **Conta Azul** — vendas da loja física\r - **Nuvemshop** — e-commerce\r - **Meta Ads** — tráfego pago",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dev-Stepads/miranda-estudio-dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Dev-Stepads/miranda-estudio-dashboard/issues"
+  },
+  "homepage": "https://github.com/Dev-Stepads/miranda-estudio-dashboard#readme",
+  "dependencies": {
+    "playwright-core": "^1.59.1"
+  }
+}

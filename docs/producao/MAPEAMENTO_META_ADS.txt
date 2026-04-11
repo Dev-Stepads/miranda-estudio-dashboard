@@ -1,89 +1,587 @@
 ========================================================
 MAPEAMENTO TÉCNICO — API Meta Ads (Marketing API)
 ========================================================
-Status: NÃO INICIADO
-Responsável: (a atribuir)
+Status: PREENCHIDO (research via docs públicas)
+Responsável: Matheus (via Claude, sessão 2026-04-10)
 Última atualização: 2026-04-10
+
+IMPORTANTE SOBRE NÍVEIS DE CONFIANÇA:
+Todo item neste doc tem um marcador:
+  [OK]    confirmado em doc oficial
+  [INF]   inferido a partir de evidências indiretas
+  [VER]   precisa VERIFICAR com acesso ao Business Manager
+          da Miranda antes de T23
 
 --------------------------------------------------------
 OBJETIVO
 --------------------------------------------------------
 Confirmar quais métricas a Marketing API do Meta entrega
-para alimentar a aba Tráfego Pago.
+para alimentar a aba Tráfego Pago (investimento, conversão,
+ROAS, ranking de criativos/conjuntos/campanhas).
+
+--------------------------------------------------------
+0. CONTEXTO — Meta Marketing API em 2026
+--------------------------------------------------------
+[OK] Versão atual estável: v25.0 (ativa desde fim de 2025)
+     Mudanças se aplicam a TODAS as versões até 2026-05-19.
+     Doc de versionamento:
+       https://developers.facebook.com/docs/marketing-api/marketing-api-changelog/versions/
+
+[OK] Base URL:
+       https://graph.facebook.com/v25.0/
+
+     Convenção: todos os endpoints prefixados com a versão.
+     Vamos TRAVAR em v25.0 pelo projeto até final de 2026 e
+     revisitar trimestralmente. Upgrades são geralmente
+     backwards-compatible, mas deprecações ocorrem.
+
+[OK] Plataforma única (Graph API) atende 3 produtos:
+     - Facebook Ads
+     - Instagram Ads
+     - Audience Network
+     O ETL vai pegar todos automaticamente (não precisa
+     endpoint separado por rede).
+
+[OK] 🚨 MUDANÇAS RECENTES QUE IMPACTAM ESTE PROJETO (2025-2026):
+
+     a) [2026-01-12] Attribution windows 7d_view e 28d_view
+        REMOVIDAS do Ads Insights API.
+        Impacto: se o cliente estava acostumado a ver conversões
+        com essas janelas, os números do nosso dashboard vão
+        divergir dos que ele "lembra" do Ads Manager antigo.
+        Janelas ainda disponíveis: 1d_click, 1d_view, 7d_click.
+        Default: 7d_click + 1d_view.
+
+     b) [2025-06-10] reach broken down por age/gender agora é
+        capped em 13 meses. Queries com janela maior falham.
+        Impacto: dashboards históricos de demografia de alcance
+        precisam respeitar essa janela.
+
+     c) [2025-mid] Unified attribution settings.
+        A API agora "enforce attribution logic automaticamente"
+        — conversões on-Facebook contam no momento da impressão.
+        Resultado: números deste projeto vão bater MAIS de perto
+        com o Ads Manager atual (que é o que queremos).
 
 --------------------------------------------------------
 1. AUTENTICAÇÃO
 --------------------------------------------------------
-Tipo: OAuth 2.0 (Facebook Login for Business)
-App necessário: (criar app no developers.facebook.com)
-Permissões necessárias:
-  - ads_read
-  - ads_management (se formos gerenciar)
-  - business_management
-Token tipo: (Long-lived user token → System user token)
-Ad Account ID: act_XXXXXXXX (preencher)
-Business Manager ID: (preencher)
+[OK] Tipo: OAuth 2.0 (Facebook Login for Business) + System User Token
+     para uso server-to-server de longo prazo.
+
+[OK] CRIAÇÃO DA APP
+     1. Ir em https://developers.facebook.com/apps/
+     2. Create App → Type: "Business"
+     3. Associar a app ao Business Manager da Stepads
+        (não ao Business Manager do cliente)
+     4. Adicionar produto "Marketing API" ao app
+     5. Coletar:
+          app_id           — público
+          app_secret       — SECRETO (cofre Stepads)
+
+[OK] PERMISSÕES / SCOPES (pedir APENAS o necessário)
+     Para leitura de insights de campanhas:
+       ads_read               ← ESSENCIAL, é só essa
+     Para gerenciar (NÃO é nosso caso, não pedir):
+       ads_management
+     Para acessar business assets:
+       business_management    ← necessário se vamos usar
+                                System User token
+
+[OK] FLUXO DE TOKEN — 3 opções, escolher a certa
+
+     (a) User access token (short-lived) — 1-2 horas
+         Obtido via OAuth user flow.
+         ❌ Inviável para ETL em produção (expira muito rápido).
+
+     (b) Long-lived user access token — 60 dias
+         Exchange do short-lived token:
+           GET https://graph.facebook.com/v25.0/oauth/access_token
+             ?grant_type=fb_exchange_token
+             &client_id={app_id}
+             &client_secret={app_secret}
+             &fb_exchange_token={short_lived_token}
+         🟡 Viável mas requer renovação a cada 60 dias.
+
+     (c) 🟢 System User token — NÃO EXPIRA
+         Configurado uma vez no Business Manager e não expira
+         (a não ser que a gente rotacione, usuário saia do BM,
+         ou app seja removida).
+         ESTA É A OPÇÃO QUE VAMOS USAR.
+
+[OK] COMO CRIAR O SYSTEM USER TOKEN (passo a passo)
+
+     Precisa do cliente (Miranda) pra algumas etapas:
+
+     1. [Miranda] Abrir Business Manager (business.facebook.com)
+     2. [Miranda] Business Settings → Users → System Users
+        → Add → "Stepads Dashboard ETL" (nome descritivo)
+        → Role: Employee (não precisa Admin)
+     3. [Miranda] Assign Ad Accounts ao System User:
+        Business Settings → Accounts → Ad Accounts
+        → selecionar a ad account da Miranda
+        → Add People → System User "Stepads Dashboard ETL"
+        → permissão: "View Performance" ou "View Campaigns"
+     4. [Miranda ou Stepads] Generate New Token:
+        Business Settings → System Users → selecionar o user
+        → Generate New Token
+        → Selecionar nossa App Marketing
+        → Scopes: ads_read, business_management
+        → set_token_expires_in_60_days: FALSE (para não expirar)
+        → Generate
+     5. Copiar o token e GUARDAR IMEDIATAMENTE no cofre Stepads.
+        Se perder, precisa gerar um novo (não tem como recuperar).
+
+[OK] Onde guardar as credenciais no cofre Stepads / .env.local:
+       META_APP_ID=
+       META_APP_SECRET=
+       META_SYSTEM_USER_TOKEN=
+       META_AD_ACCOUNT_ID=act_XXXXXXXXX  ← sempre com prefixo "act_"
+       META_BUSINESS_MANAGER_ID=
+
+[VER] Pendente do cliente (Miranda) antes de T23:
+       - Business Manager ID da Miranda
+       - Ad Account ID (act_XXXXXXXX) da Miranda
+       - Acesso para criar System User ou ser adicionado ao BM
+         como colaborador com permissão suficiente
 
 --------------------------------------------------------
-2. ENDPOINTS QUE VAMOS USAR
+2. ACCESS TIERS E APP REVIEW
 --------------------------------------------------------
+[OK] Quando a gente cria uma Marketing API app nova, ela já
+     vem com "Standard Access" ao feature "Ads Management
+     Standard Access" por DEFAULT.
 
-2.1 Insights de campanha
-    URL: /v{version}/act_{account_id}/insights
-    Level: campaign | adset | ad (precisamos dos 3)
-    Time range: parâmetro "time_range" ou "date_preset"
-    Breakdowns: (age, gender, region — conforme necessidade)
+[OK] Porém, isso é o DEVELOPMENT TIER — limites baixos:
+     Rate limit menor, e a app só funciona com ad accounts
+     onde quem tem acesso é Admin/dev ou explicitamente
+     testador.
 
-2.2 Campanhas / Conjuntos / Anúncios (metadata)
-    /act_{account_id}/campaigns
-    /act_{account_id}/adsets
-    /act_{account_id}/ads
+[OK] Para o STANDARD TIER (limites maiores, funciona em
+     qualquer ad account que o System User tiver acesso),
+     é necessário Advanced Access no feature
+     "Ads Management Standard Access".
 
-2.3 Criativos
-    /act_{account_id}/adcreatives
-    (para pegar thumbnail, nome, tipo do criativo no ranking)
+[OK] Advanced Access requer App Review:
+     App Dashboard → App Review → Permissions and Features
+     → Request Advanced Access em "Ads Management Standard Access"
+     → Submeter evidência de uso (screenshot, video do dashboard)
 
---------------------------------------------------------
-3. MÉTRICAS QUE PRECISAMOS
---------------------------------------------------------
-
-3.1 Visão geral de mídia
-    - spend                    (investimento)
-    - impressions              (impressões)
-    - reach                    (alcance)
-    - clicks                   (cliques)
-    - ctr                      (click-through rate)
-    - cpc                      (custo por clique)
-    - cpm                      (custo por mil impressões)
-
-3.2 Conversão / atribuição
-    - actions (action_type = 'purchase')      → compras
-    - action_values (action_type = 'purchase') → faturamento atribuído
-    - purchase_roas            → ROAS
-    - ticket médio = action_values / actions (calculado)
-
-3.3 Atribuição window
-    - attribution_setting: (ex.: "7d_click_1d_view" — confirmar com o cliente)
+[VER] Nossa aplicação começa em development tier. Na prática,
+      **se a Miranda é Admin do BM e a gente cria a app dela
+      nesse BM**, pode ser que development tier funcione
+      suficientemente para uma conta só. Se os rate limits
+      travarem ou se o acesso for bloqueado, subir para
+      Advanced. Decidir durante T23-T25 com base no volume
+      real de chamadas.
 
 --------------------------------------------------------
-4. GRANULARIDADE NECESSÁRIA
+3. RATE LIMITS (BUC — Business Use Case)
 --------------------------------------------------------
-- Campanha: para visão geral
-- Conjunto: para ranking de segmentação
-- Anúncio/criativo: para ranking de criativos
+[OK] Modelo: Business Use Case Rate Limits
+     Escopo: por (ad_account × business_use_case)
+     Implicação: se endpoint X dispara throttling, endpoint Y
+     do MESMO BUC também é bloqueado — quota compartilhada.
+
+[OK] HEADERS RELEVANTES na resposta HTTP:
+       X-Business-Use-Case
+         Conteúdo JSON com:
+           call_count            — chamadas feitas
+           total_cputime         — tempo de CPU consumido
+           total_time             — tempo total
+           estimated_time_to_regain_access — segundos até destravar
+       X-Ad-Account-Usage
+       X-FB-Ads-Insights-Throttle
+       ads_api_access_tier       — indica development vs standard tier
+
+[OK] REGRA DE OURO: o ETL precisa LER esses headers em toda
+     chamada e pausar quando call_count estiver alto.
+     Implementação recomendada:
+       - Se call_count > 80% do permitido → backoff exponencial
+       - Se 429 Too Many Requests → esperar estimated_time_to_regain_access
+       - Log estruturado de todos os throttles para alertar
+
+[VER] Valores exatos de rate limit não são documentados de
+     forma pública (Meta calcula dinâmicamente por BUC).
+     Vamos descobrir na prática durante T23-T25.
 
 --------------------------------------------------------
-5. GAPS IDENTIFICADOS
+4. ENDPOINTS QUE VAMOS USAR
 --------------------------------------------------------
-(preencher — ex.: "Meta não entrega dados demográficos dos
-compradores, apenas do público alcançado")
+
+4.1 INSIGHTS (o principal — tudo do dashboard sai daqui)
+    GET https://graph.facebook.com/v25.0/act_{ad_account_id}/insights
+    Query params mais importantes:
+      access_token={token}
+      level=<account|campaign|adset|ad>
+      time_range={"since":"2026-04-01","until":"2026-04-10"}
+      time_increment=1          ← 1 dia (granularidade diária)
+      fields=<lista CSV de fields>
+      breakdowns=<CSV opcional>
+      action_attribution_windows=['7d_click','1d_view']
+      limit=500                  ← paginação
+      filtering=[...]            ← opcional
+
+4.2 INSIGHTS POR NÍVEL (vamos chamar todos os 3)
+    Campanha:
+      GET /act_{id}/insights?level=campaign
+    Conjunto de anúncios:
+      GET /act_{id}/insights?level=adset
+    Anúncio:
+      GET /act_{id}/insights?level=ad
+
+    ⚠ ATENÇÃO: NÃO dá pra pedir level=campaign com breakdown
+    que implique ad-level (ex.: por criativo). Faça uma chamada
+    por level.
+
+4.3 METADADOS (para descobrir o que existe)
+    GET /act_{id}/campaigns         — lista campanhas ativas/inativas
+    GET /act_{id}/adsets            — lista conjuntos
+    GET /act_{id}/ads               — lista anúncios
+    GET /act_{id}/adcreatives       — criativos (thumbnail, nome, etc)
+
+    Fields essenciais em cada:
+      campaigns: id, name, status, objective, created_time, start_time, stop_time
+      adsets:    id, name, status, campaign_id, created_time, targeting
+      ads:       id, name, status, adset_id, creative{id,thumbnail_url,image_url,body,title}
+      adcreatives: id, name, thumbnail_url, image_url, body, title, call_to_action_type
 
 --------------------------------------------------------
-6. RATE LIMITS E PAGINAÇÃO
+5. FIELDS QUE VAMOS USAR EM /insights
 --------------------------------------------------------
-(preencher — Meta tem rate limit por ad account e por app)
+
+5.1 Identificação (sempre incluir)
+    [OK]  account_id
+    [OK]  account_name
+    [OK]  campaign_id
+    [OK]  campaign_name
+    [OK]  adset_id (quando level ∈ {adset, ad})
+    [OK]  adset_name
+    [OK]  ad_id    (quando level = ad)
+    [OK]  ad_name
+    [OK]  date_start
+    [OK]  date_stop
+
+5.2 Entrega (métricas de mídia)
+    [OK]  spend                   — investimento em moeda da conta (BRL)
+    [OK]  impressions             — impressões
+    [OK]  reach                   — pessoas únicas alcançadas
+                                    ⚠ 13 meses de janela quando usado
+                                      com breakdowns age/gender
+    [OK]  frequency               — impressions ÷ reach
+    [OK]  clicks                  — todos os cliques (inclui cliques
+                                    em ícones, sociais, etc)
+    [OK]  inline_link_clicks      — só cliques no link (mais fiel ao
+                                    CPC real de performance)
+    [OK]  unique_clicks
+    [OK]  ctr                     — clicks ÷ impressions
+    [OK]  unique_ctr
+    [OK]  cpc                     — cost per click
+    [OK]  cpm                     — cost per mille (1000 impressions)
+    [OK]  cpp                     — cost per 1000 people reached
+
+5.3 Conversão (o que a Miranda quer ver no dashboard)
+    [OK]  actions                  — ARRAY de objetos
+                                     {action_type: "purchase", value: 42}
+                                     Precisamos filtrar action_type=
+                                     "purchase" ou
+                                     "offsite_conversion.fb_pixel_purchase"
+                                     dependendo do setup do Pixel.
+    [OK]  action_values            — ARRAY correspondente ao actions
+                                     com o valor MONETÁRIO das ações
+                                     de conversão.
+    [OK]  purchase_roas            — ARRAY (por atribuição)
+                                     Usar o primeiro valor ou o que
+                                     bate com nossa janela default.
+    [OK]  website_purchase_roas    — ROAS específico de website
+    [OK]  cost_per_action_type     — ARRAY CPA por tipo de ação
+
+5.4 Video (só se Miranda usa Reels/Ads em vídeo)
+    [INF] video_play_actions
+    [INF] video_p100_watched_actions
+    [INF] video_avg_time_watched_actions
+    [VER] incluir somente se a Miranda usar criativos em vídeo.
 
 --------------------------------------------------------
-7. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+6. BREAKDOWNS DISPONÍVEIS
 --------------------------------------------------------
-(copiar também para /docs/context/DECISOES.txt)
+
+[OK] Breakdowns demográficos:
+       age                     — faixas: 18-24, 25-34, 35-44,
+                                 45-54, 55-64, 65+
+       gender                  — male, female, unknown
+       age,gender              — combinação (mais útil)
+
+[OK] Breakdowns geográficos:
+       country
+       region                  — estado
+       dma                     — designated market area
+       impression_device
+       device_platform
+
+[OK] Breakdowns de plataforma:
+       publisher_platform      — facebook, instagram,
+                                 audience_network, messenger
+       platform_position       — feed, story, reels, marketplace
+       impression_device
+
+[OK] Breakdowns temporais:
+       hourly_stats_aggregated_by_advertiser_time_zone
+       (não suporta fields de unique_*, reach, frequency)
+
+[OK] LIMITAÇÕES DE BREAKDOWN
+     - Só algumas combinações são permitidas (storage constraint)
+     - Hourly breakdown → sem reach, sem frequency, sem unique_*
+     - reach com age/gender → só últimos 13 meses
+     - Alguns breakdowns causam cap ou erro em certos fields
+
+[OK] PARA NOSSO DASHBOARD, vamos usar:
+     - Nada de breakdown no endpoint principal (level=campaign|adset|ad)
+     - breakdown age,gender APENAS para a aba "Demografia do
+       alcance" (se o cliente pedir) — janela de 13 meses
+     - breakdown region para mapa de estado
+     - breakdown publisher_platform para ver split
+       Facebook vs Instagram vs Reels
+
+--------------------------------------------------------
+7. PAGINAÇÃO (cursor-based)
+--------------------------------------------------------
+[OK] Meta API usa paginação por CURSOR, não offset.
+
+     Resposta típica:
+       {
+         "data": [...],
+         "paging": {
+           "cursors": {
+             "before": "MTIzNDU2Nzg5MA==",
+             "after":  "OTg3NjU0MzIxMA=="
+           },
+           "next": "https://graph.facebook.com/v25.0/.../?after=OTg3NjU0MzIxMA=="
+         }
+       }
+
+[OK] Parâmetros:
+       limit={N}               — default 25, max 5000
+       after={cursor}          — próxima página
+       before={cursor}         — página anterior
+     Usar limit=500 como padrão (equilíbrio entre throughput
+     e tamanho da resposta).
+
+[OK] BEST PRACTICE: quando a query atingir timeout (muito
+     comum em insights de contas grandes com janelas longas),
+     QUEBRAR em janelas menores de time_range (ex.: 1 dia por
+     chamada em vez de 7).
+
+--------------------------------------------------------
+8. ATTRIBUTION WINDOW — DECISÕES
+--------------------------------------------------------
+[OK] Janelas disponíveis em abril/2026:
+       1d_view    — conversão dentro de 1 dia após ver o anúncio
+       1d_click   — conversão dentro de 1 dia após clicar
+       7d_click   — conversão dentro de 7 dias após clicar
+
+[OK] REMOVIDAS em 2026-01-12:
+       7d_view, 28d_view — não retornam mais dados (silenciosamente).
+
+[OK] DEFAULT do Meta (se não passar action_attribution_windows):
+       7d_click + 1d_view
+
+[OK] DECISÃO INICIAL para o dashboard:
+       action_attribution_windows=['7d_click','1d_view']
+     Isto:
+       a) bate com o default atual do Ads Manager
+       b) os números do dashboard vão ser iguais ao que a
+          Miranda vê na plataforma deles
+       c) consistente entre todos os níveis (campaign/adset/ad)
+     [VER] confirmar com o representante da Miranda. Se eles
+           usam um setting diferente na conta deles (ex.: só
+           1d_click pra ser conservador), adaptar.
+
+--------------------------------------------------------
+9. WEBHOOKS — NÃO SERVEM PARA INSIGHTS
+--------------------------------------------------------
+[OK] Meta Marketing API tem webhooks, MAS:
+     - Webhooks cobrem EVENTOS (status change, ad rejected,
+       spending threshold reached, account restrictions)
+     - Webhooks NÃO cobrem atualização de métricas de insights
+     - Insights atualizam a cada 15 minutos pelo lado do Meta
+       (Ads Reporting API)
+
+[OK] DECISÃO: ETL de insights vai ser 100% POLLING.
+     Frequência recomendada: a cada 30 minutos (alinhado com
+     o delay natural de 15 min do Meta — não faz sentido
+     puxar com mais frequência).
+
+[OK] POSSÍVEL USO FUTURO DE WEBHOOKS:
+     Se quisermos notificar quando uma campanha mudar de
+     status ou quando um anúncio for rejeitado, webhooks
+     podem ser úteis. NÃO é escopo inicial.
+
+--------------------------------------------------------
+10. JANELAS DE COLETA E REPROCESSAMENTO
+--------------------------------------------------------
+[OK] O Meta RECALCULA dados históricos por alguns dias
+     após o dia do evento. Conversões podem "aparecer" até
+     7 dias depois. Campanhas podem ser re-otimizadas.
+
+[OK] REGRA DE COLETA DEFENSIVA:
+     Toda execução do ETL vai puxar os ÚLTIMOS 7 DIAS
+     (não só o dia corrente) e fazer UPSERT no banco.
+     Isso garante que qualquer re-cálculo do Meta seja
+     refletido automaticamente no nosso dashboard.
+
+[OK] INGESTÃO COMPLETA HISTÓRICA (primeira carga):
+     - Dividir em janelas mensais
+     - Puxar level=campaign primeiro (menos linhas)
+     - Depois level=adset
+     - Por último level=ad (maior volume)
+     - Respeitando os headers de rate limit
+
+--------------------------------------------------------
+11. CAMPOS DEMOGRÁFICOS DO META — IMPORTANTE
+--------------------------------------------------------
+[OK] ATENÇÃO: as métricas de age/gender do Meta são do
+     PÚBLICO ALCANÇADO/CLIKADO, não dos COMPRADORES.
+
+     Ex: 60% do alcance foi feminino NÃO significa que
+     60% das compras foram por mulheres — significa que
+     60% das pessoas que VIRAM os anúncios eram mulheres.
+
+[OK] IMPLICAÇÃO PARA O DASHBOARD:
+     - Na aba Meta Ads: podemos mostrar "demografia do alcance"
+       como um indicador de para QUEM a grana está indo.
+     - NUNCA misturar com a demografia de COMPRADORES
+       (que vem da Nuvemshop). São coisas diferentes.
+     - Labels no dashboard devem deixar isso claro para o
+       cliente final não confundir.
+
+--------------------------------------------------------
+12. GAPS IDENTIFICADOS
+--------------------------------------------------------
+
+GAP M#1 — Access tier inicial (development vs standard)
+  Status: começamos em development tier por default.
+  Impacto: pode limitar número de chamadas ou exigir que
+  somente quem tem acesso direto à app use a API.
+  Ação: testar no T23-T25 com uma ad account real da
+  Miranda. Se travar, submeter para App Review e subir
+  para Advanced Access.
+
+GAP M#2 — Business Manager e Ad Account da Miranda
+  Status: ainda não temos esses IDs.
+  Impacto: toda configuração de System User e testes
+  depende disso.
+  Ação: pedir ao cliente Miranda durante a fase de
+  preparação pro T23:
+    - Business Manager ID
+    - Ad Account ID (act_XXXXXXXXX)
+    - Adicionar dev@stepads.com.br como colaborador
+      no BM (com permissão de criar System User OU
+      ter alguém do lado deles pra criar)
+
+GAP M#3 — Attribution window real usado pela Miranda
+  Status: assumimos 7d_click + 1d_view (default do Meta).
+  Impacto: se eles usam diferente, nossos números divergem
+  do que eles veem na plataforma deles.
+  Ação: confirmar com representante.
+
+GAP M#4 — Criativos em vídeo
+  Status: não sabemos se a Miranda usa Reels/Stories/Video Ads.
+  Impacto: fields video_* ficam fora do mapeamento inicial.
+  Ação: verificar ao registrar as ad accounts. Se tiver vídeo,
+  adicionar fields video_* na coleta de level=ad.
+
+GAP M#5 — Pixel / Custom Conversions
+  Status: assumimos que o Pixel da Miranda reporta
+  action_type "purchase". Pode ser que use "offsite_conversion.
+  fb_pixel_purchase" ou uma custom conversion com nome próprio.
+  Impacto: filtro de purchase pode não pegar nada se o tipo
+  da action for diferente.
+  Ação: na T25 (primeira coleta real), inspecionar o actions[]
+  retornado e ver quais action_types aparecem. Atualizar o
+  ETL com o action_type correto.
+
+--------------------------------------------------------
+13. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+--------------------------------------------------------
+
+D1. [2026-04-10] [INTEGRACAO] Usar System User Token no Meta
+    (não User Token nem Long-Lived User Token).
+    Motivo: único token que não expira, ideal pra ETL 24/7.
+    Configuração via Business Manager, ver seção 1.
+    Copiada para /docs/context/DECISOES.txt.
+
+D2. [2026-04-10] [DADOS] Attribution window padrão do projeto =
+    7d_click + 1d_view (default do Meta em 2026).
+    Razão: compatibilidade com o que a Miranda vê no Ads Manager.
+    Os valores 7d_view e 28d_view foram removidos em 2026-01-12.
+    Copiada para /docs/context/DECISOES.txt.
+
+D3. [2026-04-10] [INTEGRACAO] ETL de insights é 100% polling
+    a cada 30 minutos. Meta atualiza métricas a cada 15 min,
+    não faz sentido puxar mais frequente. Webhook não cobre
+    métricas, só eventos de estado.
+    Copiada para /docs/context/DECISOES.txt.
+
+D4. [2026-04-10] [DADOS] Coleta defensiva: toda run do ETL
+    puxa os últimos 7 dias e faz UPSERT, porque o Meta
+    recalcula dados históricos por alguns dias após o evento.
+    Copiada para /docs/context/DECISOES.txt.
+
+D5. [2026-04-10] [ARQUITETURA] Travar versão v25.0 do Graph API
+    até final de 2026, revisitar trimestralmente.
+    Motivo: controle sobre breaking changes. Upgrades costumam
+    ser compatíveis mas queremos cuidado especial pro Meta
+    porque deprecações são frequentes (ex: o 7d_view removido
+    em janeiro).
+    Copiada para /docs/context/DECISOES.txt.
+
+--------------------------------------------------------
+14. PRÓXIMA AÇÃO PRÁTICA (para T23 — autenticação)
+--------------------------------------------------------
+
+Antes de começar T23, o Matheus precisa PEDIR AO CLIENTE
+(Miranda) as seguintes informações:
+
+  1. Business Manager ID (pode ser pego em business.facebook.com
+     → Business Settings → Business Info)
+
+  2. Ad Account ID (act_XXXXXXXXX) — pode ter mais de uma,
+     queremos a que a Miranda usa pra rodar anúncios do
+     Nuvemshop
+
+  3. Confirmação da janela de atribuição que eles usam no
+     Ads Manager hoje (7d_click+1d_view é o padrão, mas
+     pode ser diferente)
+
+  4. Se a Miranda usa criativos em vídeo (Reels/Stories/Videos)
+
+  5. Qual o identificador de "purchase" no Pixel deles
+     (se for possível via entrevista — senão descobrimos no
+     primeiro request)
+
+  6. Adicionar dev@stepads.com.br como colaborador no BM
+     (ou combinar quem vai criar o System User do lado deles)
+
+Do lado STEPADS:
+  1. Criar app Marketing no developers.facebook.com (tipo Business)
+  2. Coletar app_id e app_secret
+  3. Criar System User no BM da Miranda e gerar token
+  4. Guardar todas as credenciais no cofre
+
+--------------------------------------------------------
+15. FONTES CONSULTADAS
+--------------------------------------------------------
+- developers.facebook.com/docs/marketing-api/
+- developers.facebook.com/docs/marketing-api/insights/
+- developers.facebook.com/docs/marketing-api/insights/breakdowns/
+- developers.facebook.com/docs/graph-api/overview/rate-limiting/
+- developers.facebook.com/docs/marketing-api/overview/rate-limiting/
+- developers.facebook.com/docs/marketing-api/overview/versioning/
+- developers.facebook.com/docs/marketing-api/marketing-api-changelog/versions/
+- developers.facebook.com/docs/business-management-apis/system-users/
+- dataslayer.ai blog — Meta attribution window changes 2026
+- ppc.land — Meta releases Graph API / Marketing API v21.0
+- windsor.ai — Meta API updates June 10, 2025
+- Facebook Node.js Business SDK (GitHub TiendaNube — ah não,
+  esse era Nuvemshop. Meta tem o facebook/facebook-nodejs-business-sdk)

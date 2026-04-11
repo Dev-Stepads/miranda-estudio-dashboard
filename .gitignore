@@ -42,3 +42,10 @@ desktop.ini
 # Supabase local
 supabase/.branches
 supabase/.temp
+
+# Screenshots de investigação do dashboard real da Miranda — PII
+# Contêm dados sensíveis (CPF, faturamento, clientes). NUNCA commitar.
+debug_screenshots/
+/Captura de tela*.jpg
+/Captura de tela*.jpeg
+/Captura de tela*.png

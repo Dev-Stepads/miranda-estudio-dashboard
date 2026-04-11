@@ -1,9 +1,16 @@
 ========================================================
 MAPEAMENTO TÉCNICO — API Nuvemshop
 ========================================================
-Status: NÃO INICIADO
-Responsável: (a atribuir)
+Status: PREENCHIDO (research via docs públicas)
+Responsável: Matheus (via Claude, sessão 2026-04-10)
 Última atualização: 2026-04-10
+
+IMPORTANTE SOBRE NÍVEIS DE CONFIANÇA:
+Todo item neste doc tem um marcador:
+  [OK]    confirmado em doc oficial
+  [INF]   inferido a partir de evidências indiretas
+  [VER]   precisa VERIFICAR no dashboard real da Miranda
+          ou numa chamada real antes de T13
 
 --------------------------------------------------------
 OBJETIVO
@@ -11,91 +18,654 @@ OBJETIVO
 Confirmar quais dados a API Nuvemshop entrega para
 alimentar a aba Nuvemshop + parte da Visão Geral.
 
+Contexto especial pós-T4: como o Conta Azul não fornece
+gênero nem idade, a Nuvemshop é agora a ÚNICA fonte
+dessas análises no dashboard. Se qualquer uma delas
+falhar aqui também, a análise demográfica some do projeto
+inteiro — por isso essas duas têm prioridade máxima neste
+mapeamento.
+
+--------------------------------------------------------
+0. CONTEXTO — Nuvemshop / Tiendanube
+--------------------------------------------------------
+[OK] A Nuvemshop é a marca brasileira da Tiendanube (presente
+     em Brasil, Argentina, México, Colômbia, Chile). A API é
+     a MESMA em todos os países, só muda o domínio:
+       - Brasil: nuvemshop.com.br
+       - Outros: tiendanube.com
+
+[OK] Doc oficial (GitHub Pages, Markdown):
+       https://tiendanube.github.io/api-documentation/
+
+[OK] DevHub pt-br:
+       https://dev.nuvemshop.com.br/en/docs/
+
+[OK] Toda app Nuvemshop precisa ser REGISTRADA no Partners Portal
+     antes de qualquer coisa: https://partners.nuvemshop.com.br/
+     (não é a mesma conta do lojista — é uma conta separada de dev)
+
 --------------------------------------------------------
 1. AUTENTICAÇÃO
 --------------------------------------------------------
-Tipo: (OAuth / API Key / Access Token)
-Documentação oficial: https://dev.tiendanube.com/docs/api-reference
-Como obter credenciais: (preencher)
-Store ID necessário: ( ) sim  ( ) não
-Como armazenar: .env.local + Supabase vault
+[OK] Tipo: OAuth 2.0 — fluxo Authorization Code
+[OK] Credenciais emitidas pelo Partners Portal:
+        client_id        — público
+        client_secret    — SECRETO (vai pro .env.local / cofre)
+
+[OK] Fluxo de autorização:
+     1. Lojista (Miranda) visita a URL de autorização do nosso app:
+        https://www.nuvemshop.com.br/apps/{app_id}/authorize
+     2. Lojista aprova → redireciona para nosso redirect_uri com ?code=xxx
+     3. Nós trocamos o code por um access_token via POST:
+
+        POST https://www.nuvemshop.com.br/apps/authorize/token
+
+        Headers:
+          Content-Type: application/json
+
+        Body (JSON):
+          {
+            "client_id":     "<client_id>",
+            "client_secret": "<client_secret>",
+            "grant_type":    "authorization_code",
+            "code":          "<código_recebido>"
+          }
+
+        Resposta:
+          {
+            "access_token": "...",
+            "token_type":   "bearer",
+            "scope":        "read_products,read_orders,...",
+            "user_id":      <store_id>    ← precisamos guardar!
+          }
+
+[OK] 🟢 Access token NÃO EXPIRA.
+     Permanece válido até que o lojista desinstale o app ou
+     a gente rotacione manualmente. Isso elimina o pesadelo
+     de refresh token que tivemos que planejar pra Conta Azul.
+
+[OK] 🟢 user_id na resposta = store_id da loja Miranda.
+     Esse valor vai virar parte da base URL. Precisamos
+     persistir no Supabase.
+
+[OK] Scopes necessários (pedir só leitura):
+        read_orders            (vendas + carrinhos abandonados)
+        read_customers         (clientes, inclui campo extra.gender)
+        read_products          (catálogo, inclui variant.sku)
+        read_content           (categorias, se quisermos)
+
+     Pedir APENAS escopos de leitura. Nenhum :write.
 
 --------------------------------------------------------
-2. ENDPOINTS QUE VAMOS USAR
+2. BASE URL E REGRAS GERAIS
 --------------------------------------------------------
+[OK] Base URL:
+       https://api.nuvemshop.com.br/2025-03/{store_id}/{resource}
 
-2.1 Orders (pedidos)
-    Método:     GET
-    URL:        /v1/{store_id}/orders
-    Parâmetros: (created_at_min, created_at_max, status, payment_status, page, per_page)
-    Status considerados no faturamento: (preencher — paid? authorized?)
-    Status excluídos: (cancelled, refunded?)
-    Paginação:  (preencher)
-    Rate limit: (preencher)
+     2025-03 = versão da API (ano-mês). Vamos travar nessa versão
+     até final de 2026 e revisitar. Upgrade costuma ser compatível,
+     mas vale planejar.
 
-2.2 Customers
-    Método:     GET
-    URL:        /v1/{store_id}/customers
-    Retorna:    (preencher)
+[OK] Headers obrigatórios em toda request:
+       Authentication: bearer {access_token}
+         ⚠ ATENÇÃO: é "Authentication" (sic), NÃO "Authorization".
+            Essa é uma particularidade da Nuvemshop e é fácil de
+            errar se copiar código genérico de OAuth 2.0.
+       User-Agent: Miranda Dashboard (dev@stepads.com.br)
+         ⚠ OBRIGATÓRIO. Sem User-Agent = 400 Bad Request imediato.
+            Formato esperado: "Nome do App (email_ou_url_contato)"
+       Content-Type: application/json; charset=utf-8
+         Obrigatório só em POST/PUT (sem isso = 415 Unsupported).
 
-2.3 Abandoned Checkouts
-    Método:     GET
-    URL:        (preencher)
-    Janela:     últimos 30 dias (regra de negócio)
-    Retorna:    (preencher)
+[OK] HTTPS obrigatório. Toda request sem TLS é rejeitada.
 
-2.4 Products (se necessário para enriquecer ranking)
-    URL:        /v1/{store_id}/products
+[OK] Resposta sempre em JSON, snake_case, sem root element wrapper.
 
---------------------------------------------------------
-3. CAMPOS DISPONÍVEIS
---------------------------------------------------------
+[OK] RATE LIMITING — Leaky Bucket algorithm
+       Capacidade: 40 requests
+       Drenagem:    2 requests/segundo
+       Planos Next ou Evolution: 10x (400 capacity, 20 rps)
+       Headers de resposta:
+         x-rate-limit-limit
+         x-rate-limit-remaining
+         x-rate-limit-reset
+       Exceder → 429 Too Many Requests
+       [VER] qual plano a Miranda tem. Se for básico, é 40/2rps.
 
-3.1 Order
-    - id                : (sim/não)
-    - number            : (sim/não)
-    - created_at        : (sim/não)
-    - total             : (sim/não)
-    - subtotal          : (sim/não) ← usar subtotal ou total?
-    - status            : (sim/não)
-    - payment_status    : (sim/não)
-    - shipping_status   : (sim/não)
-    - products[]        : (sim/não)
-        - product_id
-        - name
-        - sku
-        - quantity
-        - price
-    - customer          : (sim/não)
-    - shipping_address  : (cidade/estado/país)
+[OK] PAGINAÇÃO
+       Parâmetros:
+         page      — 1-indexed
+         per_page  — default 30, máximo 200
+       Headers de resposta:
+         x-total-count   — total de resultados da query
+         Link            — URLs com rel=next/prev/first/last
+       Limite duro: 10.000 resultados por query.
+         → Para coletas grandes, usar filtros de data
+           (created_at_min/max) em janelas menores.
 
-3.2 Customer
-    - name              : (sim/não)
-    - gender            : (sim/não) ← precisamos
-    - birthdate         : (sim/não) ← precisamos para idade
-    - city              : (sim/não)
-    - province          : (sim/não) ← estado
-    - country           : (sim/não)
-
-3.3 Abandoned Checkout
-    - id                : (sim/não)
-    - created_at        : (sim/não)
-    - total             : (sim/não — valor potencial)
-    - items[]           : (sim/não)
-    - customer          : (sim/não)
+[OK] ERROS
+       400 — JSON inválido ou User-Agent faltando
+       402 — lojista está com pagamento em atraso (Nuvemshop)
+       415 — Content-Type faltando em POST/PUT
+       422 — campos inválidos
+       429 — rate limit
+       5xx — servidor. Retry com exponential backoff.
 
 --------------------------------------------------------
-4. GAPS IDENTIFICADOS
+3. WEBHOOKS — 🟢 SUPORTADOS
 --------------------------------------------------------
-(preencher)
+[OK] A Nuvemshop oferece webhooks e isso muda o DESIGN do ETL
+     em relação ao que planejamos pro Conta Azul.
+
+[OK] Eventos disponíveis (lista parcial, só os que nos interessam):
+       order/created          — pedido novo
+       order/updated          — atualização genérica
+       order/paid             — pedido pago
+       order/cancelled        — pedido cancelado
+       order/fulfilled        — pedido entregue
+       order/pending          — aguardando pagamento
+       order/voided           — estornado
+       order/edited           — editado
+       checkout/updated       — carrinho mudou
+       [VER] checkout/abandoned existe como evento separado?
+             Se não existir, usar polling em /checkouts.
+       product/created
+       product/updated
+       product/deleted
+       customer/created
+       customer/updated
+       customer/deleted
+
+[OK] REGISTRO DE WEBHOOK
+       POST /2025-03/{store_id}/webhooks
+       Body:
+         {
+           "event": "order/paid",
+           "url":   "https://miranda-estudio-dashboard.vercel.app/api/webhooks/nuvemshop"
+         }
+
+[OK] PAYLOAD recebido pela Vercel (via POST):
+       Headers:
+         x-linkedstore-hmac-sha256: <hash para validação>
+       Body:
+         {
+           "store_id": 12345,
+           "event":    "order/paid",
+           "id":       67890         ← id da entidade (ex: order_id)
+         }
+       ⚠ O payload NÃO inclui o objeto completo — só o id.
+       Depois do webhook, precisamos fazer
+       GET /orders/{id} pra buscar os dados atualizados.
+
+[OK] VALIDAÇÃO HMAC — OBRIGATÓRIA
+       HMAC-SHA256 do corpo raw da request usando o client_secret
+       como chave, comparando com o header x-linkedstore-hmac-sha256.
+       Pedidos sem HMAC válido devem ser rejeitados com 401.
+       (Sem isso, qualquer um pode enviar POSTs falsos pro nosso
+       endpoint.)
+
+[OK] RESPOSTA ESPERADA
+       2xx dentro de 3 segundos, caso contrário é considerado falha.
+       → Recebimento deve ser ASSÍNCRONO: responde 200 primeiro,
+         processa depois (enfileirar em pg_cron ou Supabase Queue).
+
+[OK] RETRY POLICY
+       18 tentativas ao longo de 48h:
+       imediato, 5min, 10min, 15min, depois exponential backoff.
+       Idempotência OBRIGATÓRIA do nosso lado — webhooks podem
+       chegar duplicados ou fora de ordem.
+
+[OK] RESTRIÇÃO IMPORTANTE
+       URLs do tipo localhost/tiendanube.com/nuvemshop.com.br
+       NÃO são aceitas como destino de webhook. Precisa ser
+       uma URL pública HTTPS (Vercel resolve isso).
 
 --------------------------------------------------------
-5. REGRAS DE NEGÓCIO DESCOBERTAS
+4. ENDPOINTS QUE VAMOS USAR
 --------------------------------------------------------
-(preencher — ex.: "total inclui frete, usar subtotal para
-faturamento de produto")
+
+4.1 Listar pedidos                                           [OK]
+    GET /2025-03/{store_id}/orders
+    Query params mais úteis:
+      status          = open | closed | cancelled
+      payment_status  = pending | authorized | paid | partially_paid
+                        | abandoned | refunded | partially_refunded | voided
+      created_at_min  = ISO 8601
+      created_at_max  = ISO 8601
+      customer_ids    = CSV de ids
+      page, per_page  = paginação
+
+4.2 Detalhe de pedido                                        [OK]
+    GET /2025-03/{store_id}/orders/{id}
+    Já traz os itens (products[]) INLINE — não é endpoint separado
+    como no Conta Azul. ✅
+
+4.3 Listar clientes                                          [OK]
+    GET /2025-03/{store_id}/customers
+    Query params:
+      since_id
+      created_at_min/max
+      updated_at_min/max
+      page, per_page, fields
+      q     = busca por nome/email/identification
+      email = filtro exato por email
+
+4.4 Detalhe de cliente                                       [OK]
+    GET /2025-03/{store_id}/customers/{id}
+    Inclui o objeto "extra" com gender e outros custom fields.
+
+4.5 Carrinhos abandonados                                    [OK]
+    GET /2025-03/{store_id}/checkouts
+    Query params:
+      since_id
+      created_at_max
+      updated_at_max
+      fields
+    ⚠ ATENÇÃO: Retenção de apenas 30 dias para acesso via API,
+      90 dias até deleção definitiva. ETL precisa rodar ao menos
+      DIÁRIO, preferência a cada 4-6h, para não perder carrinhos
+      mais antigos.
+
+4.6 Listar produtos                                          [OK]
+    GET /2025-03/{store_id}/products
+    Query params relevantes:
+      ids (até 30), q, category_id, language
+      published, free_shipping, has_promotional_price
+      min_stock, max_stock, since_id
+      created_at_min/max, updated_at_min/max
+      page, per_page, sort_by, fields
+
+4.7 Buscar produto por SKU                                   [OK]
+    GET /2025-03/{store_id}/products/sku/{sku}
+    ⚠ Útil para o matching Conta Azul ↔ Nuvemshop:
+      pegando um produto do Conta Azul (se tiver SKU no
+      cadastro lá), consultamos aqui pra casar.
+
+4.8 Webhooks — gestão                                        [OK]
+    GET    /2025-03/{store_id}/webhooks       — listar atuais
+    POST   /2025-03/{store_id}/webhooks       — registrar novo
+    DELETE /2025-03/{store_id}/webhooks/{id}  — remover
+    Usaremos no setup inicial (T13) e em caso de precisar
+    reinstalar em caso de erro.
 
 --------------------------------------------------------
-6. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+5. CAMPOS DISPONÍVEIS
 --------------------------------------------------------
-(copiar também para /docs/context/DECISOES.txt)
+
+5.1 Order (pedido)
+    [OK]  id                       — numérico, identificador único
+    [OK]  number                   — sequencial humano (visível
+                                     para o lojista)
+    [OK]  token                    — token único pro link da loja
+    [OK]  store_id
+    [OK]  contact_email            — sempre presente (pedido exige)
+    [OK]  contact_name             — sempre presente
+    [OK]  contact_phone
+    [OK]  contact_identification   — CPF/CNPJ
+    [OK]  subtotal                 — soma dos itens, antes de frete/desc
+    [OK]  total                    — valor final
+    [OK]  discount                 — desconto aplicado
+    [OK]  total_usd                — conversão para USD (se store em BRL)
+    [OK]  currency                 — ISO 4217, esperado "BRL"
+    [OK]  billing_address {...}
+    [OK]  shipping_address {...}
+    [OK]  products[] {...}         — array INLINE de itens
+    [OK]  gateway                  — id do meio de pagamento
+    [OK]  gateway_name             — nome legível (ex: "Mercado Pago")
+    [OK]  gateway_id               — id externo da transação
+    [OK]  payment_details {
+             method,
+             credit_card_company,
+             installments           ← número de parcelas
+           }
+    [OK]  status                   — open | closed | cancelled
+    [OK]  payment_status           — ver enum completo em §6
+    [OK]  shipping_status          — ver enum em §6
+    [OK]  created_at               — timestamp do pedido
+    [OK]  updated_at
+    [OK]  completed_at
+    [OK]  paid_at                  — ⭐ data efetiva do pagamento
+    [OK]  cancelled_at
+    [OK]  closed_at
+    [OK]  customer_id              — fk para /customers
+                                     (quando logado/identificado)
+
+5.2 Order.products[] — itens do pedido
+    [OK]  id                       — id do line item
+    [OK]  product_id               — fk para products
+    [OK]  variant_id               — fk para variant
+    [OK]  name                     — nome do produto na hora da venda
+    [OK]  price                    — preço unitário
+    [OK]  quantity
+    [OK]  🟢 sku                    — EXISTE NO ITEM DA VENDA
+                                     (chave para consolidação com
+                                     Conta Azul, se o CA tiver SKU)
+    [OK]  barcode
+    [OK]  weight, width, height, depth
+    [OK]  free_shipping
+    [OK]  properties               — custom fields do produto
+                                     (ex: tamanho, cor)
+    [OK]  issues                   — problemas de estoque
+
+5.3 Customer (cliente)
+    [OK]  id
+    [OK]  name
+    [OK]  email
+    [OK]  phone
+    [OK]  identification            — CPF/CNPJ
+    [OK]  note                      — notas do lojista
+    [OK]  default_address {
+             id, address, number, floor,
+             locality, city, province, country, zipcode,
+             phone, default, created_at, updated_at
+          }
+    [OK]  addresses[]               — múltiplos endereços possíveis
+    [OK]  billing_address / billing_number / billing_floor /
+          billing_locality / billing_zipcode / billing_city /
+          billing_province / billing_country
+    [OK]  extra {                    — 🟢 objeto com custom fields!
+             gender: "male" | "female" | ... (?),
+             number_of_children: "2",
+             ... outros custom definidos pela loja
+          }
+    [OK]  total_spent               — histórico de compras
+    [OK]  total_spent_currency
+    [OK]  last_order_id
+    [OK]  active
+    [OK]  created_at / updated_at
+    [OK]  accepts_marketing
+    [OK]  accepts_marketing_updated_at
+
+    🔴 CAMPOS DEMOGRÁFICOS CRÍTICOS — ESTADO ATUAL DA INVESTIGAÇÃO:
+
+    [VER-CRITICO]  extra.gender
+                   Existe como CAMPO PADRÃO no "extra", mas só é
+                   populado se a Miranda PEDIR gênero no checkout
+                   ou no formulário de cadastro. Lojas Nuvemshop
+                   podem ativar/desativar esse campo no painel.
+                   📌 AÇÃO: validar no painel da Nuvemshop da
+                   Miranda se o checkout pede gênero. Se não
+                   pedir, PRECISA ser ativado antes de começar
+                   a coleta (ou a análise desaparece do projeto
+                   inteiro, já que Conta Azul também não tem).
+
+    [VER-CRITICO]  extra.birthday / data_nascimento
+                   NÃO é campo padrão. É um CUSTOM FIELD que a
+                   loja precisa criar manualmente no painel
+                   (Configurações → Formulário de cadastro →
+                   campo personalizado tipo "date").
+                   📌 AÇÃO: validar se a Miranda tem esse custom
+                   field configurado. Se não tiver, faixa etária
+                   desaparece do dashboard inteiro.
+
+5.4 Address (default e billing)
+    [OK]  id
+    [OK]  address               — rua
+    [OK]  number
+    [OK]  floor
+    [OK]  locality              — bairro
+    [OK]  city
+    [OK]  province              — 🟢 ESTADO (ex: "São Paulo")
+    [OK]  country               — ISO 3166-1 alpha-2 (BR)
+    [OK]  zipcode               — CEP
+    [OK]  phone
+    [OK]  default               — boolean
+    [OK]  created_at, updated_at
+    🟢 Sem necessidade de fallback via DDD. A geografia na aba
+       Nuvemshop vem 100% pronta do campo province.
+
+5.5 Abandoned Checkout
+    [OK]  id
+    [OK]  contact_email            — chave de identificação
+                                     (quase sempre preenchido pois
+                                     é pedido no segundo passo)
+    [OK]  contact_name
+    [OK]  contact_phone
+    [OK]  contact_identification
+    [OK]  billing_address {...}
+    [OK]  shipping_address {...}
+    [OK]  subtotal
+    [OK]  discount
+    [OK]  discount_coupon
+    [OK]  discount_gateway
+    [OK]  total
+    [OK]  total_usd
+    [OK]  shipping_cost_owner
+    [OK]  shipping_cost_customer
+    [OK]  currency
+    [OK]  products[]              — array de itens, mesma estrutura
+                                     do order.products (inclusive sku)
+    [OK]  created_at
+    [OK]  updated_at
+    [OK]  completed_at            — se virou pedido depois
+
+5.6 Product
+    [OK]  id
+    [OK]  name                    — multi-idioma
+    [OK]  description             — multi-idioma, HTML
+    [OK]  handle                  — URL-friendly, multi-idioma
+    [OK]  brand                   — marca (nullable)
+    [OK]  categories              — array de ids
+    [OK]  tags                    — string CSV
+    [OK]  attributes              — array (max 3, define variants)
+    [OK]  variants[] {
+             id,
+             price, cost, stock,
+             weight, width, height, depth,
+             sku,                ← 🟢 SKU vive aqui, não no produto!
+             values              ← combinação dos attributes
+          }
+    [OK]  images[]
+    [OK]  published
+    [OK]  free_shipping
+    [OK]  created_at / updated_at
+    [OK]  seo_title / seo_description
+    [OK]  video_url
+    [OK]  requires_shipping
+
+    ⚠ OBSERVAÇÃO IMPORTANTE SOBRE SKU
+    Um produto pode ter MÚLTIPLAS variants (ex: camiseta com
+    tamanhos P/M/G e cores), cada variant com seu próprio SKU.
+    A consolidação com Conta Azul precisa ser na granularidade
+    de variant, não de produto.
+
+--------------------------------------------------------
+6. ENUMS DE STATUS — IMPACTO NO ETL
+--------------------------------------------------------
+
+6.1 order.status (ciclo de vida do pedido)
+      open       — pedido aberto (padrão)
+      closed     — pedido finalizado (completo)
+      cancelled  — cancelado
+
+6.2 order.payment_status (o mais importante para faturamento)
+      pending             — aguardando pagamento
+      authorized          — autorizado mas não capturado
+      paid                — ⭐ INCLUI NO FATURAMENTO
+      partially_paid      — pago em parte (avaliar caso)
+      abandoned           — desistiu
+      refunded            — estornado (reembolso total)
+      partially_refunded  — reembolso parcial
+      voided              — anulado
+
+6.3 order.shipping_status (não afeta faturamento, mas pode ser
+    útil pra KPIs operacionais)
+      unpacked
+      shipped
+      unshipped
+      delivered
+      partially_packed
+      partially_fulfilled
+
+6.4 Regra para ENTRAR no faturamento (a validar com cliente):
+      payment_status ∈ {paid}
+      [VER] incluir partially_paid? Regra precisa confirmação do
+            cliente — partial_paid pode ser em casos de parcelamento
+            onde a primeira parcela caiu. Nossa recomendação inicial:
+            incluir partially_paid E paid, pois a venda já aconteceu.
+
+--------------------------------------------------------
+7. GAPS IDENTIFICADOS
+--------------------------------------------------------
+
+GAP N#1 — Coleta de gênero pelo checkout da Miranda  [VER CRÍTICO]
+  Status: dependente da configuração da loja.
+  Impacto: se a Miranda não pede gênero no checkout/cadastro,
+  a análise de gênero DESAPARECE do dashboard inteiro (Conta
+  Azul também não tem).
+  Ação imediata: validar no painel da Nuvemshop da Miranda
+  em Configurações → Formulário de cadastro → campo "Gênero".
+  Se desativado: pedir pra ativar ANTES de começar a coleta,
+  OU aceitar que a análise sai do escopo.
+
+GAP N#2 — Custom field de data de nascimento  [VER CRÍTICO]
+  Mesmo raciocínio do GAP N#1, mas pra faixa etária.
+  Custom field tipo date precisa estar configurado no painel.
+  Ação imediata: validar se existe um custom field de birthday
+  ou equivalente no customer.
+
+GAP N#3 — checkout/abandoned como webhook  [VER]
+  A lista de eventos de webhook que consegui via docs públicas
+  não mencionou explicitamente "checkout/abandoned". Se não
+  existir, ETL de carrinhos abandonados cai em polling (ok,
+  dado o rate limit generoso).
+
+GAP N#4 — Plano da Miranda na Nuvemshop  [VER]
+  Rate limits base são 40/2rps. Planos Next/Evolution recebem
+  10x. Vale verificar qual plano a Miranda tem — muda o budget
+  de chamadas do ETL.
+
+GAP N#5 — Se a Miranda pede identification (CPF) no checkout
+  [VER]
+  contact_identification existe no order, mas depende do setup
+  da loja. Se não for obrigatório, muitos pedidos virão sem CPF.
+  Não é crítico pra dashboard mas é bom saber.
+
+--------------------------------------------------------
+8. REGRAS DE NEGÓCIO DESCOBERTAS
+--------------------------------------------------------
+
+8.1 Data oficial da venda no canônico:
+    Usar paid_at QUANDO payment_status ∈ {paid, partially_paid}
+    Fallback para created_at quando paid_at ainda é null
+    (ex: pedido pending ou authorized).
+    Isso alinha com a decisão (a tomar) sobre "data de venda"
+    no REGRAS_CONSOLIDACAO §1.2.
+    [VER] bater com representante da Miranda: eles consideram
+    a venda "feita" no dia do pedido ou do pagamento? A maioria
+    dos relatórios de e-commerce usa paid_at.
+
+8.2 Cliente "Consumidor Final" não existe na Nuvemshop:
+    Diferente do Conta Azul, TODO pedido na Nuvemshop tem
+    pelo menos contact_email. Checkout exige. Então a aba
+    Nuvemshop não terá o problema de "pedidos sem cliente"
+    que tivemos na Loja Física.
+
+8.3 Consolidação de produtos por SKU:
+    Chave canônica = product.variants[].sku
+    Fallback = nome do produto (se SKU ausente dos dois lados).
+
+8.4 Geografia = default_address.province
+    Sem fallback necessário (diferente da Loja Física).
+
+8.5 Ticket médio da Nuvemshop:
+    total / orders_count onde payment_status IN (paid, partially_paid)
+    Respeitando timezone America/Sao_Paulo para agrupamento.
+
+--------------------------------------------------------
+9. RISCOS TÉCNICOS
+--------------------------------------------------------
+
+R1. Header "Authentication" (sic, não "Authorization")
+    É muito fácil copiar código OAuth genérico e escrever
+    "Authorization". Vai dar 401 silencioso. Adicionar teste
+    unitário no cliente HTTP que assert o header correto.
+
+R2. User-Agent obrigatório
+    Qualquer chamada sem User-Agent retorna 400. No boot do
+    cliente HTTP, forçar o header padrão.
+
+R3. Versioning 2025-03
+    Travado por enquanto. Criar alerta para revisar versões
+    a cada 6 meses. Upgrade costuma ser compatível, mas
+    queremos controle.
+
+R4. store_id precisa persistir
+    Sem o store_id recebido no momento da autorização, não
+    conseguimos montar base URL. Guardar no Supabase na mesma
+    linha do access_token.
+
+R5. Webhooks duplicados
+    Retry de 48h pode entregar o mesmo evento várias vezes.
+    Deduplicação por (event_type, resource_id, timestamp) ou
+    por idempotency key do lado do ETL.
+
+R6. 30 dias de retenção para abandoned checkouts
+    ETL precisa rodar com frequência razoável. Recomendação:
+    4x ao dia (a cada 6h) + webhook em tempo real se
+    checkout/abandoned existir como evento.
+
+R7. Query de 10k items máximo
+    Evitar puxar histórico completo em uma query só. Usar
+    janelas de data (created_at_min/max) menores que 30 dias
+    para estar seguro.
+
+--------------------------------------------------------
+10. DECISÕES TOMADAS DURANTE O MAPEAMENTO
+--------------------------------------------------------
+
+D1. [2026-04-10] [INTEGRACAO] Nuvemshop: webhooks primários +
+    polling diário safety-net.
+    Contexto: Nuvemshop suporta webhooks com retry de 48h. Polling
+    sozinho é desperdício de rate limit. Webhook sozinho pode
+    perder eventos se nosso endpoint ficar fora do ar.
+    Decisão: webhook é o caminho principal para order/paid,
+    order/cancelled, order/updated, customer/created, customer/updated.
+    Polling a cada 6h em /checkouts (carrinhos abandonados).
+    Polling diário em /orders com janela das últimas 48h como
+    reconciliação defensiva.
+    Copiado para /docs/context/DECISOES.txt.
+
+D2. [2026-04-10] [DADOS] Data canônica da venda Nuvemshop:
+    paid_at quando disponível, senão created_at. Registrar
+    em REGRAS_CONSOLIDACAO.txt §1.2.
+    Copiado para /docs/context/DECISOES.txt.
+
+--------------------------------------------------------
+11. PRÓXIMA AÇÃO PRÁTICA (para T13 — autenticação)
+--------------------------------------------------------
+
+Antes de começar T13, o Matheus precisa:
+
+  1. Criar conta no Partners Portal:
+     https://partners.nuvemshop.com.br/
+
+  2. Registrar app "Miranda Dashboard":
+     - nome:        Miranda Dashboard
+     - redirect_uri:
+         DEV:  http://localhost:3000/api/auth/nuvemshop/callback
+         PROD: https://miranda-estudio-dashboard.vercel.app/api/auth/nuvemshop/callback
+     - scopes:      read_orders, read_customers, read_products
+     - webhook URL: https://miranda-estudio-dashboard.vercel.app/api/webhooks/nuvemshop
+
+  3. Guardar client_id, client_secret e app_id no cofre Stepads,
+     no item "Miranda Dashboard — .env.local":
+        NUVEMSHOP_CLIENT_ID=
+        NUVEMSHOP_CLIENT_SECRET=
+        NUVEMSHOP_APP_ID=
+
+  4. Instalar o app na loja da Miranda (one-time flow), o que
+     vai gerar o access_token + store_id. Persistir ambos no
+     Supabase em uma tabela tipo oauth_tokens.
+
+  5. Registrar webhooks via POST /webhooks depois da instalação.
+
+--------------------------------------------------------
+12. FONTES CONSULTADAS
+--------------------------------------------------------
+- tiendanube.github.io/api-documentation (doc oficial — acessível
+  via WebFetch, diferente do Conta Azul que estava 403)
+- dev.nuvemshop.com.br/en/docs (DevHub Brasil)
+- github.com/TiendaNube/api-docs (repo fonte das docs)
+- Getting Started, Authentication, Rate Limiting, Pagination
+- Recursos: Order, Customer, Product, Abandoned Checkout, Webhook

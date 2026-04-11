@@ -62,3 +62,216 @@ DECISÕES REGISTRADAS
             nunca login/senha do painel.
   Impacto:  .gitignore precisa cobrir .env*. Toda nova integração deve
             usar variáveis de ambiente.
+
+[2026-04-10] [INTEGRACAO] Usar API NOVA do Conta Azul (v1), não a legada
+  Contexto: Conta Azul mantém duas APIs em paralelo. A legada
+            (api.contaazul.com.br/pub/...) usa ExternalApplicationToken
+            + CompanyToken. A nova (api.contaazul.com/v1/...) usa
+            OAuth 2.0 padrão e foi lançada em março/2025. O prazo
+            oficial de migração para a nova era 2025-11-05, já vencido.
+  Decisão:  Todo o desenvolvimento da integração Conta Azul usa
+            EXCLUSIVAMENTE a API nova v1. Aplicação registrada em
+            https://developers-portal.contaazul.com/ com credenciais
+            client_id + client_secret. Fluxo OAuth = authorization_code.
+  Impacto:  Refresh token é single-use (2 semanas de validade) — exige
+            persistência transacional no Supabase para evitar race
+            condition. Access token dura 1 hora. Sem sandbox dedicado:
+            testes usam conta trial de 3 dias ou produção do cliente.
+            Sem webhooks — sincronização via polling em cron.
+
+[2026-04-10] [INTEGRACAO] ETL do Conta Azul será 100% polling
+  Contexto: API nova do Conta Azul não suporta webhooks. Precisamos
+            manter os dashboards razoavelmente atualizados ao longo
+            do dia sem depender de push do lado da Conta Azul.
+  Decisão:  Cron jobs alinhados ao Supabase (ou Vercel Cron com região
+            gru1) executando:
+              - ingestão incremental a cada 30 min em horário comercial
+              - ingestão completa do dia anterior uma vez por dia (02h)
+            Preferência: rodar no Supabase Edge Functions (colocalizado
+            com o banco em São Paulo) para evitar possível geo-bloqueio
+            da API Conta Azul fora do Brasil.
+  Impacto:  Rate limit 600 req/min × N chamadas /sales/{id}/items por
+            venda (endpoint separado) é o maior risco de performance.
+            Na T7 validar se existe param "expand=items" que permita
+            trazer items inline em /sales — impacto direto no desenho
+            do loop de ingestão.
+
+[2026-04-10] [ESCOPO] [NEGOCIO] Loja Física sem demografia de gênero/idade
+  Contexto: Validação direta no dashboard real da Miranda em 2026-04-10
+            (screenshots da ficha de cliente real e das abas
+            "Informações adicionais") confirmou que o cadastro de
+            cliente do Conta Azul usado pela Miranda NÃO tem campo de
+            gênero nem de data de nascimento. Miranda NÃO usa campos
+            personalizados / custom fields.
+  Decisão:  A aba "Loja Física" do dashboard NÃO terá análise por
+            gênero nem por faixa etária. Essas análises ficam APENAS
+            na aba Nuvemshop, onde os dados existem.
+            A aba Loja Física terá:
+              - Faturamento (total e por período)
+              - Ranking de produtos vendidos
+              - Ticket médio
+              - Distribuição geográfica por estado (endereço do cliente
+                ou DDD como fallback, já que o estado vem direto no
+                cadastro do cliente)
+  Impacto:  1. MODELAGEM_DADOS.txt: a tabela `customers` continua tendo
+               os campos gender/age_range/age (são canônicos entre
+               fontes), mas para `source = 'conta_azul'` esses campos
+               ficam sempre em 'unknown'.
+            2. REGRAS_CONSOLIDACAO.txt: a regra §4 (demografia) precisa
+               deixar explícito que Conta Azul não fornece gênero/idade.
+            3. DASHBOARD / Views: v_loja_fisica_demografia_genero e
+               v_loja_fisica_demografia_idade são REMOVIDAS da
+               modelagem. v_loja_fisica_estado permanece.
+            4. README.md / descrição das abas: atualizar para refletir
+               a ausência dessas métricas na aba Loja Física.
+            Caminhos abertos para o futuro (não vão ser feitos agora):
+              - Miranda adicionar campos personalizados no cadastro
+                (só resolveria clientes novos, não o histórico)
+              - Enriquecer via fonte externa (CRM / WhatsApp / etc.)
+            Essas opções ficam registradas como ideias para uma
+            eventual evolução do dashboard. Por agora, escopo fechado.
+
+[2026-04-10] [INTEGRACAO] Separar canal de venda por "vendedor_responsavel"
+  Contexto: Investigação no dashboard real do Conta Azul da Miranda
+            (venda #16138, 2026-04-10) mostrou um campo "Vendedor
+            responsável" com valor "LOJA FÍSICA". Esse campo é usado
+            como etiqueta de canal pela Miranda — todas as vendas
+            do ponto físico carregam esse vendedor. A tela "Vendas de
+            produtos" lista todas as vendas (incluindo PDV/frente de
+            caixa) numa única lista, então não há endpoint separado
+            de PDV na API.
+  Decisão:  O ETL do Conta Azul vai filtrar vendas da loja física
+            usando o campo "vendedor_responsavel" = "LOJA FÍSICA"
+            (ou valores equivalentes a confirmar na T7/T8).
+  Impacto:  A query canônica para sales da Conta Azul vai ter um filtro
+            adicional por vendedor. Precisamos mapear na T7 a LISTA
+            COMPLETA de valores usados pela Miranda nesse campo — se
+            houver variações tipo "LOJA FÍSICA - CAIXA 1", ou
+            vendedores individuais para comissão, o filtro precisa
+            acomodar todos. Em caso de dúvida, puxar TUDO e filtrar
+            no ETL (mais seguro que depender de query filter externo).
+
+[2026-04-10] [INTEGRACAO] Nuvemshop — webhooks primários + polling safety-net
+  Contexto: A API Nuvemshop suporta webhooks (order/paid, order/cancelled,
+            customer/created, etc.) com política de retry de 48h. Webhook
+            sozinho pode perder eventos se nosso endpoint ficar fora do ar
+            por mais de 48h. Polling sozinho desperdiça rate limit e cria
+            latência desnecessária.
+  Decisão:  Híbrido. Webhook como caminho primário para eventos de order
+            e customer. Polling defensivo:
+              - /orders com janela das últimas 48h (1x/dia, reconciliação)
+              - /checkouts a cada 6h (carrinhos abandonados — retenção
+                de 30 dias exige frequência mínima)
+            Webhooks chegam via endpoint
+              https://miranda-estudio-dashboard.vercel.app/api/webhooks/nuvemshop
+            Validação HMAC-SHA256 obrigatória usando o client_secret
+            como chave. Processamento é assíncrono (responde 200 em
+            menos de 3s, enfileira o resource_id para um worker).
+  Impacto:  Arquitetura do ETL da Nuvemshop é diferente da do Conta Azul
+            (que é 100% polling por falta de webhooks). Código dos dois
+            não deve ser reusado direto — mas a normalização final para
+            tabelas canônicas (sales, customers) é a mesma.
+
+[2026-04-10] [DADOS] Data canônica da venda por fonte
+  Contexto: REGRAS_CONSOLIDACAO.txt §1.2 deixou em aberto qual campo de
+            data usar ("decidir entre data do pedido x data do pagamento").
+            O T4 e o T5 deram informação suficiente pra resolver.
+  Decisão:  - Conta Azul: "Data de venda" (campo já visto na UI, mapear
+                           para nome exato na API em T7).
+            - Nuvemshop:  paid_at quando disponível, senão created_at.
+                          A maioria dos relatórios de e-commerce usa
+                          data de pagamento e é o que o dashboard deve
+                          refletir pra não confundir o cliente.
+            - Meta Ads:   date_start do insight (era a regra original).
+            Timezone: America/Sao_Paulo para todos os 3.
+  Impacto:  Atualizar REGRAS_CONSOLIDACAO.txt §1.2 pra refletir isso.
+            No caso da Nuvemshop, vendas pending/authorized que ainda
+            não foram pagas entram no dashboard com a data em que foram
+            criadas — depois, quando payment_status virar "paid", o
+            registro canônico é REESCRITO com paid_at. Idempotência
+            do ETL precisa cuidar disso.
+
+[2026-04-10] [ESCOPO] Gênero/idade do dashboard agora dependem APENAS
+            da Nuvemshop — risco aberto
+  Contexto: Com Conta Azul confirmado sem esses campos (T4), e o
+            mapeamento da Nuvemshop (T5) mostrando que gender é
+            campo padrão do extra mas só é preenchido se a loja
+            pedir no checkout, e que birthday é custom field que a
+            loja precisa criar, a análise demográfica do dashboard
+            INTEIRO depende de duas configurações no painel da
+            Nuvemshop da Miranda.
+  Decisão:  Antes de iniciar T13 (auth Nuvemshop) ou T18-T20 (coleta
+            de demografia Nuvemshop), o Matheus vai:
+              1. Verificar se o checkout da Nuvemshop da Miranda
+                 pede gênero.
+              2. Verificar se existe custom field de data de
+                 nascimento/birthday configurado.
+            Se QUALQUER um dos dois estiver desativado:
+              a) Pedir pra Miranda ativar, OU
+              b) Aceitar que essa análise sai do escopo do dashboard
+                 inteiro (não só da Loja Física).
+  Impacto:  Gate crítico pra metade das métricas demográficas do
+            projeto. Precisa ser resolvido antes de qualquer linha
+            de código T13 ser escrita.
+
+[2026-04-10] [INTEGRACAO] Meta Ads: usar System User Token (não expira)
+  Contexto: A Marketing API do Meta oferece 3 tipos de token:
+            user short-lived (1-2h), user long-lived (60d) e System
+            User token (não expira). Para ETL 24/7 em produção, a
+            única opção viável é System User.
+  Decisão:  Usar System User access token configurado no Business
+            Manager da Miranda, com scopes ads_read e
+            business_management. Token gerado via:
+              Business Settings → System Users → Generate New Token
+              Opção "set_token_expires_in_60_days": false
+            Ad Account assinada ao System User com permissão
+            "View Performance" ou "View Campaigns".
+  Impacto:  Requer coordenação com a Miranda para criar System User
+            no BM deles. Se não puderem, alternativa é long-lived
+            user token (60d) com rotina de refresh. Preferência
+            é System User pra simplicidade do ETL.
+
+[2026-04-10] [DADOS] Meta Ads: attribution window = 7d_click + 1d_view
+  Contexto: Em 2026-01-12 o Meta REMOVEU 7d_view e 28d_view do Ads
+            Insights API. Janelas disponíveis agora: 1d_click,
+            1d_view, 7d_click. Default do Meta (quando não passamos
+            action_attribution_windows) é 7d_click + 1d_view.
+  Decisão:  Todo o ETL passa explicitamente
+              action_attribution_windows=['7d_click','1d_view']
+            Isso bate com o que a Miranda vê no Ads Manager por
+            default, e os números do nosso dashboard vão ser
+            consistentes com o painel nativo do Meta.
+  Impacto:  Se a Miranda usa janela diferente (ex: só 1d_click para
+            ser conservador na atribuição), os números vão divergir
+            do dashboard deles. Validar com o representante antes
+            de T25. Se divergir, trocar a janela no código.
+            Observação: não podemos oferecer 7d_view nem 28d_view
+            mesmo que o cliente peça — foram desligados pelo Meta.
+
+[2026-04-10] [INTEGRACAO] Meta Ads: ETL 100% polling a cada 30 min
+  Contexto: Marketing API tem webhooks, mas eles só cobrem EVENTOS
+            (status change, ad rejected, account issues). Para
+            métricas de insights (spend, impressões, conversões),
+            webhooks NÃO são uma opção. A Ads Reporting API
+            atualiza os dados do lado do Meta a cada 15 minutos.
+  Decisão:  ETL polling em /insights:
+              - Frequência: a cada 30 min
+              - Níveis puxados: campaign, adset, ad (3 chamadas)
+              - Janela: últimos 7 dias com UPSERT
+                (Meta recalcula histórico por alguns dias)
+            Não usamos webhooks do Meta no escopo inicial.
+  Impacto:  Dashboard tem latência de até 30-45 min em relação ao
+            Ads Manager (15 min do Meta + 30 min do nosso cron).
+            Aceitável para todos os KPIs que o cliente pediu.
+
+[2026-04-10] [ARQUITETURA] Travar versão v25.0 da Graph API do Meta
+  Contexto: Meta deprecia versões com frequência (ex.: 7d_view removido
+            em janeiro de 2026 foi "silent deprecation"). Usar "latest"
+            implícito é armadilha.
+  Decisão:  Travar todas as chamadas em v25.0 explicitamente na URL.
+            Revisão trimestral: checar changelog, testar v25.0+1,
+            atualizar se não houver breaking changes.
+  Impacto:  Código fica explícito (base URL = graph.facebook.com/v25.0),
+            mas obriga rotina de revisão. Alternativa seria pinar em
+            envvar para trocar sem deploy, mas por simplicidade,
+            fica hardcoded com comentário indicando data de revisão.

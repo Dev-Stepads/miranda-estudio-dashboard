@@ -5,41 +5,152 @@ HANDOFF — Dashboard Miranda Studio
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-10
 RESPONSÁVEL: Matheus (setup inicial via Claude)
-BRANCH: main (repo ainda não criado no GitHub)
+BRANCH: main
 
 --------------------------------------------------------
 1. O que foi feito neste push
 --------------------------------------------------------
-- Criada estrutura de pastas do projeto (/docs, /src)
-- Criados arquivos base de contexto: HANDOFF, STATUS_ATUAL, DECISOES
-- Criados arquivos de produção: BACKLOG_MIRANDA, MAPEAMENTOS (esqueletos), MODELAGEM_DADOS, REGRAS_CONSOLIDACAO
-- Criado CHECKLIST_VALIDACAO em /docs/qa
-- Criado README.md com instruções de revezamento
-- Repositório GitHub criado e primeiro push realizado (T1a concluída)
-  URL: https://github.com/Dev-Stepads/miranda-estudio-dashboard
-- Projeto Supabase criado (T1b concluída)
-  URL: https://pntlbaffrelxymiodelj.supabase.co
-  Nome: miranda-dashboard
-  Org: dev@stepads.com.br
-- .env.local criado localmente com as 3 chaves do Supabase
-  (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY)
-  — confirmado que não é commitado (.gitignore linha 8)
-- Criado CLAUDE.md na raiz do repo com as regras obrigatórias
-  que qualquer Claude (de qualquer pessoa do revezamento) deve
-  seguir: ler HANDOFF antes de mexer, atualizar os 3 docs vivos
-  (BACKLOG + HANDOFF + STATUS_ATUAL) quando estado mudar — com
-  destaque de que o BACKLOG é o mais esquecido — regras de negócio
-  (Visão Geral sem Meta Ads), DECISOES append-only, etc.
-- BACKLOG_MIRANDA.txt: T1b marcada como [x] (estava desmarcada por
-  esquecimento anterior — corrigido).
-- CLAUDE.md ganhou a seção 6 "Setup inicial em máquina nova":
-  instruções para quem chega no projeto preencher o .env.local a
-  partir do cofre de senhas da Stepads (item "Miranda Dashboard —
-  .env.local") em vez de logar no Supabase. Também documenta o
-  fluxo de rotação de credenciais.
-  AÇÃO PENDENTE DO MATHEUS: criar esse item no cofre (1Password/
-  Bitwarden) antes da equipe começar a trabalhar à tarde.
-- Nenhum código de integração escrito ainda
+- T1c CONCLUÍDA: projeto Vercel criado e vinculado ao repositório
+  Dev-Stepads/miranda-estudio-dashboard.
+  URL de produção: https://miranda-estudio-dashboard.vercel.app
+  Painel do projeto: https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
+  Team slug: dev-1871s-projects  (slug gerado automaticamente pela Vercel
+  para a conta dev@stepads.com.br — confirmado pelo Matheus em 2026-04-10)
+  Primeiro deploy sem código de app (esperado nesta fase — o importante
+  é o projeto estar criado e com o Git conectado para auto-deploy futuro).
+
+  Notas operacionais sobre como o import foi feito (importante caso
+  alguém precise repetir em outra máquina):
+  - O repo está na conta pessoal Dev-Stepads, mas o Vercel user opera
+    logado via GitHub studiocode1020.
+  - Foi necessário:
+    (a) instalar o Vercel GitHub App na conta Dev-Stepads;
+    (b) adicionar studiocode1020 como Collaborator no repo;
+    (c) em repo de conta pessoal NÃO existe papel "Admin" — Collaborator
+        já é o nível máximo e é suficiente para a Vercel;
+    (d) conectar Dev-Stepads como segunda Login Connection no Vercel
+        user (Account Settings → Login Connections) para o repo aparecer
+        no dropdown de import.
+  - Repo foi tornado público durante o troubleshooting. Avaliar se deve
+    voltar a ser privado após o projeto estabilizar.
+
+- BACKLOG_MIRANDA.txt: T1c e T4 marcadas como [x].
+- STATUS_ATUAL.txt: checkbox Vercel marcado, link atualizado, T4
+  marcada como concluída, observação de região Supabase limpa.
+- Parte 2 concluída: as 3 env vars do Supabase adicionadas no projeto
+  Vercel em Settings → Environment Variables, nos 3 environments
+  (Production, Preview, Development):
+    SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+- Região do Supabase CONFIRMADA em South America / São Paulo
+  (verificado pelo Matheus em 2026-04-10).
+- T4 CONCLUÍDA: mapeamento técnico da API Conta Azul preenchido em
+  /docs/producao/MAPEAMENTO_CONTA_AZUL.txt.
+  Research feita em duas rodadas:
+    1. Pesquisa web das docs públicas (portal 403 no WebFetch, usado
+       FAQ, LinkApi, changelog, repos GitHub oficiais e não-oficiais)
+    2. Validação VISUAL direta no dashboard real da Miranda via
+       Playwright/CDP conectado ao OperaGX do Matheus em modo debug.
+       Screenshots salvos em /debug_screenshots/ para referência.
+  Decisões oficiais registradas em DECISOES.txt (4 novas):
+    - Usar API NOVA v1 (OAuth 2.0), não a legada
+    - ETL será 100% polling (sem webhooks)
+    - Aba Loja Física NÃO terá gênero nem faixa etária (dados
+      inexistentes no Conta Azul da Miranda, validado direto na UI)
+    - Filtro de canal de venda via campo "vendedor_responsavel"
+      (valor "LOJA FÍSICA" confirmado na venda #16138)
+  Gaps críticos resolvidos:
+    - GAP #1 (gênero): ❌ CONFIRMADO INVIÁVEL → escopo reduzido
+    - GAP #2 (idade): ❌ CONFIRMADO INVIÁVEL → escopo reduzido
+    - GAP #3 (itens inline): parecem vir inline na UI, mas é preciso
+      confirmar na API real — mantido como [VER] na T7
+    - GAP estado: ✅ MELHOR QUE ESPERADO — estado vem direto no
+      endereço do cliente, DDD vira só fallback de edge case
+  Descobertas positivas:
+    - Campo "vendedor_responsavel" resolve separação de canais
+    - Status de venda confirmados: Cancelados / Previstos / Aprovados
+    - Vendas PDV e Vendas tradicionais aparecem juntas em uma lista
+      única (não precisa de dois endpoints)
+  Pendências que NÃO foram resolvidas nesta rodada e ficam pra T7:
+    - Verificar se produto tem campo SKU (não foi validado na UI,
+      faltou visitar o módulo Produtos / Estoque)
+    - Mapear valores completos do campo "vendedor_responsavel"
+    - Confirmar se /v1/sales aceita "expand=items" para evitar N+1
+    - Ver status de "Integrações" / API no painel
+  Arquivos relacionados atualizados nesta rodada:
+    - MODELAGEM_DADOS.txt: removidas views v_loja_fisica_demografia_*
+    - REGRAS_CONSOLIDACAO.txt: §4 reescrito com tabela de
+      disponibilidade por fonte
+    - README.md: descrição da aba "Loja Física" ajustada
+
+- T6 CONCLUÍDA: mapeamento técnico da API Meta Ads (Marketing API)
+  preenchido em /docs/producao/MAPEAMENTO_META_ADS.txt.
+  Research via docs oficiais do Meta for Developers.
+  Decisões oficiais registradas em DECISOES.txt (5 novas):
+    - Usar System User Token (não expira) — requer criar no BM
+      da Miranda com scope ads_read
+    - Attribution window = 7d_click + 1d_view (padrão do Meta;
+      7d_view e 28d_view foram REMOVIDOS em 2026-01-12)
+    - ETL 100% polling de 30 em 30 min (webhook não cobre métricas)
+    - Coleta defensiva de 7 dias com UPSERT (Meta recalcula histórico)
+    - Travar versão v25.0 da Graph API até revisão trimestral
+  Atenções importantes descobertas:
+    - Demografia do Meta é do PÚBLICO alcançado, não dos compradores.
+      Labels do dashboard devem deixar isso claro (vs. demografia de
+      comprador que vem da Nuvemshop)
+    - Reach com breakdown age/gender limitado a 13 meses de histórico
+    - Rate limit BUC (Business Use Case) — quota compartilhada por
+      ad account, precisamos ler headers X-Business-Use-Case em
+      cada chamada
+    - Access tier inicial é "development" por default; pode ser
+      necessário subir pra "standard" via App Review se hit rate
+      limit em T25
+  Gaps pra T23 (precisa coordenação com a Miranda):
+    - Business Manager ID
+    - Ad Account ID (act_XXXXXXXXX)
+    - Criar System User no BM da Miranda + assignar ad account
+    - Confirmar attribution window em uso (default 7d_click+1d_view)
+    - Confirmar action_type de purchase no Pixel deles
+  Arquivo relacionado atualizado:
+    - REGRAS_CONSOLIDACAO.txt §7.2 (attribution window resolvido)
+
+- T5 CONCLUÍDA: mapeamento técnico da API Nuvemshop preenchido em
+  /docs/producao/MAPEAMENTO_NUVEMSHOP.txt.
+  Research feita via docs públicas — o portal da Nuvemshop
+  (tiendanube.github.io/api-documentation) é acessível via WebFetch,
+  diferente do da Conta Azul. Não foi necessário validação visual
+  dessa vez porque a doc oficial é completa e legível.
+  Decisões oficiais registradas em DECISOES.txt (3 novas):
+    - Nuvemshop: arquitetura híbrida webhooks primários + polling
+      defensivo
+    - Data canônica de venda por fonte (Nuvemshop usa paid_at)
+    - Gate crítico: gênero/idade do dashboard inteiro dependem agora
+      APENAS da Nuvemshop + duas configurações no painel da Miranda
+  Descobertas positivas:
+    - Access token Nuvemshop não expira (vs refresh token single-use
+      de 2 semanas do Conta Azul)
+    - Webhooks eliminam dependência de polling agressivo
+    - SKU existe no item do pedido (products[].sku) e em variants[]
+    - Gênero (campo padrão extra.gender) e birthday (custom field)
+      existem no modelo da Nuvemshop — depende de a Miranda coletar
+    - Geografia vem estruturada (default_address.province), sem
+      necessidade de fallback DDD
+  Descobertas de atenção:
+    - Header de auth é "Authentication: bearer" (sic), não
+      "Authorization" — pegadinha comum
+    - User-Agent obrigatório (sem ele = 400)
+    - Rate limit é leaky bucket 40/2rps (10x pra planos Next/Evolution)
+    - Retenção de abandoned checkouts: 30 dias (API) / 90 dias
+      (deleção definitiva) → ETL precisa polling frequente
+  Gaps que NÃO podem esperar até T13/T18:
+    - Miranda pede gênero no checkout da Nuvemshop? (gate)
+    - Miranda tem custom field de birthday configurado? (gate)
+  Arquivos relacionados atualizados:
+    - REGRAS_CONSOLIDACAO.txt §1.2 (data canônica) e §2.2
+      (status Nuvemshop)
+
+- Contexto herdado dos pushes anteriores (não refeito nesta sessão):
+  estrutura /docs e /src, arquivos de contexto e produção, README.md,
+  CLAUDE.md, T1a (GitHub) e T1b (Supabase) já concluídos.
 
 --------------------------------------------------------
 2. O que está funcionando
@@ -48,20 +159,35 @@ BRANCH: main (repo ainda não criado no GitHub)
 - Backlog documentado com todas as tasks T1–T45
 - Repositório GitHub ativo e conectado ao projeto local
 - Projeto Supabase ativo e credenciais configuradas localmente
+- Projeto Vercel ativo, vinculado ao repo, pronto para auto-deploy
+  assim que houver código de frontend e env vars configuradas
 - .gitignore protege .env.local (confirmado: não foi commitado)
 
 --------------------------------------------------------
 3. O que ainda não está pronto
 --------------------------------------------------------
-- Vercel do projeto (T1c — criar com dev@stepads.com.br)
-- Confirmar região do Supabase (deve ser South America / São Paulo)
-- Mapeamento técnico das 3 APIs (Conta Azul, Nuvemshop, Meta Ads)
-- Toda a implementação de código
+- Validar no painel da Nuvemshop da Miranda: checkout pede gênero?
+  custom field de birthday existe? (gate crítico, ver HANDOFF §5)
+- Coordenar com o representante da Miranda para obter informações
+  do Meta Ads: Business Manager ID, Ad Account ID, acesso para
+  criar System User.
+- Repassar ao representante da Miranda a decisão sobre escopo
+  reduzido da Loja Física (sem gênero/idade) — e a pendência
+  sobre partially_paid (incluir no faturamento Nuvemshop ou não)
+- Toda a implementação de código (Etapas 3 em diante)
 
 --------------------------------------------------------
 4. Bloqueios encontrados
 --------------------------------------------------------
-- Nenhum no momento. Aguardando criação de Supabase e Vercel.
+- Nenhum no momento.
+
+Histórico do troubleshooting desta sessão (para referência futura):
+- Vercel não listava o repo Dev-Stepads/miranda-estudio-dashboard no
+  import porque a sessão Vercel estava autenticada via OAuth
+  studiocode1020 enquanto o repo estava em outra conta pessoal. Resolvido
+  adicionando Dev-Stepads em Login Connections no Vercel user. Tornar
+  o repo público NÃO resolveu o problema (era questão de OAuth, não de
+  visibilidade). Collaborator também não basta sozinho.
 
 --------------------------------------------------------
 5. Próximo passo exato para quem assumir
@@ -73,22 +199,89 @@ ANTES DE COMEÇAR (setup por pessoa, ver CLAUDE.md seção 6):
     — .env.local", e colar no .env.local local.
   - Se o item ainda não existir no cofre, pedir pro Matheus criar.
 
-Depois, completar o restante da Etapa 1 nesta ordem:
+PRÓXIMO PASSO IMEDIATO — Consolidação pós-descoberta
 
-  1. T1c — Criar projeto Vercel (dev@stepads.com.br)
-     - importar o repo Dev-Stepads/miranda-estudio-dashboard
-     - adicionar as 3 env vars do Supabase em Environment Variables:
-         SUPABASE_URL=https://pntlbaffrelxymiodelj.supabase.co
-         SUPABASE_ANON_KEY=(copiar do .env.local local)
-         SUPABASE_SERVICE_ROLE_KEY=(copiar do .env.local local)
-  2. Verificar região do Supabase (Settings → Infrastructure).
-     Deve ser South America (São Paulo). Se não for, avaliar recriar
-     antes de popular o banco.
-  3. Atualizar STATUS_ATUAL.txt com URL da Vercel quando pronta.
-  4. Iniciar T4–T6 (mapeamento técnico das 3 APIs) — preencher os arquivos
-     em /docs/producao/MAPEAMENTO_*.txt
+  ETAPA 2 (Descoberta técnica) está CONCLUÍDA. T4, T5, T6 fechadas.
+  Todos os 3 mapeamentos têm visão clara dos endpoints, campos,
+  autenticação, rate limits, gaps e riscos. O projeto agora está
+  em um "gate de preparação" antes de começar implementação.
 
-Depois disso, seguir com T7 (autenticação Conta Azul).
+  Ações que PRECEDEM qualquer linha de código da Etapa 3:
+
+  1. [MATHEUS] Fechar OperaGX em modo debug
+     (usado na T4, ainda pode estar com --remote-debugging-port=9222
+     aberto). Simples higiene de segurança.
+
+  2. [MATHEUS → REPRESENTANTE] Repassar ao representante da Miranda:
+     a) DECISÃO: aba "Loja Física" do dashboard NÃO terá gênero nem
+        faixa etária (Conta Azul não coleta esses dados). Essas
+        análises ficam concentradas na aba Nuvemshop.
+        → Pedir ciência e aprovação do representante.
+     b) GATE N#1: o checkout da Nuvemshop da Miranda pede gênero?
+        → Pedir pra verificar e, se não pedir, pedir pra ativar
+          OU aceitar que gênero sai do escopo TOTAL do dashboard.
+     c) GATE N#2: existe custom field tipo "date" de aniversário
+        no cadastro de cliente da Nuvemshop?
+        → Mesmo tratamento: verificar, ativar se puder, OU aceitar
+          que faixa etária sai do escopo total.
+     d) PENDÊNCIA Nuvemshop: partially_paid entra no faturamento
+        do e-commerce? (nossa recomendação = sim; confirmar)
+     e) PENDÊNCIA Meta Ads: qual attribution window a Miranda usa
+        no Ads Manager hoje? Nossa aposta é 7d_click + 1d_view
+        (default do Meta). Se for diferente, adaptar o ETL.
+
+  3. [MATHEUS → CLIENTE MIRANDA] Pedir informações técnicas:
+     a) Conta Azul: credenciais para registrar app no
+        developers-portal.contaazul.com
+     b) Meta Ads:
+        - Business Manager ID
+        - Ad Account ID (act_XXXXXXXXX)
+        - Acesso/colaboração para criar System User no BM
+        - Se usam criativos em vídeo (importa pros fields video_*)
+
+  4. [MATHEUS] Coletar as credenciais dos 3 serviços e guardar
+     no cofre Stepads em "Miranda Dashboard — .env.local":
+       # Conta Azul (criar no portal dev)
+       CONTAAZUL_CLIENT_ID=
+       CONTAAZUL_CLIENT_SECRET=
+       # Nuvemshop (criar no Partners Portal)
+       NUVEMSHOP_APP_ID=
+       NUVEMSHOP_CLIENT_ID=
+       NUVEMSHOP_CLIENT_SECRET=
+       # Meta Ads (criar app em developers.facebook.com)
+       META_APP_ID=
+       META_APP_SECRET=
+       META_SYSTEM_USER_TOKEN=
+       META_AD_ACCOUNT_ID=
+       META_BUSINESS_MANAGER_ID=
+
+DEPOIS DESSAS AÇÕES — começar Etapa 3 (implementação):
+
+  Primeira task: T7 — Autenticação Conta Azul.
+  Segunda:       T8 — Coleta de vendas Conta Azul.
+  ... (ver backlog)
+
+  A ordem recomendada é: Conta Azul → Nuvemshop → Meta Ads,
+  porque Conta Azul é a mais arriscada (API legada recém
+  desativada, refresh token single-use, sem sandbox).
+
+DEPOIS DISSO — T6: mapear tecnicamente a API da Meta Ads
+
+  5. Mesmo padrão em MAPEAMENTO_META_ADS.txt: Graph API,
+     access tokens de longa duração, endpoints de insights por nível
+     (campaign/adset/ad), atribuição window, rate limits e cotas,
+     fields canônicos que a gente já quer (spend, impressions, reach,
+     clicks, purchases, purchase_value, purchase_roas).
+
+DEPOIS DE T4-T6 — começar implementação:
+
+  6. T7 (autenticação Conta Azul) — primeira tarefa de código.
+     Antes de começar T7, o Matheus precisa:
+       - Criar conta em https://developers-portal.contaazul.com/
+       - Registrar aplicação "Miranda Dashboard" com redirect_uri
+       - Guardar CONTAAZUL_CLIENT_ID e CONTAAZUL_CLIENT_SECRET no
+         cofre Stepads (item "Miranda Dashboard — .env.local")
+     Ver seção 9 do MAPEAMENTO_CONTA_AZUL.txt para detalhes.
 
 --------------------------------------------------------
 6. Arquivos principais alterados
