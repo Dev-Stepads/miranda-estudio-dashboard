@@ -34,14 +34,19 @@ Etapa 7 — Dashboard: EM ANDAMENTO (2026-04-12)
          [x] T32 aba Loja Fisica — faturamento, produtos, estado (2026-04-12)
          [x] T33 aba Nuvemshop — faturamento, produtos, geografia, abandonados (2026-04-12)
          [~] T34 aba Meta Ads — placeholder (bloqueado por T23)
-         [x] T35 filtros — period filter 7d/15d/30d/90d/1ano via URL params (2026-04-12)
-Etapa 8 — QA: NAO INICIADA
+         [x] T35 filtros — period filter 7d/15d/30d/90d/1ano + date picker custom
+             + filtro persiste entre abas via search params (2026-04-12)
+         [x] Mobile responsive — header, tabs, cards, charts, tables (2026-04-12)
+         [x] Deploy Vercel — live em miranda-estudio-dashboard.vercel.app (2026-04-12)
+Etapa 8 — QA: PARCIAL
+         [x] Customer linkage fix — 5936/5936 orders com customer_id (2026-04-12)
+         [x] Raw table dedup — unique index + upsert ignoreDuplicates (2026-04-12)
 Etapa 9 — Divida tecnica: PARCIAL
-         [ ] T44 LGPD webhooks — pendente
-         [x] T45 NF-e detail — RESOLVIDO (XML via GET /v1/notas-fiscais/{chave_acesso})
+         [~] T44 LGPD webhooks — stubs respondendo 200 (falta implementacao real)
+         [x] T45 NF-e detail — RESOLVIDO
          [ ] T46 cofre de senhas — pendente
          [ ] T47 rotacao secrets — pendente
-         [x] T48 scheduler — RESOLVIDO (GitHub Actions cron 30 min)
+         [x] T48 scheduler — RESOLVIDO (GitHub Actions cron 30 min, ambas fontes)
 
 --------------------------------------------------------
 INFRAESTRUTURA
@@ -67,6 +72,13 @@ INFRAESTRUTURA
 [x] ETL Conta Azul rodando (full + incremental) — 2026-04-12
 [x] GitHub Actions cron a cada 30 min — 2026-04-12
 [x] Frontend Next.js 16 funcionando localmente — 2026-04-12
+[x] Deploy Vercel production — LIVE (2026-04-12)
+    https://miranda-estudio-dashboard.vercel.app
+[x] Migration raw table dedup + unique index — APLICADA (2026-04-12)
+[x] LGPD webhook stubs (3 endpoints) — respondendo 200 (2026-04-12)
+[x] Customer linkage fix (customer object vs customer_id) — 2026-04-12
+[x] Mobile responsive — 2026-04-12
+[x] Date picker custom + filtro persiste entre abas — 2026-04-12
 [ ] Cofre de senhas Stepads (1P ou Bitwarden) — PENDENTE (task T46)
 [ ] Rotacao de secrets que passaram pelo chat — PENDENTE (task T47)
 [ ] Deploy do frontend no Vercel — PENDENTE (codigo pronto, falta push)
