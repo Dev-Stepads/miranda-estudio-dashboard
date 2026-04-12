@@ -219,16 +219,28 @@ export interface MonthlyData {
 export async function fetchMonthlyComparison(months: number = 12): Promise<MonthlyData[]> {
   const supabase = getSupabase();
 
-  const { data, error } = await supabase
-    .from('v_visao_geral_daily')
-    .select('day, gross_revenue, orders_count')
-    .order('day', { ascending: true });
+  // Paginate to get ALL rows (Supabase default limit is 1000)
+  const allRows: Array<{ day: string; gross_revenue: number; orders_count: number }> = [];
+  let page = 0;
+  const PAGE_SIZE = 1000;
 
-  if (error) throw new Error(`fetchMonthlyComparison: ${error.message}`);
+  while (true) {
+    const { data: batch, error } = await supabase
+      .from('v_visao_geral_daily')
+      .select('day, gross_revenue, orders_count')
+      .order('day', { ascending: true })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+    if (error) throw new Error(`fetchMonthlyComparison: ${error.message}`);
+    if (batch === null || batch.length === 0) break;
+    allRows.push(...(batch as typeof allRows));
+    if (batch.length < PAGE_SIZE) break;
+    page++;
+  }
 
   // Aggregate by month
   const byMonth = new Map<string, { revenue: number; orders: number }>();
-  for (const row of (data ?? []) as Array<{ day: string; gross_revenue: number; orders_count: number }>) {
+  for (const row of allRows) {
     const month = row.day.slice(0, 7); // "2026-04"
     const existing = byMonth.get(month) ?? { revenue: 0, orders: 0 };
     existing.revenue += row.gross_revenue;
