@@ -1,0 +1,50 @@
+name: Sync Nuvemshop → Supabase
+
+on:
+  # Roda a cada 30 minutos automaticamente
+  schedule:
+    - cron: '*/30 * * * *'
+
+  # Permite rodar manualmente pelo painel do GitHub
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Nuvemshop Incremental Sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Nuvemshop sync (incremental)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NUVEMSHOP_ACCESS_TOKEN: ${{ secrets.NUVEMSHOP_ACCESS_TOKEN }}
+          NUVEMSHOP_STORE_ID: ${{ secrets.NUVEMSHOP_STORE_ID }}
+          NUVEMSHOP_USER_AGENT: 'Miranda Dashboard (dev@stepads.com.br)'
+        run: npx tsx src/etl/nuvemshop/run.ts
+
+# ⚠ CONTA AZUL NÃO ESTÁ INCLUÍDA NESTE CRON.
+#
+# Motivo: o refresh_token do Conta Azul é SINGLE-USE — cada execução
+# gera um novo token que precisa ser PERSISTIDO pra próxima vez.
+# GitHub Actions não tem como atualizar seus próprios secrets entre runs.
+#
+# Solução futura: criar uma tabela `etl_config` no Supabase pra
+# armazenar o refresh_token, e o ETL lê/escreve de lá em vez do .env.local.
+# Quando isso for implementado, adicionar um segundo step aqui pro Conta Azul.
+#
+# Por enquanto, sync do Conta Azul é MANUAL:
+#   npm run sync:contaazul
