@@ -13,7 +13,6 @@ interface BrazilMapProps {
   data: StateData[];
 }
 
-// Map state names (GeoJSON) to UF codes
 const NAME_TO_UF: Record<string, string> = {
   'Acre': 'AC', 'Alagoas': 'AL', 'Amapá': 'AP', 'Amazonas': 'AM',
   'Bahia': 'BA', 'Ceará': 'CE', 'Distrito Federal': 'DF',
@@ -36,11 +35,16 @@ function getColor(value: number, max: number): string {
   return '#ddd6fe';
 }
 
+function formatBRL(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
 export function BrazilMap({ data }: BrazilMapProps) {
   const [tooltip, setTooltip] = useState<{ name: string; revenue: number; orders: number } | null>(null);
 
   const dataMap = new Map(data.map(d => [d.state, d]));
   const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
+  const ranked = [...data].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -48,68 +52,98 @@ export function BrazilMap({ data }: BrazilMapProps) {
         Compradores por Estado
       </h3>
 
-      <div className="relative h-64 sm:h-80">
-        <ComposableMap
-          projection="geoMercator"
-          projectionConfig={{ scale: 600, center: [-54, -15] }}
-          width={500}
-          height={400}
-          style={{ width: '100%', height: '100%' }}
-        >
-          <ZoomableGroup>
-            <Geographies geography="/brazil-states.geojson">
-              {({ geographies }) =>
-                geographies.map((geo) => {
-                  const stateName = geo.properties.name as string;
-                  const uf = NAME_TO_UF[stateName] ?? '';
-                  const stateData = dataMap.get(uf);
-                  const revenue = stateData?.revenue ?? 0;
-                  const orders = stateData?.orders_count ?? 0;
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Map */}
+        <div className="relative h-56 sm:h-72">
+          <ComposableMap
+            projection="geoMercator"
+            projectionConfig={{ scale: 550, center: [-54, -15] }}
+            width={500}
+            height={400}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <ZoomableGroup>
+              <Geographies geography="/brazil-states.geojson">
+                {({ geographies }) =>
+                  geographies.map((geo) => {
+                    const stateName = geo.properties.name as string;
+                    const uf = NAME_TO_UF[stateName] ?? '';
+                    const stateData = dataMap.get(uf);
+                    const revenue = stateData?.revenue ?? 0;
+                    const orders = stateData?.orders_count ?? 0;
 
-                  return (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill={getColor(revenue, maxRevenue)}
-                      stroke="#fff"
-                      strokeWidth={0.5}
-                      style={{
-                        default: { outline: 'none' },
-                        hover: { outline: 'none', fill: '#4c1d95', cursor: 'pointer' },
-                        pressed: { outline: 'none' },
-                      }}
-                      onMouseEnter={() => setTooltip({ name: `${stateName} (${uf})`, revenue, orders })}
-                      onMouseLeave={() => setTooltip(null)}
-                    />
-                  );
-                })
-              }
-            </Geographies>
-          </ZoomableGroup>
-        </ComposableMap>
+                    return (
+                      <Geography
+                        key={geo.rsmKey}
+                        geography={geo}
+                        fill={getColor(revenue, maxRevenue)}
+                        stroke="#fff"
+                        strokeWidth={0.5}
+                        style={{
+                          default: { outline: 'none' },
+                          hover: { outline: 'none', fill: '#4c1d95', cursor: 'pointer' },
+                          pressed: { outline: 'none' },
+                        }}
+                        onMouseEnter={() => setTooltip({ name: `${stateName} (${uf})`, revenue, orders })}
+                        onMouseLeave={() => setTooltip(null)}
+                      />
+                    );
+                  })
+                }
+              </Geographies>
+            </ZoomableGroup>
+          </ComposableMap>
 
-        {/* Tooltip */}
-        {tooltip && (
-          <div className="absolute top-2 right-2 bg-white dark:bg-gray-700 rounded-lg shadow-lg p-3 text-xs border border-gray-200 dark:border-gray-600 pointer-events-none">
-            <p className="font-semibold text-gray-900 dark:text-gray-100">{tooltip.name}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tooltip.revenue)}
-            </p>
-            <p className="text-gray-500 dark:text-gray-400">
-              {tooltip.orders} pedidos
-            </p>
+          {tooltip && (
+            <div className="absolute top-2 right-2 bg-white dark:bg-gray-700 rounded-lg shadow-lg p-3 text-xs border border-gray-200 dark:border-gray-600 pointer-events-none">
+              <p className="font-semibold text-gray-900 dark:text-gray-100">{tooltip.name}</p>
+              <p className="text-gray-600 dark:text-gray-300 mt-1">{formatBRL(tooltip.revenue)}</p>
+              <p className="text-gray-500 dark:text-gray-400">{tooltip.orders} pedidos</p>
+            </div>
+          )}
+
+          {/* Legend */}
+          <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400 justify-center">
+            <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#ddd6fe' }} />
+            <span>Baixo</span>
+            <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#a78bfa' }} />
+            <span>Médio</span>
+            <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#6d28d9' }} />
+            <span>Alto</span>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-2 mt-4 text-xs text-gray-500 dark:text-gray-400 justify-center">
-        <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#ddd6fe' }} />
-        <span>Baixo</span>
-        <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#a78bfa' }} />
-        <span>Médio</span>
-        <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#6d28d9' }} />
-        <span>Alto</span>
+        {/* Ranking table */}
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ranking por Faturamento</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-gray-700">
+                  <th className="py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Estado</th>
+                  <th className="py-1.5 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
+                  <th className="py-1.5 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ranked.map((s) => (
+                  <tr key={s.state} className="border-b border-gray-50 dark:border-gray-700/50">
+                    <td className="py-1.5">
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm mr-1.5 align-middle" style={{ background: getColor(s.revenue, maxRevenue) }} />
+                      <span className="font-medium text-gray-800 dark:text-gray-200">{s.state}</span>
+                    </td>
+                    <td className="py-1.5 text-right text-gray-600 dark:text-gray-300 font-mono">
+                      {s.orders_count.toLocaleString('pt-BR')}
+                    </td>
+                    <td className="py-1.5 text-right font-semibold text-gray-900 dark:text-gray-100">
+                      {formatBRL(s.revenue)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
