@@ -17,6 +17,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from '../../lib/supabase.ts';
 import { syncContaAzul } from './sync.ts';
 
@@ -26,14 +27,68 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function updateEnvFile(newRefreshToken: string): void {
-  const envPath = path.resolve('.env.local');
-  let content = fs.readFileSync(envPath, 'utf-8');
-  content = content.replace(
-    /^CONTA_AZUL_REFRESH_TOKEN=.+$/m,
-    `CONTA_AZUL_REFRESH_TOKEN=${newRefreshToken}`,
-  );
-  fs.writeFileSync(envPath, content, 'utf-8');
+/**
+ * Try to update .env.local with the new refresh_token (works locally).
+ * Silently fails in CI (file doesn't exist) — that's OK, Supabase
+ * is the source of truth.
+ */
+function tryUpdateEnvFile(newRefreshToken: string): void {
+  try {
+    const envPath = path.resolve('.env.local');
+    let content = fs.readFileSync(envPath, 'utf-8');
+    content = content.replace(
+      /^CONTA_AZUL_REFRESH_TOKEN=.+$/m,
+      `CONTA_AZUL_REFRESH_TOKEN=${newRefreshToken}`,
+    );
+    fs.writeFileSync(envPath, content, 'utf-8');
+  } catch {
+    // In CI, .env.local doesn't exist — that's fine.
+  }
+}
+
+/**
+ * Read the refresh_token from Supabase etl_config table.
+ * Falls back to env var if the table doesn't have it yet.
+ */
+async function getRefreshToken(supabase: SupabaseClient): Promise<string> {
+  const { data } = await supabase
+    .from('etl_config')
+    .select('value')
+    .eq('key', 'conta_azul_refresh_token')
+    .limit(1);
+
+  if (data !== null && data.length > 0 && data[0]?.value) {
+    console.log('  📦 Refresh token loaded from Supabase etl_config');
+    return data[0].value as string;
+  }
+
+  // Fallback to env var (first run or table not populated yet)
+  const envToken = process.env.CONTA_AZUL_REFRESH_TOKEN;
+  if (envToken) {
+    console.log('  📦 Refresh token loaded from env var (fallback)');
+    return envToken;
+  }
+
+  throw new Error('No refresh_token found in Supabase etl_config or env vars');
+}
+
+/**
+ * Save the new refresh_token to Supabase etl_config table.
+ * This is the source of truth for CI environments.
+ */
+async function saveRefreshToken(supabase: SupabaseClient, newToken: string): Promise<void> {
+  const { error } = await supabase
+    .from('etl_config')
+    .upsert(
+      { key: 'conta_azul_refresh_token', value: newToken, updated_at: new Date().toISOString() },
+      { onConflict: 'key' },
+    );
+
+  if (error !== null) {
+    console.error(`  ❌ Failed to save refresh_token to Supabase: ${error.message}`);
+  } else {
+    console.log('  ✅ Refresh token saved to Supabase etl_config');
+  }
 }
 
 function formatDate(d: Date): string {
@@ -94,14 +149,20 @@ async function main(): Promise<void> {
   }
   console.log('========================================\n');
 
+  // Read refresh_token from Supabase (source of truth) with env fallback
+  const refreshToken = await getRefreshToken(supabase);
+
   const result = await syncContaAzul(
     supabase,
     {
       clientId: requireEnv('CONTA_AZUL_CLIENT_ID'),
       clientSecret: requireEnv('CONTA_AZUL_CLIENT_SECRET'),
-      refreshToken: requireEnv('CONTA_AZUL_REFRESH_TOKEN'),
-      onRefreshTokenRotated: (newToken) => {
-        updateEnvFile(newToken);
+      refreshToken,
+      onRefreshTokenRotated: async (newToken) => {
+        // Save to Supabase (source of truth for CI/cron)
+        await saveRefreshToken(supabase, newToken);
+        // Also try to update .env.local (convenience for local dev)
+        tryUpdateEnvFile(newToken);
       },
     },
     dataInicial,

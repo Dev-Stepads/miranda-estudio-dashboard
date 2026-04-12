@@ -1,4 +1,4 @@
-name: Sync Nuvemshop → Supabase
+name: Sync ETL (Nuvemshop + Conta Azul)
 
 on:
   # Roda a cada 30 minutos automaticamente
@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Nuvemshop sync (incremental)
+      - name: Sync Nuvemshop (incremental)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -38,15 +38,13 @@ jobs:
           NUVEMSHOP_USER_AGENT: 'Miranda Dashboard (dev@stepads.com.br)'
         run: npx tsx src/etl/nuvemshop/run.ts
 
-# ⚠ CONTA AZUL NÃO ESTÁ INCLUÍDA NESTE CRON.
-#
-# Motivo: o refresh_token do Conta Azul é SINGLE-USE — cada execução
-# gera um novo token que precisa ser PERSISTIDO pra próxima vez.
-# GitHub Actions não tem como atualizar seus próprios secrets entre runs.
-#
-# Solução futura: criar uma tabela `etl_config` no Supabase pra
-# armazenar o refresh_token, e o ETL lê/escreve de lá em vez do .env.local.
-# Quando isso for implementado, adicionar um segundo step aqui pro Conta Azul.
-#
-# Por enquanto, sync do Conta Azul é MANUAL:
-#   npm run sync:contaazul
+      - name: Sync Conta Azul (incremental)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CONTA_AZUL_CLIENT_ID: ${{ secrets.CONTA_AZUL_CLIENT_ID }}
+          CONTA_AZUL_CLIENT_SECRET: ${{ secrets.CONTA_AZUL_CLIENT_SECRET }}
+          # Refresh token is read from Supabase etl_config table (not from secrets).
+          # The ETL writes the new rotated token back to the table after each run.
+          # CONTA_AZUL_REFRESH_TOKEN env var is only used as fallback on first run.
+        run: npx tsx src/etl/conta-azul/run.ts
