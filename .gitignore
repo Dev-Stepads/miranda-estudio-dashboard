@@ -27,6 +27,7 @@ notes.local.*
 
 # Build (Next.js + general)
 .next/
+*.tsbuildinfo
 dist/
 build/
 out/
@@ -85,3 +86,4 @@ screenshots*/
 /*.png
 /*.gif
 /*.webp
+.vercel
