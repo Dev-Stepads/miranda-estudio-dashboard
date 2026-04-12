@@ -9,36 +9,41 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-lg">
+          {/* Top row: logo + date */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-sm sm:text-lg shrink-0">
                 M
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Miranda Studio</h1>
-                <p className="text-sm text-gray-500">Dashboard de Vendas</p>
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900">Miranda Studio</h1>
+                <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Dashboard de Vendas</p>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <PeriodFilter />
-              <p className="text-xs text-gray-400">
-                {new Date().toLocaleDateString('pt-BR', {
-                  weekday: 'long',
-                  day: '2-digit',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </p>
-            </div>
+            <p className="text-xs text-gray-400 hidden md:block">
+              {new Date().toLocaleDateString('pt-BR', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
           </div>
-          <NavTabs />
+          {/* Period filter */}
+          <div className="mb-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <PeriodFilter />
+          </div>
+          {/* Tabs */}
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <NavTabs />
+          </div>
         </div>
       </header>
 
       {/* Page content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
         {children}
       </main>
 

@@ -17,7 +17,7 @@ function TabLinks() {
   const queryString = searchParams.toString();
 
   return (
-    <nav className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+    <nav className="flex gap-1 bg-gray-100 p-1 rounded-lg w-max min-w-full sm:w-auto">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
         // Preserve current filters (days, from, to) when switching tabs

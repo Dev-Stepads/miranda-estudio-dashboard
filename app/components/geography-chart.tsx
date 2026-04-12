@@ -16,11 +16,11 @@ interface GeoChartProps {
 
 export function GeographyChart({ data }: GeoChartProps) {
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm border border-gray-100">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
         Faturamento por Estado
       </h3>
-      <div className="h-72">
+      <div className="h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

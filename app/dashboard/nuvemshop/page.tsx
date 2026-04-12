@@ -76,9 +76,9 @@ export default async function NuvemshopPage({
     .slice(0, 10);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-8">
       {/* KPI Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           title="Faturamento Nuvemshop"
           value={formatBRL(totalRevenue)}
@@ -107,7 +107,7 @@ export default async function NuvemshopPage({
       <RevenueChart data={chartData} />
 
       {/* Two columns: Geography + Abandoned */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
         <GeographyChart data={geoData} />
 
         <SimpleTable

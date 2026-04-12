@@ -80,9 +80,9 @@ export default async function VisaoGeralPage({
     .slice(0, 10);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-8">
       {/* KPI Cards with % change */}
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           title="Faturamento Total"
           value={formatBRL(totalRevenue)}
@@ -108,7 +108,7 @@ export default async function VisaoGeralPage({
       </section>
 
       {/* Chart + Donut side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
         <div className="lg:col-span-2">
           <RevenueChart data={chartData} />
         </div>
@@ -116,7 +116,7 @@ export default async function VisaoGeralPage({
       </div>
 
       {/* Geography + Top Products */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
         <GeographyChart data={geoData} />
         <div className="lg:col-span-2">
           <TopProductsTable products={topProducts} />

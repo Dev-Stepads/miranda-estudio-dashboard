@@ -33,11 +33,11 @@ function formatDay(day: string) {
 
 export function RevenueChart({ data }: RevenueChartProps) {
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm border border-gray-100">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
         Faturamento Diário
       </h3>
-      <div className="h-80">
+      <div className="h-56 sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

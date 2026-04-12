@@ -24,9 +24,9 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
 
   return (
     <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-6 pb-3">
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        {subtitle && <p className="text-sm text-gray-400 mt-1">{subtitle}</p>}
+      <div className="p-4 sm:p-6 pb-3">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">{title}</h3>
+        {subtitle && <p className="text-xs sm:text-sm text-gray-400 mt-1">{subtitle}</p>}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

@@ -19,9 +19,9 @@ export function ChannelDonut({ nuvemshop, contaAzul }: ChannelDonutProps) {
   ];
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">Split por Canal</h3>
-      <div className="h-64">
+    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm border border-gray-100">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Split por Canal</h3>
+      <div className="h-52 sm:h-64">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
