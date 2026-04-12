@@ -6,7 +6,7 @@ import {
   fetchGeography,
   fetchAbandoned,
 } from '../../lib/queries';
-import { KpiCard, formatBRL, formatNumber } from '../../components/kpi-cards';
+import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { GeographyChart } from '../../components/geography-chart';
 import { SimpleTable } from '../../components/simple-table';
@@ -19,8 +19,9 @@ export default async function NuvemshopPage({
   const params = await searchParams;
   const days = Math.max(1, Number(params.days ?? '30') || 30);
 
-  const [daily, topProducts, geography, abandoned] = await Promise.all([
+  const [daily, prevDaily, topProducts, geography, abandoned] = await Promise.all([
     fetchNuvemshopDaily(days),
+    fetchNuvemshopDaily(days * 2),
     fetchTopProducts(20),
     fetchGeography(15),
     fetchAbandoned(),
@@ -30,6 +31,16 @@ export default async function NuvemshopPage({
   const totalRevenue = daily.reduce((sum, r) => sum + r.gross_revenue, 0);
   const totalOrders = daily.reduce((sum, r) => sum + r.orders_count, 0);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  // Previous period for comparison
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const prevRevenue = prevDaily
+    .filter(r => new Date(r.day) < cutoff)
+    .reduce((sum, r) => sum + r.gross_revenue, 0);
+  const prevOrders = prevDaily
+    .filter(r => new Date(r.day) < cutoff)
+    .reduce((sum, r) => sum + r.orders_count, 0);
 
   const totalAbandoned = abandoned.reduce((sum, r) => sum + r.abandoned_count, 0);
   const totalAbandonedValue = abandoned.reduce((sum, r) => sum + r.total_amount, 0);
@@ -71,11 +82,13 @@ export default async function NuvemshopPage({
           title="Faturamento Nuvemshop"
           value={formatBRL(totalRevenue)}
           subtitle={`Últimos ${days} dias`}
+          change={percentChange(totalRevenue, prevRevenue)}
         />
         <KpiCard
           title="Pedidos"
           value={formatNumber(totalOrders)}
           subtitle={`Ticket médio ${formatBRL(avgTicket)}`}
+          change={percentChange(totalOrders, prevOrders)}
         />
         <KpiCard
           title="Carrinhos Abandonados"
