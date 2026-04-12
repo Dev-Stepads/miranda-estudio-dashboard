@@ -152,12 +152,31 @@ export default async function VisaoGeralPage({
         const totalRepeat = recurrence.reduce((s, r) => s + r.repeat_buyers, 0);
         const totalCust = totalFirst + totalRepeat;
         const rate = totalCust > 0 ? Number(((totalRepeat / totalCust) * 100).toFixed(1)) : 0;
+
+        const ns = recurrence.find(r => r.source === 'nuvemshop');
+        const ca = recurrence.find(r => r.source === 'conta_azul');
+
         return (
           <RecurrenceCard
-            firstTime={totalFirst}
-            repeat={totalRepeat}
-            repeatRate={rate}
-            label="Todas as fontes — clientes que compraram mais de 1 vez"
+            totalFirstTime={totalFirst}
+            totalRepeat={totalRepeat}
+            totalRepeatRate={rate}
+            sources={[
+              {
+                label: 'E-commerce (Nuvemshop)',
+                firstTime: ns?.first_time_buyers ?? 0,
+                repeat: ns?.repeat_buyers ?? 0,
+                repeatRate: Number(ns?.repeat_rate ?? 0),
+                color: '#6366f1',
+              },
+              {
+                label: 'Loja Física (Conta Azul)',
+                firstTime: ca?.first_time_buyers ?? 0,
+                repeat: ca?.repeat_buyers ?? 0,
+                repeatRate: Number(ca?.repeat_rate ?? 0),
+                color: '#f59e0b',
+              },
+            ]}
           />
         );
       })()}
