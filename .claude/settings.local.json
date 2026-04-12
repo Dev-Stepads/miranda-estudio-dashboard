@@ -20,7 +20,28 @@
       "Bash(node browser_debug.js navigate \"https://pro.contaazul.com/#/ca/vendas/produtos\" \"vendas_produtos_lista\")",
       "Bash(node browser_debug.js screenshot \"venda_detalhe_exemplo\")",
       "WebFetch(domain:tiendanube.github.io)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(curl -s --max-time 3 http://localhost:9222/json/version)",
+      "Bash(netstat -ano)",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name like 'opera%'\\\\\" | Select-Object ProcessId, Name, CommandLine | Format-List\")",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:www.stepads.com.br)",
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(npx tsx:*)",
+      "Bash(npx next:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(vercel:*)",
+      "Bash(python3 -c \" import json, sys d = json.load\\(sys.stdin\\) ns = sum\\(r['gross_revenue'] for r in d if r['source']=='nuvemshop'\\) ca = sum\\(r['gross_revenue'] for r in d if r['source']=='conta_azul'\\) print\\(f'Nuvemshop: R\\\\$ {ns:,.2f}'\\) print\\(f'Conta Azul: R\\\\$ {ca:,.2f}'\\) print\\(f'TOTAL JANEIRO 2026: R\\\\$ {ns+ca:,.2f}'\\) print\\(f'Pedidos: {len\\([r for r in d if r[\\\\\"source\\\\\"]==\\\\\"nuvemshop\\\\\"]\\)} dias NS + {len\\([r for r in d if r[\\\\\"source\\\\\"]==\\\\\"conta_azul\\\\\"]\\)} dias CA'\\) \")",
+      "Bash(tasklist)",
+      "Bash(npx vitest:*)"
     ]
   }
 }
