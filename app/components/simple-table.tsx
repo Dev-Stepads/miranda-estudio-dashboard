@@ -25,17 +25,17 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="p-4 sm:p-6 pb-3">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900">{title}</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
         {subtitle && <p className="text-xs sm:text-sm text-gray-400 mt-1">{subtitle}</p>}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-t border-gray-100 bg-gray-50">
+            <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-6 py-3 font-medium text-gray-500 ${
+                  className={`px-6 py-3 font-medium text-gray-500 dark:text-gray-400 ${
                     col.align === 'right' ? 'text-right' : 'text-left'
                   }`}
                 >
@@ -46,13 +46,13 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+              <tr key={i} className="border-t border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 {columns.map((col) => (
                   <td
                     key={col.key}
                     className={`px-6 py-3 ${
                       col.align === 'right' ? 'text-right font-mono' : ''
-                    } ${col.format === 'currency' ? 'font-semibold text-gray-900' : 'text-gray-700'}`}
+                    } ${col.format === 'currency' ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}
                   >
                     {formatCell(row[col.key], col.format)}
                   </td>

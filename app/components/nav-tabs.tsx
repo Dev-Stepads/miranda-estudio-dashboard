@@ -17,10 +17,9 @@ function TabLinks() {
   const queryString = searchParams.toString();
 
   return (
-    <nav className="flex gap-1 bg-gray-100 p-1 rounded-lg w-max min-w-full sm:w-auto">
+    <nav className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-max min-w-full sm:w-auto">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
-        // Preserve current filters (days, from, to) when switching tabs
         const href = queryString ? `${tab.href}?${queryString}` : tab.href;
         return (
           <Link
@@ -28,8 +27,8 @@ function TabLinks() {
             href={href}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               isActive
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
             {tab.label}

@@ -20,8 +20,18 @@ export function ChannelDonut({ nuvemshop, contaAzul }: ChannelDonutProps) {
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Split por Canal</h3>
-      <div className="h-52 sm:h-64">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Split por Canal</h3>
+      <div className="flex justify-center gap-4 text-xs mb-2">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" />
+          <span className="text-gray-600 dark:text-gray-300">E-commerce {total > 0 ? `${((nuvemshop / total) * 100).toFixed(1)}%` : ''}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
+          <span className="text-gray-600 dark:text-gray-300">Loja Física {total > 0 ? `${((contaAzul / total) * 100).toFixed(1)}%` : ''}</span>
+        </span>
+      </div>
+      <div className="h-44 sm:h-56">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -32,9 +42,7 @@ export function ChannelDonut({ nuvemshop, contaAzul }: ChannelDonutProps) {
               outerRadius={90}
               paddingAngle={3}
               dataKey="value"
-              label={({ name, percent }) =>
-                `${String(name ?? '').split('(')[0]?.trim()} ${((percent ?? 0) * 100).toFixed(1)}%`
-              }
+              label={false}
               labelLine={false}
             >
               {data.map((_entry, index) => (
