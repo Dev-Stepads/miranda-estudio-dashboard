@@ -4,7 +4,7 @@ import { fetchDailyRevenue, fetchTopProducts, fetchTopCustomers, fetchGeographyC
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { AvgTicketChart } from '../../components/avg-ticket-chart';
-import { GeographyChart } from '../../components/geography-chart';
+import { BrazilMap } from '../../components/brazil-map';
 import { SimpleTable } from '../../components/simple-table';
 
 export default async function LojaFisicaPage({
@@ -91,7 +91,7 @@ export default async function LojaFisicaPage({
       )}
 
       {/* Geography */}
-      <GeographyChart
+      <BrazilMap
         data={(() => {
           const byState = new Map<string, { revenue: number; orders_count: number }>();
           for (const g of geography) {
@@ -102,8 +102,7 @@ export default async function LojaFisicaPage({
           }
           return Array.from(byState.entries())
             .map(([state, vals]) => ({ state, ...vals }))
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 10);
+            .sort((a, b) => b.revenue - a.revenue);
         })()}
       />
 

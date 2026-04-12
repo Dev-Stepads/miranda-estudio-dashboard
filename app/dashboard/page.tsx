@@ -7,7 +7,7 @@ import { TopProductsTable } from '../components/top-products-table';
 import { SimpleTable } from '../components/simple-table';
 import { AvgTicketChart } from '../components/avg-ticket-chart';
 import { ChannelDonut } from '../components/channel-donut';
-import { GeographyChart } from '../components/geography-chart';
+import { BrazilMap } from '../components/brazil-map';
 
 function buildChartData(rows: { day: string; source: string; gross_revenue: number }[]) {
   const byDay = new Map<string, { nuvemshop: number; conta_azul: number }>();
@@ -146,7 +146,7 @@ export default async function VisaoGeralPage({
 
       {/* Geography + Top Products */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
-        <GeographyChart data={geoData} />
+        <BrazilMap data={geoData} />
         <div className="lg:col-span-2">
           <TopProductsTable products={topProducts} />
         </div>

@@ -11,7 +11,7 @@ import {
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { AvgTicketChart } from '../../components/avg-ticket-chart';
-import { GeographyChart } from '../../components/geography-chart';
+import { BrazilMap } from '../../components/brazil-map';
 import { SimpleTable } from '../../components/simple-table';
 
 export default async function NuvemshopPage({
@@ -114,7 +114,7 @@ export default async function NuvemshopPage({
 
       {/* Geography by state + by city */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-        <GeographyChart data={geoData} />
+        <BrazilMap data={geoData} />
 
         <SimpleTable
           title="Top Cidades"

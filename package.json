@@ -33,8 +33,11 @@
     "fast-xml-parser": "^5.5.11",
     "next": "^16.2.3",
     "playwright-core": "^1.59.1",
+    "prop-types": "^15.8.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-is": "^19.2.5",
+    "react-simple-maps": "^3.0.0",
     "recharts": "^3.8.1",
     "zod": "^3.23.8"
   },
