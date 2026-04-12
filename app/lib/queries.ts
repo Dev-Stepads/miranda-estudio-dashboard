@@ -170,6 +170,43 @@ export async function fetchGeography(limit: number = 15): Promise<GeoData[]> {
   return (data ?? []) as GeoData[];
 }
 
+/** Geography (Conta Azul — Loja Física) */
+export async function fetchGeographyCA(limit: number = 15): Promise<GeoData[]> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from('v_loja_fisica_geografia')
+    .select('state, city, orders_count, revenue')
+    .not('state', 'is', null)
+    .order('revenue', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
+  return (data ?? []) as GeoData[];
+}
+
+export interface GeoConsolidated {
+  state: string;
+  orders_count: number;
+  revenue: number;
+  revenue_nuvemshop: number;
+  revenue_conta_azul: number;
+}
+
+/** Geography consolidated (both sources) */
+export async function fetchGeographyConsolidated(limit: number = 15): Promise<GeoConsolidated[]> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from('v_geografia_consolidada')
+    .select('*')
+    .order('revenue', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`fetchGeographyConsolidated: ${error.message}`);
+  return (data ?? []) as GeoConsolidated[];
+}
+
 /** Abandoned checkouts (Nuvemshop) */
 export async function fetchAbandoned(): Promise<AbandonedData[]> {
   const supabase = getSupabase();

@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeography, fetchTopCustomers, parsePeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, parsePeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
@@ -33,11 +33,11 @@ export default async function VisaoGeralPage({
   const period = parsePeriod(params);
 
   // Fetch current period + previous period (for % change comparison)
-  const [currentRevenue, previousRevenue, topProducts, geography, topCustomers] = await Promise.all([
+  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(15),
-    fetchGeography(10),
+    fetchGeographyConsolidated(10),
     fetchTopCustomers(10),
   ]);
 
@@ -69,18 +69,12 @@ export default async function VisaoGeralPage({
 
   const chartData = buildChartData(currentRevenue);
 
-  // Aggregate geography by state
-  const geoByState = new Map<string, { revenue: number; orders_count: number }>();
-  for (const g of geography) {
-    const existing = geoByState.get(g.state) ?? { revenue: 0, orders_count: 0 };
-    existing.revenue += g.revenue;
-    existing.orders_count += g.orders_count;
-    geoByState.set(g.state, existing);
-  }
-  const geoData = Array.from(geoByState.entries())
-    .map(([state, vals]) => ({ state, ...vals }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 10);
+  // Geography data (already aggregated by state from consolidated view)
+  const geoData = geoConsolidated.map(g => ({
+    state: g.state,
+    revenue: g.revenue,
+    orders_count: g.orders_count,
+  }));
 
   return (
     <div className="space-y-4 sm:space-y-8">
