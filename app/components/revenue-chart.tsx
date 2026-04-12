@@ -33,8 +33,8 @@ function formatDay(day: string) {
 
 export function RevenueChart({ data }: RevenueChartProps) {
   return (
-    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm border border-gray-100">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
         Faturamento Diário
       </h3>
       <div className="h-56 sm:h-80">

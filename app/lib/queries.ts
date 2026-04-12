@@ -207,6 +207,39 @@ export async function fetchGeographyConsolidated(limit: number = 15): Promise<Ge
   return (data ?? []) as GeoConsolidated[];
 }
 
+export interface RecentOrder {
+  sale_id: number;
+  source: string;
+  sale_date: string;
+  gross_revenue: number;
+  status: string;
+  payment_method: string | null;
+  customer_name: string | null;
+}
+
+/** Recent orders (last N) across all sources */
+export async function fetchRecentOrders(limit: number = 10): Promise<RecentOrder[]> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from('sales')
+    .select('sale_id, source, sale_date, gross_revenue, status, payment_method, customers(name)')
+    .order('sale_date', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`fetchRecentOrders: ${error.message}`);
+
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    sale_id: row.sale_id as number,
+    source: row.source as string,
+    sale_date: row.sale_date as string,
+    gross_revenue: row.gross_revenue as number,
+    status: row.status as string,
+    payment_method: row.payment_method as string | null,
+    customer_name: (row.customers as Record<string, unknown> | null)?.name as string | null ?? null,
+  }));
+}
+
 /** Abandoned checkouts (Nuvemshop) */
 export async function fetchAbandoned(): Promise<AbandonedData[]> {
   const supabase = getSupabase();

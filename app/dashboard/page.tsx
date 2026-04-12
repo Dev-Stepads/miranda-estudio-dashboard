@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, parsePeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, parsePeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
@@ -33,12 +33,13 @@ export default async function VisaoGeralPage({
   const period = parsePeriod(params);
 
   // Fetch current period + previous period (for % change comparison)
-  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers] = await Promise.all([
+  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(15),
     fetchGeographyConsolidated(10),
     fetchTopCustomers(10),
+    fetchRecentOrders(10),
   ]);
 
   // Split previous period data
@@ -78,6 +79,28 @@ export default async function VisaoGeralPage({
 
   return (
     <div className="space-y-4 sm:space-y-8">
+      {/* Executive Summary */}
+      <div className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 p-4 sm:p-6 text-white shadow-lg">
+        <p className="text-sm sm:text-base font-medium opacity-90">{period.label}</p>
+        <p className="text-2xl sm:text-4xl font-bold mt-1">
+          {formatBRL(totalRevenue)}
+        </p>
+        <p className="text-sm mt-2 opacity-80">
+          {formatNumber(totalOrders)} pedidos
+          {' · '}ticket médio {formatBRL(avgTicket)}
+          {percentChange(totalRevenue, prevTotalRevenue) !== null && (
+            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
+              (percentChange(totalRevenue, prevTotalRevenue) ?? 0) >= 0
+                ? 'bg-white/20'
+                : 'bg-red-400/30'
+            }`}>
+              {(percentChange(totalRevenue, prevTotalRevenue) ?? 0) >= 0 ? '↑' : '↓'}{' '}
+              {Math.abs(percentChange(totalRevenue, prevTotalRevenue) ?? 0).toFixed(1)}% vs período anterior
+            </span>
+          )}
+        </p>
+      </div>
+
       {/* KPI Cards with % change */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
@@ -129,7 +152,25 @@ export default async function VisaoGeralPage({
         </div>
       </div>
 
-      {/* Top Customers */}
+      {/* Recent Orders + Top Customers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+        <SimpleTable
+          title="Pedidos Recentes"
+          subtitle="Últimos 10 pedidos (todas as fontes)"
+          columns={[
+            { key: 'sale_date_fmt', label: 'Data' },
+            { key: 'customer_name', label: 'Cliente' },
+            { key: 'source_label', label: 'Canal' },
+            { key: 'gross_revenue', label: 'Valor', align: 'right', format: 'currency' },
+          ]}
+          rows={recentOrders.map(o => ({
+            ...o,
+            sale_date_fmt: new Date(o.sale_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+            source_label: o.source === 'nuvemshop' ? 'E-commerce' : 'Loja',
+            customer_name: o.customer_name ?? '—',
+          })) as unknown as Record<string, unknown>[]}
+        />
+
       <SimpleTable
         title="Top Clientes"
         subtitle="Ranking por faturamento total (todas as fontes)"
@@ -142,6 +183,7 @@ export default async function VisaoGeralPage({
         ]}
         rows={topCustomers as unknown as Record<string, unknown>[]}
       />
+      </div>
     </div>
   );
 }

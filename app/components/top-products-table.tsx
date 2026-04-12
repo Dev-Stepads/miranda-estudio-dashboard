@@ -7,7 +7,7 @@ interface TopProductsTableProps {
 
 export function TopProductsTable({ products }: TopProductsTableProps) {
   return (
-    <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+    <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="p-4 sm:p-6 pb-3">
         <h3 className="text-base sm:text-lg font-semibold text-gray-900">Top Produtos</h3>
         <p className="text-xs sm:text-sm text-gray-400 mt-1">Ranking por faturamento consolidado</p>

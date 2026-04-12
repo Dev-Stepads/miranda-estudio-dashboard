@@ -1,5 +1,6 @@
 import { NavTabs } from '../components/nav-tabs';
 import { PeriodFilter } from '../components/period-filter';
+import { ThemeToggle } from '../components/theme-toggle';
 
 export default function DashboardLayout({
   children,
@@ -9,7 +10,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 sm:py-4">
         <div className="max-w-7xl mx-auto">
           {/* Top row: logo + date */}
           <div className="flex items-center justify-between mb-3">
@@ -18,9 +19,12 @@ export default function DashboardLayout({
                 M
               </div>
               <div>
-                <h1 className="text-lg sm:text-2xl font-bold text-gray-900">Miranda Studio</h1>
-                <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Dashboard de Vendas</p>
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Miranda Studio</h1>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">Dashboard de Vendas</p>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
             </div>
             <p className="text-xs text-gray-400 hidden md:block">
               {new Date().toLocaleDateString('pt-BR', {
@@ -48,7 +52,7 @@ export default function DashboardLayout({
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 mt-12 py-6 text-center text-sm text-gray-400">
+      <footer className="border-t border-gray-200 dark:border-gray-800 mt-12 py-6 text-center text-sm text-gray-400">
         Miranda Studio Dashboard — Stepads &copy; {new Date().getFullYear()}
       </footer>
     </div>

@@ -8,9 +8,9 @@ interface KpiCardProps {
 
 export function KpiCard({ title, value, subtitle, change }: KpiCardProps) {
   return (
-    <div className="rounded-xl bg-white p-4 sm:p-6 shadow-sm border border-gray-100">
+    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
       <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
         {change !== undefined && change !== null && Number.isFinite(change) && (
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -23,7 +23,7 @@ export function KpiCard({ title, value, subtitle, change }: KpiCardProps) {
           </span>
         )}
       </div>
-      <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-bold tracking-tight text-gray-900">{value}</p>
+      <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">{value}</p>
       {subtitle && (
         <p className="mt-1 text-sm text-gray-400">{subtitle}</p>
       )}
