@@ -1,9 +1,11 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeography, parsePeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeography, fetchTopCustomers, parsePeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
+import { SimpleTable } from '../components/simple-table';
+import { AvgTicketChart } from '../components/avg-ticket-chart';
 import { ChannelDonut } from '../components/channel-donut';
 import { GeographyChart } from '../components/geography-chart';
 
@@ -31,11 +33,12 @@ export default async function VisaoGeralPage({
   const period = parsePeriod(params);
 
   // Fetch current period + previous period (for % change comparison)
-  const [currentRevenue, previousRevenue, topProducts, geography] = await Promise.all([
+  const [currentRevenue, previousRevenue, topProducts, geography, topCustomers] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
-    fetchDailyRevenue(period.days * 2), // fetch 2x and split
+    fetchDailyRevenue(period.days * 2),
     fetchTopProducts(15),
     fetchGeography(10),
+    fetchTopCustomers(10),
   ]);
 
   // Split previous period data
@@ -115,6 +118,15 @@ export default async function VisaoGeralPage({
         <ChannelDonut nuvemshop={nuvemshopRevenue} contaAzul={contaAzulRevenue} />
       </div>
 
+      {/* Avg Ticket Chart */}
+      <AvgTicketChart
+        data={chartData.map(d => ({
+          day: d.day,
+          avg_ticket: (d.nuvemshop + d.conta_azul) /
+            (currentRevenue.filter(r => r.day === d.day).reduce((s, r) => s + r.orders_count, 0) || 1),
+        }))}
+      />
+
       {/* Geography + Top Products */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
         <GeographyChart data={geoData} />
@@ -122,6 +134,20 @@ export default async function VisaoGeralPage({
           <TopProductsTable products={topProducts} />
         </div>
       </div>
+
+      {/* Top Customers */}
+      <SimpleTable
+        title="Top Clientes"
+        subtitle="Ranking por faturamento total (todas as fontes)"
+        columns={[
+          { key: 'name', label: 'Cliente' },
+          { key: 'state', label: 'UF' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
+        ]}
+        rows={topCustomers as unknown as Record<string, unknown>[]}
+      />
     </div>
   );
 }

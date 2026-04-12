@@ -126,6 +126,30 @@ export async function fetchNuvemshopDaily(days: number = 30, from?: string, to?:
   return (data ?? []) as NuvemshopDaily[];
 }
 
+export interface TopCustomer {
+  customer_id: number;
+  name: string;
+  state: string | null;
+  source: string;
+  orders_count: number;
+  total_revenue: number;
+  avg_ticket: number;
+}
+
+/** Top customers by revenue */
+export async function fetchTopCustomers(limit: number = 15): Promise<TopCustomer[]> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from('v_top_customers')
+    .select('*')
+    .order('total_revenue', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
+  return (data ?? []) as TopCustomer[];
+}
+
 /** Geography (Nuvemshop) */
 export async function fetchGeography(limit: number = 15): Promise<GeoData[]> {
   const supabase = getSupabase();
