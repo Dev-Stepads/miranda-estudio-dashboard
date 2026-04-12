@@ -20,8 +20,8 @@ export function ChannelDonut({ nuvemshop, contaAzul }: ChannelDonutProps) {
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Split por Canal</h3>
-      <div className="flex justify-center gap-4 text-xs mb-2">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Split por Canal</h3>
+      <div className="flex justify-center gap-4 text-xs mb-4">
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" />
           <span className="text-gray-600 dark:text-gray-300">E-commerce {total > 0 ? `${((nuvemshop / total) * 100).toFixed(1)}%` : ''}</span>
