@@ -207,6 +207,60 @@ export async function fetchGeographyConsolidated(limit: number = 15): Promise<Ge
   return (data ?? []) as GeoConsolidated[];
 }
 
+export interface MonthlyData {
+  month: string;
+  revenue: number;
+  orders: number;
+  avgTicket: number;
+  changePercent: number | null;
+}
+
+/** Monthly comparison — all sources consolidated */
+export async function fetchMonthlyComparison(months: number = 12): Promise<MonthlyData[]> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from('v_visao_geral_daily')
+    .select('day, gross_revenue, orders_count')
+    .order('day', { ascending: true });
+
+  if (error) throw new Error(`fetchMonthlyComparison: ${error.message}`);
+
+  // Aggregate by month
+  const byMonth = new Map<string, { revenue: number; orders: number }>();
+  for (const row of (data ?? []) as Array<{ day: string; gross_revenue: number; orders_count: number }>) {
+    const month = row.day.slice(0, 7); // "2026-04"
+    const existing = byMonth.get(month) ?? { revenue: 0, orders: 0 };
+    existing.revenue += row.gross_revenue;
+    existing.orders += row.orders_count;
+    byMonth.set(month, existing);
+  }
+
+  // Sort descending (most recent first) and limit
+  const sorted = Array.from(byMonth.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, months);
+
+  // Calculate % change vs previous month
+  const result: MonthlyData[] = sorted.map(([month, vals], i) => {
+    const prevMonth = sorted[i + 1];
+    const prevRevenue = prevMonth ? prevMonth[1].revenue : null;
+    const changePercent = prevRevenue !== null && prevRevenue > 0
+      ? ((vals.revenue - prevRevenue) / prevRevenue) * 100
+      : null;
+
+    return {
+      month,
+      revenue: vals.revenue,
+      orders: vals.orders,
+      avgTicket: vals.orders > 0 ? vals.revenue / vals.orders : 0,
+      changePercent,
+    };
+  });
+
+  return result;
+}
+
 export interface RecentOrder {
   sale_id: number;
   source: string;

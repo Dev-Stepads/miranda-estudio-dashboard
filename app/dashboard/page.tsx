@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, fetchCustomerRecurrence, parsePeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, fetchCustomerRecurrence, fetchMonthlyComparison, parsePeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
 import { SimpleTable } from '../components/simple-table';
 import { RecurrenceCard } from '../components/recurrence-card';
+import { MonthlyComparison } from '../components/monthly-comparison';
 import { AvgTicketChart } from '../components/avg-ticket-chart';
 import { ChannelDonut } from '../components/channel-donut';
 import { BrazilMap } from '../components/brazil-map';
@@ -34,7 +35,7 @@ export default async function VisaoGeralPage({
   const period = parsePeriod(params);
 
   // Fetch current period + previous period (for % change comparison)
-  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence] = await Promise.all([
+  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence, monthly] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(15),
@@ -42,6 +43,7 @@ export default async function VisaoGeralPage({
     fetchTopCustomers(10),
     fetchRecentOrders(10),
     fetchCustomerRecurrence(),
+    fetchMonthlyComparison(12),
   ]);
 
   // Split previous period data
@@ -188,6 +190,9 @@ export default async function VisaoGeralPage({
           <TopProductsTable products={topProducts} />
         </div>
       </div>
+
+      {/* Monthly Comparison */}
+      <MonthlyComparison data={monthly} />
 
       {/* Recent Orders + Top Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
