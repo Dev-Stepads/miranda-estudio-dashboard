@@ -148,6 +148,9 @@ export const RawNuvemshopOrderSchema = z
     cancelled_at: z.string().nullable().optional(),
     closed_at: z.string().nullable().optional(),
 
+    /** Nuvemshop v2025-03 returns full customer OBJECT, not just customer_id */
+    customer: z.object({ id: z.number() }).passthrough().nullable().optional(),
+    /** Legacy field — some API versions return customer_id as a number */
     customer_id: z.number().nullable().optional(),
 
     /**

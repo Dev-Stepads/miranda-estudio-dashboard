@@ -67,10 +67,9 @@ export function mapOrderToCanonicalSale(raw: RawNuvemshopOrder): CanonicalSale {
     total_gross: safeParseMoney(raw.total),
     total_net: safeParseMoney(raw.subtotal),
     status: mapPaymentStatus(raw.payment_status),
-    customer_source_id:
-      raw.customer_id !== undefined && raw.customer_id !== null
-        ? String(raw.customer_id)
-        : null,
+    // Nuvemshop v2025-03 sends `customer: { id }` object, not `customer_id` number.
+    // Support both for backwards compatibility with older API versions/fixtures.
+    customer_source_id: resolveCustomerSourceId(raw),
     payment_method: firstNonEmpty(raw.gateway_name, raw.gateway),
     items,
   };
@@ -199,6 +198,23 @@ export function safeParseMoney(value: string | null | undefined): number {
   if (value === null || value === undefined || value === '') return 0;
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Extract customer source ID from a raw order. Nuvemshop v2025-03 uses
+ * `customer: { id }` object, older versions used `customer_id` number.
+ */
+function resolveCustomerSourceId(raw: RawNuvemshopOrder): string | null {
+  // v2025-03: customer object with id
+  const customerObj = raw.customer;
+  if (customerObj !== null && customerObj !== undefined && typeof customerObj === 'object' && 'id' in customerObj) {
+    const id = (customerObj as { id: number }).id;
+    if (id !== null && id !== undefined) return String(id);
+  }
+  // Legacy: customer_id as number
+  const legacyId = raw.customer_id;
+  if (legacyId !== null && legacyId !== undefined) return String(legacyId);
+  return null;
 }
 
 function nullIfEmpty(value: string | null | undefined): string | null {
