@@ -9,6 +9,7 @@ import {
 } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
+import { AvgTicketChart } from '../../components/avg-ticket-chart';
 import { GeographyChart } from '../../components/geography-chart';
 import { SimpleTable } from '../../components/simple-table';
 
@@ -105,6 +106,9 @@ export default async function NuvemshopPage({
 
       {/* Revenue Chart */}
       <RevenueChart data={chartData} />
+
+      {/* Avg Ticket Chart */}
+      <AvgTicketChart data={daily.map(d => ({ day: d.day, avg_ticket: d.avg_ticket }))} />
 
       {/* Two columns: Geography + Abandoned */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { fetchDailyRevenue, fetchTopProducts, parsePeriod } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
+import { AvgTicketChart } from '../../components/avg-ticket-chart';
 import { SimpleTable } from '../../components/simple-table';
 
 export default async function LojaFisicaPage({
@@ -75,6 +76,16 @@ export default async function LojaFisicaPage({
 
       {/* Revenue Chart */}
       {chartData.length > 0 && <RevenueChart data={chartData} />}
+
+      {/* Avg Ticket */}
+      {chartData.length > 0 && (
+        <AvgTicketChart
+          data={caDaily.map(d => ({
+            day: d.day,
+            avg_ticket: d.orders_count > 0 ? d.gross_revenue / d.orders_count : 0,
+          }))}
+        />
+      )}
 
       {/* Top Products */}
       <SimpleTable
