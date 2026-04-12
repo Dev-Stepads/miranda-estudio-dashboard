@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 
-const periods = [
+const presets = [
   { label: '7d', value: '7' },
   { label: '15d', value: '15' },
   { label: '30d', value: '30' },
@@ -15,31 +15,113 @@ function PeriodButtons() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const current = searchParams.get('days') ?? '30';
+  const currentDays = searchParams.get('days') ?? '30';
+  const currentFrom = searchParams.get('from');
+  const currentTo = searchParams.get('to');
+  const isCustom = currentFrom !== null && currentTo !== null;
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [fromDate, setFromDate] = useState(currentFrom ?? '');
+  const [toDate, setToDate] = useState(currentTo ?? formatDate(new Date()));
 
   function setDays(days: string) {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams();
     params.set('days', days);
     router.push(`${pathname}?${params.toString()}`);
+    setShowDatePicker(false);
+  }
+
+  function applyCustomRange() {
+    if (!fromDate || !toDate) return;
+    const params = new URLSearchParams();
+    params.set('from', fromDate);
+    params.set('to', toDate);
+    router.push(`${pathname}?${params.toString()}`);
+    setShowDatePicker(false);
+  }
+
+  function clearCustom() {
+    const params = new URLSearchParams();
+    params.set('days', '30');
+    router.push(`${pathname}?${params.toString()}`);
+    setShowDatePicker(false);
   }
 
   return (
-    <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-      {periods.map((p) => (
-        <button
-          key={p.value}
-          onClick={() => setDays(p.value)}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-            current === p.value
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          {p.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        {presets.map((p) => (
+          <button
+            key={p.value}
+            onClick={() => setDays(p.value)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              !isCustom && currentDays === p.value
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+
+        {/* Custom button / active label */}
+        {isCustom ? (
+          <span className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-900 shadow-sm">
+            {currentFrom} → {currentTo}
+            <button
+              onClick={clearCustom}
+              className="ml-1 text-gray-400 hover:text-red-500 cursor-pointer text-sm leading-none"
+              title="Limpar filtro"
+            >
+              ×
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setShowDatePicker(!showDatePicker)}
+            className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+          >
+            Custom
+          </button>
+        )}
+      </div>
+
+      {/* Date picker dropdown */}
+      {showDatePicker && (
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2 shadow-sm">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="text-xs border border-gray-200 rounded px-2 py-1"
+          />
+          <span className="text-xs text-gray-400">→</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="text-xs border border-gray-200 rounded px-2 py-1"
+          />
+          <button
+            onClick={applyCustomRange}
+            className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 cursor-pointer"
+          >
+            Aplicar
+          </button>
+          <button
+            onClick={() => setShowDatePicker(false)}
+            className="px-2 py-1 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
+}
+
+function formatDate(d: Date): string {
+  return d.toISOString().split('T')[0]!;
 }
 
 export function PeriodFilter() {

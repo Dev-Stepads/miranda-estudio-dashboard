@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 const tabs = [
   { href: '/dashboard', label: 'Visão Geral' },
@@ -10,17 +11,21 @@ const tabs = [
   { href: '/dashboard/meta-ads', label: 'Meta Ads' },
 ];
 
-export function NavTabs() {
+function TabLinks() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const queryString = searchParams.toString();
 
   return (
     <nav className="flex gap-1 bg-gray-100 p-1 rounded-lg">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
+        // Preserve current filters (days, from, to) when switching tabs
+        const href = queryString ? `${tab.href}?${queryString}` : tab.href;
         return (
           <Link
             key={tab.href}
-            href={tab.href}
+            href={href}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               isActive
                 ? 'bg-white text-gray-900 shadow-sm'
@@ -32,5 +37,13 @@ export function NavTabs() {
         );
       })}
     </nav>
+  );
+}
+
+export function NavTabs() {
+  return (
+    <Suspense fallback={<div className="h-10 w-96 bg-gray-100 rounded-lg animate-pulse" />}>
+      <TabLinks />
+    </Suspense>
   );
 }

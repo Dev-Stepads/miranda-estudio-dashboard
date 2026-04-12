@@ -43,18 +43,48 @@ export interface AbandonedData {
   total_amount: number;
 }
 
-/** Visão Geral: revenue by day and source (last N days) */
-export async function fetchDailyRevenue(days: number = 30): Promise<DailyRevenue[]> {
-  const supabase = getSupabase();
-  const since = new Date();
-  since.setDate(since.getDate() - days);
+/** Parse period from searchParams: supports { days } or { from, to } */
+export function parsePeriod(params: { days?: string; from?: string; to?: string }): {
+  since: string;
+  until: string;
+  days: number;
+  label: string;
+} {
+  if (params.from && params.to) {
+    const from = new Date(params.from);
+    const to = new Date(params.to);
+    const diffDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+    return { since: params.from, until: params.to, days: diffDays, label: `${params.from} → ${params.to}` };
+  }
+  const days = Math.max(1, Number(params.days ?? '30') || 30);
+  const now = new Date();
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return {
+    since: since.toISOString().split('T')[0]!,
+    until: now.toISOString().split('T')[0]!,
+    days,
+    label: `Últimos ${days} dias`,
+  };
+}
 
-  const { data, error } = await supabase
+/** Visão Geral: revenue by day and source */
+export async function fetchDailyRevenue(days: number = 30, from?: string, to?: string): Promise<DailyRevenue[]> {
+  const supabase = getSupabase();
+
+  let query = supabase
     .from('v_visao_geral_daily')
     .select('day, source, orders_count, gross_revenue')
-    .gte('day', since.toISOString().split('T')[0]!)
     .order('day', { ascending: true });
 
+  if (from && to) {
+    query = query.gte('day', from).lte('day', to);
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    query = query.gte('day', since.toISOString().split('T')[0]!);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(`fetchDailyRevenue: ${error.message}`);
   return (data ?? []) as DailyRevenue[];
 }
@@ -75,17 +105,23 @@ export async function fetchTopProducts(limit: number = 20): Promise<TopProduct[]
 }
 
 /** Nuvemshop daily for the Nuvemshop tab */
-export async function fetchNuvemshopDaily(days: number = 30): Promise<NuvemshopDaily[]> {
+export async function fetchNuvemshopDaily(days: number = 30, from?: string, to?: string): Promise<NuvemshopDaily[]> {
   const supabase = getSupabase();
-  const since = new Date();
-  since.setDate(since.getDate() - days);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('v_nuvemshop_daily')
     .select('*')
-    .gte('day', since.toISOString().split('T')[0]!)
     .order('day', { ascending: true });
 
+  if (from && to) {
+    query = query.gte('day', from).lte('day', to);
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    query = query.gte('day', since.toISOString().split('T')[0]!);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(`fetchNuvemshopDaily: ${error.message}`);
   return (data ?? []) as NuvemshopDaily[];
 }

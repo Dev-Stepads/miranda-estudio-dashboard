@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts } from '../../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, parsePeriod } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { SimpleTable } from '../../components/simple-table';
@@ -8,14 +8,14 @@ import { SimpleTable } from '../../components/simple-table';
 export default async function LojaFisicaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const days = Math.max(1, Number(params.days ?? '30') || 30);
+  const period = parsePeriod(params);
 
   const [dailyRevenue, prevDailyRevenue, topProducts] = await Promise.all([
-    fetchDailyRevenue(days),
-    fetchDailyRevenue(days * 2),
+    fetchDailyRevenue(period.days, params.from, params.to),
+    fetchDailyRevenue(period.days * 2),
     fetchTopProducts(20),
   ]);
 
@@ -27,7 +27,7 @@ export default async function LojaFisicaPage({
 
   // Previous period for comparison
   const now = new Date();
-  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
   const prevCaDaily = prevDailyRevenue
     .filter(r => r.source === 'conta_azul' && new Date(r.day) < cutoff);
   const prevRevenue = prevCaDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
@@ -57,7 +57,7 @@ export default async function LojaFisicaPage({
         <KpiCard
           title="Faturamento Loja Física"
           value={formatBRL(totalRevenue)}
-          subtitle={`Últimos ${days} dias`}
+          subtitle={period.label}
           change={percentChange(totalRevenue, prevRevenue)}
         />
         <KpiCard
@@ -69,7 +69,7 @@ export default async function LojaFisicaPage({
         <KpiCard
           title="NF-e Emitidas"
           value={formatNumber(totalOrders)}
-          subtitle={`Últimos ${days} dias`}
+          subtitle={period.label}
         />
       </section>
 

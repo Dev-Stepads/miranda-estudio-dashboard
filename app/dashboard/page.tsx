@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeography } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeography, parsePeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
@@ -25,23 +25,23 @@ function buildChartData(rows: { day: string; source: string; gross_revenue: numb
 export default async function VisaoGeralPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const days = Math.max(1, Number(params.days ?? '30') || 30);
+  const period = parsePeriod(params);
 
   // Fetch current period + previous period (for % change comparison)
   const [currentRevenue, previousRevenue, topProducts, geography] = await Promise.all([
-    fetchDailyRevenue(days),
-    fetchDailyRevenue(days * 2), // fetch 2x and split
+    fetchDailyRevenue(period.days, params.from, params.to),
+    fetchDailyRevenue(period.days * 2), // fetch 2x and split
     fetchTopProducts(15),
     fetchGeography(10),
   ]);
 
   // Split previous period data
   const now = new Date();
-  const currentCutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  const previousCutoff = new Date(now.getTime() - days * 2 * 24 * 60 * 60 * 1000);
+  const currentCutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
+  const previousCutoff = new Date(now.getTime() - period.days * 2 * 24 * 60 * 60 * 1000);
 
   const prevPeriodRevenue = previousRevenue.filter((r) => {
     const d = new Date(r.day);
@@ -86,7 +86,7 @@ export default async function VisaoGeralPage({
         <KpiCard
           title="Faturamento Total"
           value={formatBRL(totalRevenue)}
-          subtitle={`Últimos ${days} dias`}
+          subtitle={period.label}
           change={percentChange(totalRevenue, prevTotalRevenue)}
         />
         <KpiCard

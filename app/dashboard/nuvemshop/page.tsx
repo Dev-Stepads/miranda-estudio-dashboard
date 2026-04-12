@@ -5,6 +5,7 @@ import {
   fetchTopProducts,
   fetchGeography,
   fetchAbandoned,
+  parsePeriod,
 } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
@@ -14,14 +15,14 @@ import { SimpleTable } from '../../components/simple-table';
 export default async function NuvemshopPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const days = Math.max(1, Number(params.days ?? '30') || 30);
+  const period = parsePeriod(params);
 
   const [daily, prevDaily, topProducts, geography, abandoned] = await Promise.all([
-    fetchNuvemshopDaily(days),
-    fetchNuvemshopDaily(days * 2),
+    fetchNuvemshopDaily(period.days, params.from, params.to),
+    fetchNuvemshopDaily(period.days * 2),
     fetchTopProducts(20),
     fetchGeography(15),
     fetchAbandoned(),
@@ -34,7 +35,7 @@ export default async function NuvemshopPage({
 
   // Previous period for comparison
   const now = new Date();
-  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
   const prevRevenue = prevDaily
     .filter(r => new Date(r.day) < cutoff)
     .reduce((sum, r) => sum + r.gross_revenue, 0);
@@ -81,7 +82,7 @@ export default async function NuvemshopPage({
         <KpiCard
           title="Faturamento Nuvemshop"
           value={formatBRL(totalRevenue)}
-          subtitle={`Últimos ${days} dias`}
+          subtitle={period.label}
           change={percentChange(totalRevenue, prevRevenue)}
         />
         <KpiCard
