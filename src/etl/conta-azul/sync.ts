@@ -267,10 +267,10 @@ export async function syncContaAzul(
       }
 
       // 6. Insert raw
-      await supabase.from('raw_contaazul_sales').insert({
-        source_id: nfe.chaveAcesso,
-        payload: { xml_length: xml.length, numero_nota: nfe.numeroNota, parsed: nfe },
-      });
+      await supabase.from('raw_contaazul_sales').upsert(
+        { source_id: nfe.chaveAcesso, payload: { xml_length: xml.length, numero_nota: nfe.numeroNota, parsed: nfe } },
+        { onConflict: 'source_id', ignoreDuplicates: true },
+      );
 
       // Progress log
       if ((i + 1) % BATCH_LOG_INTERVAL === 0 || i === allChaves.length - 1) {
