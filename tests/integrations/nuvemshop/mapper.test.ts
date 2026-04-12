@@ -51,6 +51,7 @@ function makeOrder(overrides: Partial<RawNuvemshopOrder> = {}): RawNuvemshopOrde
     updated_at: '2026-04-10T19:12:44-0300',
     paid_at: '2026-04-10T18:07:02-0300',
     cancelled_at: null,
+    customer: { id: 32547459 },
     customer_id: 32547459,
     products: [
       {
@@ -239,6 +240,34 @@ describe('mapOrderToCanonicalSale', () => {
     expect(result.source).toBe('nuvemshop');
     expect(result.source_id).toBe('1944668557');
     expect(result.customer_source_id).toBe('32547459');
+  });
+
+  it('resolves customer_source_id from customer object (v2025-03 API)', () => {
+    const result = mapOrderToCanonicalSale(
+      makeOrder({ customer: { id: 99999 }, customer_id: undefined }),
+    );
+    expect(result.customer_source_id).toBe('99999');
+  });
+
+  it('falls back to customer_id when customer object is missing (legacy)', () => {
+    const result = mapOrderToCanonicalSale(
+      makeOrder({ customer: undefined, customer_id: 88888 }),
+    );
+    expect(result.customer_source_id).toBe('88888');
+  });
+
+  it('returns null customer_source_id when both customer and customer_id are null', () => {
+    const result = mapOrderToCanonicalSale(
+      makeOrder({ customer: null, customer_id: null }),
+    );
+    expect(result.customer_source_id).toBeNull();
+  });
+
+  it('prefers customer.id over customer_id when both present', () => {
+    const result = mapOrderToCanonicalSale(
+      makeOrder({ customer: { id: 111 }, customer_id: 222 }),
+    );
+    expect(result.customer_source_id).toBe('111');
   });
 
   it('uses paid_at as sale_date when present', () => {

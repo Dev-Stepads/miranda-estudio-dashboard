@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, parsePeriod } from '../../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchTopCustomers, parsePeriod } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { AvgTicketChart } from '../../components/avg-ticket-chart';
@@ -14,10 +14,11 @@ export default async function LojaFisicaPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
-  const [dailyRevenue, prevDailyRevenue, topProducts] = await Promise.all([
+  const [dailyRevenue, prevDailyRevenue, topProducts, topCustomers] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(20),
+    fetchTopCustomers(10, 'conta_azul'),
   ]);
 
   // Filter Conta Azul only
@@ -87,18 +88,31 @@ export default async function LojaFisicaPage({
         />
       )}
 
-      {/* Top Products */}
-      <SimpleTable
-        title="Top Produtos Loja Física"
-        subtitle="Ranking por faturamento (NF-e Conta Azul)"
-        columns={[
-          { key: 'product_name', label: 'Produto' },
-          { key: 'sku', label: 'SKU' },
-          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
-          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-        ]}
-        rows={caProducts as unknown as Record<string, unknown>[]}
-      />
+      {/* Top Products + Top Customers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+        <SimpleTable
+          title="Top Produtos"
+          subtitle="Ranking por faturamento (NF-e)"
+          columns={[
+            { key: 'product_name', label: 'Produto' },
+            { key: 'sku', label: 'SKU' },
+            { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
+            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          ]}
+          rows={caProducts as unknown as Record<string, unknown>[]}
+        />
+        <SimpleTable
+          title="Top Clientes"
+          subtitle="Ranking por faturamento (Loja Física)"
+          columns={[
+            { key: 'name', label: 'Cliente' },
+            { key: 'state', label: 'UF' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          ]}
+          rows={topCustomers as unknown as Record<string, unknown>[]}
+        />
+      </div>
     </div>
   );
 }
