@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, parsePeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, fetchCustomerRecurrence, parsePeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
 import { SimpleTable } from '../components/simple-table';
+import { RecurrenceCard } from '../components/recurrence-card';
 import { AvgTicketChart } from '../components/avg-ticket-chart';
 import { ChannelDonut } from '../components/channel-donut';
 import { BrazilMap } from '../components/brazil-map';
@@ -33,13 +34,14 @@ export default async function VisaoGeralPage({
   const period = parsePeriod(params);
 
   // Fetch current period + previous period (for % change comparison)
-  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders] = await Promise.all([
+  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(15),
     fetchGeographyConsolidated(10),
     fetchTopCustomers(10),
     fetchRecentOrders(10),
+    fetchCustomerRecurrence(),
   ]);
 
   // Split previous period data
@@ -143,6 +145,22 @@ export default async function VisaoGeralPage({
             (currentRevenue.filter(r => r.day === d.day).reduce((s, r) => s + r.orders_count, 0) || 1),
         }))}
       />
+
+      {/* Recurrence */}
+      {(() => {
+        const totalFirst = recurrence.reduce((s, r) => s + r.first_time_buyers, 0);
+        const totalRepeat = recurrence.reduce((s, r) => s + r.repeat_buyers, 0);
+        const totalCust = totalFirst + totalRepeat;
+        const rate = totalCust > 0 ? Number(((totalRepeat / totalCust) * 100).toFixed(1)) : 0;
+        return (
+          <RecurrenceCard
+            firstTime={totalFirst}
+            repeat={totalRepeat}
+            repeatRate={rate}
+            label="Todas as fontes — clientes que compraram mais de 1 vez"
+          />
+        );
+      })()}
 
       {/* Geography + Top Products */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">

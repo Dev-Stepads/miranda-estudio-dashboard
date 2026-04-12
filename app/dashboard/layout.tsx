@@ -1,6 +1,7 @@
 import { NavTabs } from '../components/nav-tabs';
 import { PeriodFilter } from '../components/period-filter';
 import { ThemeToggle } from '../components/theme-toggle';
+import { AutoRefresh } from '../components/auto-refresh';
 
 export default function DashboardLayout({
   children,
@@ -45,6 +46,8 @@ export default function DashboardLayout({
           </div>
         </div>
       </header>
+
+      <AutoRefresh />
 
       {/* Page content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">

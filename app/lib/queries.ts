@@ -240,6 +240,26 @@ export async function fetchRecentOrders(limit: number = 10): Promise<RecentOrder
   }));
 }
 
+export interface CustomerRecurrence {
+  source: string;
+  first_time_buyers: number;
+  repeat_buyers: number;
+  total_customers: number;
+  repeat_rate: number;
+}
+
+/** Customer recurrence (repeat vs first-time buyers) */
+export async function fetchCustomerRecurrence(): Promise<CustomerRecurrence[]> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from('v_customer_recurrence')
+    .select('*');
+
+  if (error) throw new Error(`fetchCustomerRecurrence: ${error.message}`);
+  return (data ?? []) as CustomerRecurrence[];
+}
+
 /** Abandoned checkouts (Nuvemshop) */
 export async function fetchAbandoned(): Promise<AbandonedData[]> {
   const supabase = getSupabase();
