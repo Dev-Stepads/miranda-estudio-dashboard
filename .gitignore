@@ -25,11 +25,12 @@ notes.local.*
 /onde*.md
 /onde*.0
 
-# Build
+# Build (Next.js + general)
 .next/
 dist/
 build/
 out/
+next-env.d.ts
 
 # Logs
 *.log

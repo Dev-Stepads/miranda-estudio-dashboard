@@ -9,9 +9,9 @@
  */
 
 export interface I18nString {
-  pt?: string;
-  es?: string;
-  en?: string;
+  pt?: string | null;
+  es?: string | null;
+  en?: string | null;
 }
 
 export type LocalizedField = I18nString | string | null | undefined;
@@ -33,9 +33,13 @@ export function extractLocalized(
   const preferred = field[preferredLang];
   if (typeof preferred === 'string' && preferred.length > 0) return preferred;
 
-  if (typeof field.pt === 'string' && field.pt.length > 0) return field.pt;
-  if (typeof field.es === 'string' && field.es.length > 0) return field.es;
-  if (typeof field.en === 'string' && field.en.length > 0) return field.en;
+  // Fallback chain: pt → es → en. Null values are skipped.
+  const pt = field.pt;
+  if (typeof pt === 'string' && pt.length > 0) return pt;
+  const es = field.es;
+  if (typeof es === 'string' && es.length > 0) return es;
+  const en = field.en;
+  if (typeof en === 'string' && en.length > 0) return en;
 
   return '';
 }

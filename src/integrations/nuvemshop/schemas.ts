@@ -26,11 +26,16 @@ import { z } from 'zod';
  * Localized string field — Nuvemshop returns product names as
  * `{ pt: "...", es: "...", en: "..." }`. All keys are optional.
  */
+/**
+ * I18n fields can have null values for any language key (Nuvemshop
+ * sends null when the merchant didn't fill SEO/description for a
+ * product in that language). Discovered in ETL run 2026-04-12.
+ */
 export const NuvemshopI18nSchema = z
   .object({
-    pt: z.string().optional(),
-    es: z.string().optional(),
-    en: z.string().optional(),
+    pt: z.string().nullable().optional(),
+    es: z.string().nullable().optional(),
+    en: z.string().nullable().optional(),
   })
   .passthrough();
 
@@ -38,14 +43,20 @@ export const NuvemshopI18nSchema = z
 // Address (used inside Customer)
 // ------------------------------------------------------------
 
+/**
+ * Address fields can be `null` in real data (discovered in first ETL run
+ * 2026-04-12 — customers with incomplete addresses have null for address,
+ * city, province, country, zipcode). Original schema had `.default('')`
+ * which only covers `undefined`, NOT `null`. Fixed to `.nullable()`.
+ */
 export const RawNuvemshopAddressSchema = z
   .object({
-    address: z.string().default(''),
+    address: z.string().nullable().default(null),
     number: z.string().nullable().optional(),
-    city: z.string().default(''),
-    province: z.string().default(''),
-    country: z.string().default(''),
-    zipcode: z.string().default(''),
+    city: z.string().nullable().default(null),
+    province: z.string().nullable().default(null),
+    country: z.string().nullable().default(null),
+    zipcode: z.string().nullable().default(null),
     floor: z.string().nullable().optional(),
     locality: z.string().nullable().optional(),
     phone: z.string().nullable().optional(),
@@ -61,14 +72,22 @@ export const RawNuvemshopOrderProductSchema = z
     id: z.number(),
     product_id: z.number(),
     variant_id: z.number().nullable(),
-    name: z.string(),
+    name: z.string().default(''),
     sku: z.string().nullable(),
-    quantity: z.number(),
-    /** Monetary value as string — parseFloat at mapper layer. */
-    price: z.string(),
+    quantity: z.number().default(1),
+    /**
+     * Monetary value as string — parseFloat at mapper layer.
+     * Can be null for free items (discovered in ETL run 2026-04-12).
+     */
+    price: z.string().nullable().default('0'),
     compare_at_price: z.string().nullable(),
-    /** Line total (price × quantity, minus discounts). */
-    total: z.string(),
+    /**
+     * Line total (price × quantity, minus discounts).
+     * Sometimes missing from the API for free items or partial orders
+     * (discovered in first ETL run 2026-04-12). Defaults to '0' so
+     * safeParseMoney returns 0 instead of crashing.
+     */
+    total: z.string().optional().default('0'),
     properties: z.array(z.unknown()).optional(),
   })
   .passthrough();
@@ -84,30 +103,31 @@ export const RawNuvemshopOrderSchema = z
     token: z.string(),
     store_id: z.number(),
 
-    // Contact — PII
-    contact_email: z.string().default(''),
-    contact_name: z.string().default(''),
-    contact_phone: z.string().default(''),
-    contact_identification: z.string().default(''),
+    // Contact — PII — ALL nullable (Nuvemshop sends null for unfilled fields)
+    contact_email: z.string().nullable().default(''),
+    contact_name: z.string().nullable().default(''),
+    contact_phone: z.string().nullable().default(''),
+    contact_identification: z.string().nullable().default(''),
 
-    // Billing address (optional — mapper treats it as best-effort)
-    billing_name: z.string().optional(),
-    billing_phone: z.string().optional(),
-    billing_address: z.string().optional(),
-    billing_city: z.string().optional(),
-    billing_province: z.string().optional(),
-    billing_zipcode: z.string().optional(),
-    billing_country: z.string().optional(),
+    // Billing address — ALL nullable because Nuvemshop sends null
+    // for any field the customer didn't fill (discovered in ETL 2026-04-12).
+    billing_name: z.string().nullable().optional(),
+    billing_phone: z.string().nullable().optional(),
+    billing_address: z.string().nullable().optional(),
+    billing_city: z.string().nullable().optional(),
+    billing_province: z.string().nullable().optional(),
+    billing_zipcode: z.string().nullable().optional(),
+    billing_country: z.string().nullable().optional(),
 
-    // Money — all strings in Nuvemshop
-    subtotal: z.string(),
-    total: z.string(),
-    discount: z.string().default('0.00'),
-    currency: z.string().default('BRL'),
+    // Money — all strings in Nuvemshop, all nullable defensively
+    subtotal: z.string().nullable().default('0'),
+    total: z.string().nullable().default('0'),
+    discount: z.string().nullable().default('0.00'),
+    currency: z.string().nullable().default('BRL'),
 
-    // Payment
-    gateway: z.string().default(''),
-    gateway_name: z.string().default(''),
+    // Payment — nullable
+    gateway: z.string().nullable().default(''),
+    gateway_name: z.string().nullable().default(''),
     payment_details: z.record(z.unknown()).optional(),
 
     // State machine
@@ -118,7 +138,12 @@ export const RawNuvemshopOrderSchema = z
     // Timestamps (ISO with TZ offset like "-0300")
     created_at: z.string(),
     updated_at: z.string(),
-    completed_at: z.string().nullable().optional(),
+    /**
+     * Can be string, null, OR an object (date serialization quirk
+     * discovered in first ETL run 2026-04-12). We don't use this
+     * field in canonical mapping, so accept any type defensively.
+     */
+    completed_at: z.unknown().optional(),
     paid_at: z.string().nullable().optional(),
     cancelled_at: z.string().nullable().optional(),
     closed_at: z.string().nullable().optional(),
@@ -186,8 +211,8 @@ export const RawNuvemshopVariantSchema = z
   .object({
     id: z.number(),
     product_id: z.number(),
-    /** Monetary as string. */
-    price: z.string(),
+    /** Monetary as string. Nullable for variants with price not set (2026-04-12). */
+    price: z.string().nullable().default('0'),
     promotional_price: z.string().nullable(),
     stock_management: z.boolean().optional(),
     stock: z.number().nullable(),
@@ -206,7 +231,8 @@ export const RawNuvemshopImageSchema = z
     id: z.number(),
     src: z.string(),
     position: z.number().optional(),
-    alt: z.array(z.string()).optional(),
+    /** alt is an I18n object {pt,es,en}, not an array (schema corrected 2026-04-12). */
+    alt: z.unknown().optional(),
   })
   .passthrough();
 

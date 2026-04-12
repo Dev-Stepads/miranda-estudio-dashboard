@@ -31,6 +31,7 @@ import type {
   Gender,
 } from '../../canonical/types.ts';
 import { extractLocalized } from '../../lib/i18n.ts';
+import { normalizeState } from '../../lib/brazil.ts';
 
 // ------------------------------------------------------------
 // Sales
@@ -44,13 +45,20 @@ import { extractLocalized } from '../../lib/i18n.ts';
  * to load the full detail when needed.
  */
 export function mapOrderToCanonicalSale(raw: RawNuvemshopOrder): CanonicalSale {
-  const items: CanonicalSaleItem[] = (raw.products ?? []).map((p) => ({
-    product_name: p.name,
-    sku: p.sku,
-    quantity: p.quantity,
-    unit_price: safeParseMoney(p.price),
-    total_price: safeParseMoney(p.total),
-  }));
+  const items: CanonicalSaleItem[] = (raw.products ?? []).map((p) => {
+    const unitPrice = safeParseMoney(p.price);
+    const rawTotal = safeParseMoney(p.total);
+    // Nuvemshop list endpoint often omits `total` from line items
+    // (discovered in ETL run 2026-04-12). Fall back to price × quantity.
+    const totalPrice = rawTotal > 0 ? rawTotal : unitPrice * (p.quantity ?? 1);
+    return {
+      product_name: p.name,
+      sku: p.sku,
+      quantity: p.quantity,
+      unit_price: unitPrice,
+      total_price: totalPrice,
+    };
+  });
 
   return {
     source: 'nuvemshop',
@@ -117,7 +125,9 @@ export function mapCustomerToCanonical(raw: RawNuvemshopCustomer): CanonicalCust
     gender: mapGender(raw.extra?.gender),
     age: null, // TODO(T21): extract from custom_fields birthday when available
     age_range: 'unknown',
-    state: nullIfEmpty(addr?.province),
+    // normalizeState converts "Bahia" → "BA", "São Paulo" → "SP", etc.
+    // Returns null for international or unrecognized values.
+    state: normalizeState(addr?.province),
     city: nullIfEmpty(addr?.city),
     email: nullIfEmpty(raw.email),
     phone: nullIfEmpty(raw.phone),

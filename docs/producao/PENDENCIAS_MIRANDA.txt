@@ -1,0 +1,292 @@
+========================================================
+PENDÊNCIAS COM A MIRANDA — Dashboard Miranda Studio
+========================================================
+Última atualização: 2026-04-12
+
+Este documento lista todas as configurações, dados e
+informações que DEPENDEM de ação da Miranda (cliente)
+para o dashboard funcionar 100%. Cada item explica o
+problema, o impacto no dashboard e a ação que a Miranda
+precisa tomar.
+
+Regra: este arquivo é APPEND-ONLY para novos itens.
+Itens resolvidos devem ser marcados com [RESOLVIDO] +
+data, nunca apagados.
+
+========================================================
+PENDÊNCIAS ATIVAS
+========================================================
+
+--------------------------------------------------------
+P1. GÊNERO NÃO É COLETADO NO CHECKOUT DA NUVEMSHOP
+--------------------------------------------------------
+Status: PENDENTE
+Criticidade: ALTA (afeta aba Nuvemshop inteira)
+Descoberto em: 2026-04-12 (ETL real — 0 de 5928 pedidos
+               com gênero preenchido via dados reais)
+
+PROBLEMA:
+  O checkout da loja Nuvemshop da Miranda NÃO pede o
+  gênero do comprador. O campo existe na plataforma
+  (extra.gender), mas precisa ser ATIVADO nas configurações
+  do checkout. Sem ele, 100% dos clientes ficam como
+  "unknown" na análise demográfica.
+
+IMPACTO NO DASHBOARD:
+  - A aba "Nuvemshop → Gênero" fica VAZIA (0 registros
+    utilizáveis). Só apareceram 7 registros de gênero,
+    que são do seed de teste e não de dados reais.
+  - Qualquer gráfico de "distribuição por gênero" mostra
+    uma única barra "unknown" a 100%.
+  - A Conta Azul já foi confirmada como impossível pra
+    gênero (decisão T4). Então se a Nuvemshop também não
+    coletar, o dashboard INTEIRO fica sem análise de gênero.
+
+AÇÃO DA MIRANDA:
+  1. Acessar o painel admin da Nuvemshop da loja
+  2. Ir em Configurações → Checkout → Campos do formulário
+     (ou similar, varia conforme o tema)
+  3. ATIVAR o campo "Gênero" como OBRIGATÓRIO no checkout
+  4. Confirmar pra nós quando estiver feito
+
+OBSERVAÇÃO:
+  - Ativar o campo só afeta COMPRAS FUTURAS. O histórico
+    de 5928 pedidos existentes continuará sem gênero.
+  - Se a Miranda NÃO quiser coletar gênero, precisamos
+    aceitar que essa análise sai do escopo do dashboard
+    INTEIRO (não só da Loja Física — já era sem).
+  - Alternativa parcial: se a Miranda tiver dados de gênero
+    em outro sistema (CRM, WhatsApp, planilha), podemos
+    importar manualmente e cruzar por email/CPF. Mas isso
+    é trabalho extra não previsto no backlog atual.
+
+--------------------------------------------------------
+P2. FAIXA ETÁRIA NÃO É COLETADA (BIRTHDAY / DATA DE
+    NASCIMENTO)
+--------------------------------------------------------
+Status: PENDENTE
+Criticidade: ALTA (afeta aba Nuvemshop inteira)
+Descoberto em: 2026-04-12 (ETL real — 0 registros com
+               idade de dados reais)
+
+PROBLEMA:
+  A Nuvemshop suporta custom fields no cadastro de cliente,
+  incluindo "data de nascimento" (birthday). Mas esse campo
+  precisa ser CONFIGURADO pela loja como um custom field do
+  tipo "date" e ATIVADO no checkout. A loja da Miranda
+  aparentemente NÃO tem esse custom field configurado,
+  porque nenhum cliente real tem idade/faixa etária.
+
+IMPACTO NO DASHBOARD:
+  - A aba "Nuvemshop → Faixa Etária" fica VAZIA.
+  - Gráficos de "18-24 / 25-34 / 35-44 / 45-54 / 55+"
+    mostram zero em todas as faixas.
+  - Conta Azul também não fornece idade (decisão T4).
+  - Sem Miranda ativar, análise de faixa etária sai do
+    dashboard inteiro.
+
+AÇÃO DA MIRANDA:
+  1. Acessar o painel admin da Nuvemshop
+  2. Ir em Configurações → Checkout → Campos personalizados
+  3. Criar um campo tipo "Data" chamado "Data de nascimento"
+     (ou "Birthday")
+  4. Marcar como OBRIGATÓRIO no checkout
+  5. Confirmar pra nós quando estiver feito
+
+OBSERVAÇÃO:
+  - Mesmo ativando, só compras FUTURAS terão a data.
+  - O ETL precisa ser atualizado pra extrair esse custom
+    field e calcular idade/faixa (task T21 no backlog).
+
+--------------------------------------------------------
+P3. SKU NÃO PREENCHIDO NOS PRODUTOS DA NUVEMSHOP
+--------------------------------------------------------
+Status: PENDENTE
+Criticidade: MÉDIA (afeta ranking de produtos)
+Descoberto em: 2026-04-12 (ETL real — 0 de 431 produtos
+               com SKU nas variantes; 9837 de 10097
+               sale_items sem SKU)
+
+PROBLEMA:
+  O catálogo da Miranda na Nuvemshop tem 431 produtos
+  cadastrados, mas NENHUM deles tem o campo SKU preenchido
+  nas variantes. Como consequência:
+  - 97.4% dos itens vendidos (9837 de 10097) não têm SKU
+  - O dashboard não consegue CONSOLIDAR vendas do mesmo
+    produto entre Nuvemshop e Conta Azul (consolidação
+    usa SKU como chave, per REGRAS_CONSOLIDACAO §3)
+  - O ranking de produtos na aba Nuvemshop funciona por
+    nome do produto no pedido, que pode ter variações de
+    escrita (ex: "Camiseta P" vs "Camiseta - P")
+
+IMPACTO NO DASHBOARD:
+  - Ranking de produtos funciona MAS com agrupamento por
+    nome exato (pode duplicar o mesmo produto se o nome
+    variar entre pedidos).
+  - Consolidação cross-fonte (Conta Azul + Nuvemshop)
+    será IMPOSSÍVEL sem SKU. A Visão Geral vai mostrar
+    o mesmo produto como dois itens diferentes.
+  - Se a Miranda preencher SKU, o dashboard automaticamente
+    consolida por SKU via upsert na tabela canonical.
+
+AÇÃO DA MIRANDA:
+  1. Acessar o painel admin da Nuvemshop
+  2. Ir em Produtos → Cada produto → Variantes
+  3. Preencher o campo "SKU" de cada variante com o mesmo
+     código usado no Conta Azul (ex: "MIR0285CAP")
+  4. Isso permite que o dashboard CRUZE vendas online e
+     vendas na loja física do mesmo produto
+  5. Não precisa fazer tudo de uma vez — pode ir preenchendo
+     aos poucos. Cada SKU preenchido melhora a consolidação.
+
+OBSERVAÇÃO:
+  - O campo "codigo" no Conta Azul (= SKU interno) já está
+    preenchido para os 2909 produtos da Miranda na loja
+    física. O ideal é usar os MESMOS códigos na Nuvemshop.
+  - Se a Miranda usa um ERP terceiro que gera SKUs, o ideal
+    é exportar de lá e importar na Nuvemshop via CSV.
+
+--------------------------------------------------------
+P4. ESTADO DO CLIENTE — DEPENDE DO ENDEREÇO NO CHECKOUT
+--------------------------------------------------------
+Status: PARCIALMENTE RESOLVIDO
+Criticidade: BAIXA (workaround aplicado)
+Descoberto em: 2026-04-12
+
+PROBLEMA:
+  O campo "estado" (UF) do cliente vem do endereço de
+  entrega cadastrado na Nuvemshop (default_address.province).
+  A plataforma retorna esse campo como texto livre — pode
+  ser "BA", "Bahia", "bahia", "BAHIA", ou até "Salvador"
+  (cidade no lugar do estado).
+
+  Nosso ETL já normaliza as variações conhecidas (nome
+  completo → UF de 2 letras), mas se o checkout NÃO exigir
+  endereço ou se o comprador preencher errado, o estado
+  fica null.
+
+  Resultado após normalização: 4594 de 4913 clientes (93.5%)
+  com estado preenchido. Os 319 restantes provavelmente são
+  compradores internacionais ou com endereço incompleto.
+
+IMPACTO NO DASHBOARD:
+  - A aba "Nuvemshop → Geografia" funciona BEM (93.5% dos
+    clientes têm estado). Mas 6.5% ficam de fora.
+  - Se a Miranda vende muito pra fora do Brasil, esses 6.5%
+    podem ser significativos e vão aparecer como "sem estado"
+    no dashboard.
+
+AÇÃO DA MIRANDA:
+  - NENHUMA AÇÃO URGENTE. O workaround de normalização já
+    cobre 93.5% dos casos.
+  - Se quiserem melhorar: verificar nas configurações do
+    checkout se o campo "Estado" é OBRIGATÓRIO. Se for
+    opcional, tornar obrigatório.
+  - Para clientes internacionais, aceitar que o estado
+    ficará em branco (não há UF brasileiro aplicável).
+
+--------------------------------------------------------
+P5. META ADS — INFORMAÇÕES TÉCNICAS PENDENTES
+--------------------------------------------------------
+Status: PENDENTE
+Criticidade: ALTA (bloqueia toda a integração Meta Ads)
+Descoberto em: 2026-04-11
+
+PROBLEMA:
+  A integração com o Meta Ads depende de informações
+  técnicas que só a Miranda (ou quem administra o Business
+  Manager dela) pode fornecer.
+
+INFORMAÇÕES NECESSÁRIAS:
+  1. Business Manager ID
+     → Onde achar: business.facebook.com → Configurações
+       do Negócio → Informações do Negócio → número de
+       15-16 dígitos
+
+  2. Ad Account ID (formato act_XXXXXXXXX)
+     → Onde achar: Configurações do Negócio → Contas de
+       Anúncio → selecionar a conta ativa
+
+  3. Acesso ao Business Manager para criar System User
+     → Opção A: adicionar dev@stepads.com.br como Admin
+       no BM (Configurações → Pessoas → Adicionar)
+     → Opção B: Miranda cria o System User ela mesma:
+       nome "Stepads Dashboard ETL", escopo ads_read,
+       gera token permanente e nos envia de forma segura
+
+  4. Confirmação da janela de atribuição usada hoje
+     → Padrão do Meta: 7 dias clique + 1 dia visualização
+     → Se a Miranda usa diferente, precisamos saber pra
+       bater os números
+
+  5. Se usam criativos em vídeo (Reels/Stories/Videos)
+     → Importa pra saber quais fields puxar da API
+
+  6. Qual o action_type de conversão de compra no Pixel
+     → Se não souber, descobrimos no primeiro request
+
+AÇÃO DA MIRANDA:
+  - Responder os 6 itens acima
+  - Itens 1 e 2 são os mais urgentes
+  - Item 3 é o mais importante (sem isso não conseguimos
+    gerar o token de acesso permanente)
+
+--------------------------------------------------------
+P6. PARTIALLY_PAID — INCLUIR NO FATURAMENTO?
+--------------------------------------------------------
+Status: PENDENTE (aguardando decisão da Miranda)
+Criticidade: BAIXA (já tem default implementado)
+Descoberto em: 2026-04-10 (mapeamento Nuvemshop)
+
+PROBLEMA:
+  A Nuvemshop tem um status de pagamento "partially_paid"
+  (parcialmente pago) que pode aparecer em pedidos parcelados
+  ou com pagamento parcial. O dashboard precisa decidir:
+  esse pedido CONTA no faturamento ou não?
+
+DECISÃO ATUAL (default):
+  partially_paid é tratado como PAID (conta no faturamento).
+  Isso foi implementado no mapper e está documentado em
+  REGRAS_CONSOLIDACAO §2.2. Se a Miranda discordar, a gente
+  muda pra tratar como "pending" (não conta).
+
+AÇÃO DA MIRANDA:
+  - Confirmar se partially_paid deve contar como venda
+    efetivada no dashboard ou como venda pendente.
+  - Se concordar com o default (conta como venda), não
+    precisa fazer nada.
+
+--------------------------------------------------------
+P7. ABA LOJA FÍSICA SEM GÊNERO E FAIXA ETÁRIA — APROVAÇÃO
+--------------------------------------------------------
+Status: PENDENTE (aguardando ciência da Miranda)
+Criticidade: BAIXA (decisão já tomada, só precisa aceite)
+Descoberto em: 2026-04-10 (T4 — mapeamento Conta Azul)
+
+PROBLEMA:
+  O Conta Azul da Miranda NÃO tem campos de gênero nem
+  data de nascimento no cadastro de clientes. Isso foi
+  confirmado visualmente no dashboard real em 2026-04-10.
+  Como consequência, a aba "Loja Física" do dashboard
+  NÃO terá análise de gênero nem de faixa etária.
+
+  Essas análises ficam APENAS na aba Nuvemshop (se a
+  Miranda ativar os campos — ver P1 e P2 acima).
+
+AÇÃO DA MIRANDA:
+  - Tomar ciência de que a aba Loja Física mostrará:
+    * Faturamento (total e por período)
+    * Ranking de produtos vendidos
+    * Ticket médio
+    * Distribuição geográfica por estado
+    * NÃO mostrará gênero nem faixa etária
+  - Se quiser gênero/idade na Loja Física no futuro,
+    precisaria adicionar campos personalizados no Conta
+    Azul (só afetaria clientes NOVOS, não o histórico).
+
+========================================================
+PENDÊNCIAS RESOLVIDAS
+========================================================
+
+(nenhuma ainda — à medida que a Miranda resolver os itens
+acima, eles serão movidos pra esta seção com data e notas)
