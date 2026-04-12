@@ -20,9 +20,16 @@ function buildChartData(rows: { day: string; source: string; gross_revenue: numb
     .sort((a, b) => a.day.localeCompare(b.day));
 }
 
-export default async function VisaoGeralPage() {
+export default async function VisaoGeralPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
+  const params = await searchParams;
+  const days = Math.max(1, Number(params.days ?? '30') || 30);
+
   const [dailyRevenue, topProducts] = await Promise.all([
-    fetchDailyRevenue(30),
+    fetchDailyRevenue(days),
     fetchTopProducts(15),
   ]);
 
@@ -50,7 +57,7 @@ export default async function VisaoGeralPage() {
         <KpiCard
           title="Faturamento Total"
           value={formatBRL(totalRevenue)}
-          subtitle="Loja Física + E-commerce (30 dias)"
+          subtitle={`Loja Física + E-commerce (${days} dias)`}
         />
         <KpiCard
           title="Pedidos"

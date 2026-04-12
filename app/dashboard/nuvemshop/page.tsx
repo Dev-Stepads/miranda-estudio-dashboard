@@ -11,9 +11,16 @@ import { RevenueChart } from '../../components/revenue-chart';
 import { GeographyChart } from '../../components/geography-chart';
 import { SimpleTable } from '../../components/simple-table';
 
-export default async function NuvemshopPage() {
+export default async function NuvemshopPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
+  const params = await searchParams;
+  const days = Math.max(1, Number(params.days ?? '30') || 30);
+
   const [daily, topProducts, geography, abandoned] = await Promise.all([
-    fetchNuvemshopDaily(30),
+    fetchNuvemshopDaily(days),
     fetchTopProducts(20),
     fetchGeography(15),
     fetchAbandoned(),
@@ -63,7 +70,7 @@ export default async function NuvemshopPage() {
         <KpiCard
           title="Faturamento Nuvemshop"
           value={formatBRL(totalRevenue)}
-          subtitle="Últimos 30 dias"
+          subtitle={`Últimos ${days} dias`}
         />
         <KpiCard
           title="Pedidos"

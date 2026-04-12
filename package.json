@@ -12,8 +12,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc",
-    "sync": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts",
-    "sync:full": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts --full"
+    "sync:nuvemshop": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts",
+    "sync:nuvemshop:full": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts --full",
+    "sync:contaazul": "tsx --env-file=.env.local src/etl/conta-azul/run.ts",
+    "sync:contaazul:90d": "tsx --env-file=.env.local src/etl/conta-azul/run.ts --days 90"
   },
   "repository": {
     "type": "git",
@@ -28,6 +30,7 @@
   "homepage": "https://github.com/Dev-Stepads/miranda-estudio-dashboard#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
+    "fast-xml-parser": "^5.5.11",
     "next": "^16.2.3",
     "playwright-core": "^1.59.1",
     "react": "^19.2.5",

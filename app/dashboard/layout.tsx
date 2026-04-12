@@ -1,4 +1,5 @@
 import { NavTabs } from '../components/nav-tabs';
+import { PeriodFilter } from '../components/period-filter';
 
 export default function DashboardLayout({
   children,
@@ -15,8 +16,9 @@ export default function DashboardLayout({
               <h1 className="text-2xl font-bold text-gray-900">Miranda Studio</h1>
               <p className="text-sm text-gray-500">Dashboard de Vendas</p>
             </div>
-            <div className="text-right text-sm text-gray-400">
-              <p>
+            <div className="flex flex-col items-end gap-2">
+              <PeriodFilter />
+              <p className="text-xs text-gray-400">
                 {new Date().toLocaleDateString('pt-BR', {
                   weekday: 'long',
                   day: '2-digit',

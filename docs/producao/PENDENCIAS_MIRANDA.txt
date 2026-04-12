@@ -285,6 +285,32 @@ AÇÃO DA MIRANDA:
     Azul (só afetaria clientes NOVOS, não o histórico).
 
 ========================================================
+PENDÊNCIAS INTERNAS (STEPADS — não depende da Miranda)
+========================================================
+
+--------------------------------------------------------
+I1. FILTRO DE PERÍODO — AJUSTES SOLICITADOS PELO MATHEUS
+--------------------------------------------------------
+Status: PENDENTE
+Criticidade: BAIXA (filtro funciona, precisa de refinamento)
+Descoberto em: 2026-04-12
+
+PROBLEMA:
+  O filtro de período (7d / 15d / 30d / 90d / 1 ano) está
+  funcional mas o Matheus quer fazer alterações no comportamento
+  e/ou nas opções disponíveis. Detalhes a definir na próxima
+  sessão.
+
+AÇÃO:
+  Perguntar ao Matheus quais alterações ele quer no filtro
+  antes de mexer. Possíveis mudanças:
+  - Mudar os períodos disponíveis (ex: adicionar "Este mês",
+    "Mês passado", remover algum)
+  - Mudar o comportamento de persistência entre abas
+  - Adicionar seletor de data custom (date picker)
+  - Mudar posição/estilo do filtro na UI
+
+========================================================
 PENDÊNCIAS RESOLVIDAS
 ========================================================
 

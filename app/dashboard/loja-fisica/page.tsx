@@ -5,9 +5,16 @@ import { KpiCard, formatBRL, formatNumber } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { SimpleTable } from '../../components/simple-table';
 
-export default async function LojaFisicaPage() {
+export default async function LojaFisicaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
+  const params = await searchParams;
+  const days = Math.max(1, Number(params.days ?? '30') || 30);
+
   const [dailyRevenue, topProducts] = await Promise.all([
-    fetchDailyRevenue(30),
+    fetchDailyRevenue(days),
     fetchTopProducts(20),
   ]);
 
@@ -49,7 +56,7 @@ export default async function LojaFisicaPage() {
         <KpiCard
           title="Faturamento Loja Física"
           value={formatBRL(totalRevenue)}
-          subtitle="Conta Azul — últimos 30 dias"
+          subtitle={`Conta Azul — últimos ${days} dias`}
         />
         <KpiCard
           title="Pedidos"
