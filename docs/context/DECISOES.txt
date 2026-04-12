@@ -552,3 +552,109 @@ DECISÕES REGISTRADAS
             em vez de CanonicalSale completo. T7/T8 precisam resolver
             isso antes de popular o canonical `sales` com dados reais
             do Conta Azul.
+
+[2026-04-12] [INTEGRACAO] Conta Azul NF-e retorna XML, nao JSON
+  Contexto: ao testar GET /v1/notas-fiscais/{chave_acesso}, o endpoint
+            retornou um documento XML (NF-e padrao SEFAZ) em vez de
+            JSON como todos os outros endpoints da API v1. Isso era
+            inesperado e nao esta documentado claramente no portal dev.
+  Decisao:  Usar fast-xml-parser como dependencia para parsear o XML
+            da NF-e. Parser dedicado criado em
+            src/integrations/conta-azul/nfe-parser.ts. Extraimos:
+            valor total, items (produto, quantidade, preco unitario,
+            preco total), dados do destinatario (estado, cidade).
+            REVERTIDA parcialmente a decisao de 2026-04-11 "NF-e detail
+            endpoint — discovery deferred" — T45 agora esta RESOLVIDA.
+  Impacto:  fast-xml-parser adicionada ao package.json como dep runtime.
+            O PartialContaAzulSale agora pode ser completado com dados
+            do XML e inserido como CanonicalSale no banco.
+
+[2026-04-12] [INTEGRACAO] Conta Azul janela max de 15 dias no endpoint de lista
+  Contexto: o endpoint GET /v1/notas-fiscais aceita data_inicial e
+            data_final. Testes em producao mostraram que janelas maiores
+            que 15 dias retornam erro ou resultados incompletos.
+  Decisao:  ETL faz chunking automatico em janelas de 14 dias (margem
+            de seguranca de 1 dia). Para full sync de 1 ano, sao ~26
+            chunks sequenciais.
+  Impacto:  Full sync demora ~8min (26 chunks x paginacao x XML parse).
+            Incremental sync (ultimos 14 dias) demora ~10s. Cron de
+            30 min usa modo incremental.
+
+[2026-04-12] [INTEGRACAO] Refresh token persistence via etl_config table
+  Contexto: o refresh_token do Conta Azul e single-use (cada uso gera
+            um novo). Em GitHub Actions cron, nao ha disco persistente
+            entre runs — salvar em .env.local nao funciona.
+  Decisao:  Criar tabela etl_config no Supabase com colunas (key text PK,
+            value text, updated_at timestamptz). O ETL le o refresh_token
+            do etl_config antes de cada sync e escreve o novo token de
+            volta apos cada refresh. Migration:
+            supabase/migrations/20260412150000_etl_config_table.sql
+  Impacto:  Resolve o problema de refresh_token em CI/cron. Qualquer
+            config do ETL que precise persistir entre runs pode usar
+            a mesma tabela. service_role tem acesso via RLS bypass.
+
+[2026-04-12] [ARQUITETURA] Next.js 16 + Tailwind 4 + Recharts para frontend
+  Contexto: precisavamos escolher a stack do frontend. A decisao de
+            2026-04-10 mencionava "Next.js 15 + shadcn/ui + Recharts"
+            como sugestao. Na pratica, Next.js 16 ja estava disponivel
+            e Tailwind 4 e a versao corrente.
+  Decisao:  Stack do frontend:
+            - Next.js 16 com App Router
+            - Tailwind CSS 4
+            - Recharts para graficos (bar, pie, area)
+            - @supabase/supabase-js para queries (service_role em
+              Server Components — seguro porque e server-only code)
+            - Sem shadcn/ui por enquanto — componentes proprios simples
+              (KpiCard, RevenueChart, ChannelDonut, etc.)
+  Impacto:  Frontend funciona em localhost:3000. Todas as paginas usam
+            force-dynamic (export const dynamic = 'force-dynamic') para
+            garantir dados frescos a cada request. Period filter via URL
+            search params (7d/15d/30d/90d/1ano).
+
+[2026-04-12] [DADOS] Views agrupam por product_name, nao product_id
+  Contexto: ao rodar ETL real, 97% dos sale_items tinham product_id
+            null. Isso acontece porque a Miranda nao preenche SKU no
+            catalogo da Nuvemshop, e os items de NF-e do Conta Azul
+            tambem nao tem referencia a produto cadastrado. As views
+            originais agrupavam por products.product_id via JOIN,
+            resultando em ranking vazio.
+  Decisao:  DROP + CREATE das views v_*_produtos para agrupar
+            diretamente por sale_items.product_name (sem JOIN com
+            products). Migration:
+            supabase/migrations/20260412120000_fix_product_views_group_by_name.sql
+  Impacto:  Ranking de produtos funciona com dados reais. O campo
+            products.sku continua existindo no schema para futuro uso,
+            mas nao e a chave de agrupamento. Documentado em
+            PENDENCIAS_MIRANDA.txt como item pendente da Miranda
+            (preencher SKU no catalogo).
+
+[2026-04-12] [ARQUITETURA] GitHub Actions cron para scheduler do ETL
+  Contexto: precisavamos de um scheduler para rodar ETL incremental
+            periodicamente. Opcoes avaliadas: Supabase Edge Functions
+            + pg_cron, Vercel Cron, GitHub Actions. A decisao de
+            2026-04-11 sugeria Supabase Edge Functions.
+  Decisao:  Usar GitHub Actions scheduled workflows (cron) a cada 30
+            minutos. Motivos:
+            - Mais simples de configurar (YAML no repo)
+            - Free para repos publicos
+            - Nao depende de regiao (Supabase Edge Functions exigiria
+              deploy separado, Vercel Cron exigiria regiao gru1)
+            - Logs integrados ao GitHub
+            Arquivo: .github/workflows/sync-nuvemshop.yml
+            Roda ambos: sync:nuvemshop + sync:contaazul (incremental).
+  Impacto:  Latencia de dados: ate 30 min entre a venda real e o dado
+            aparecer no dashboard. Aceitavel para o caso de uso.
+            GitHub Actions tem limite de 2000 min/mes no free tier
+            (cron 30 min = ~1440 min/mes, dentro do limite).
+
+[2026-04-12] [DADOS] normalizeState() para padronizar estados brasileiros
+  Contexto: dados de NF-e vem com nome completo do estado ("Bahia",
+            "Sao Paulo") enquanto dados da Nuvemshop vem com sigla
+            ("BA", "SP"). Para consolidar geografia entre fontes,
+            precisamos de um padrao.
+  Decisao:  Funcao normalizeState() em src/lib/brazil.ts que mapeia
+            nomes completos para siglas UF (27 estados). Cobertura
+            de 93.5% dos registros reais testados. Casos nao mapeados
+            ficam como o valor original.
+  Impacto:  Todas as insercoes no campo customer_state passam por
+            normalizeState(). Dashboard exibe UF padronizado.

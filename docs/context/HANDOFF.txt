@@ -3,712 +3,240 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-11
-RESPONSÁVEL: Matheus (sessão longa 2026-04-11 à tarde/noite via Claude)
+DATA: 2026-04-12
+RESPONSAVEL: Matheus (sessao longa 2026-04-12 via Claude)
 BRANCH: main
 
 --------------------------------------------------------
 1. O que foi feito neste push
 --------------------------------------------------------
-- 🎉 SESSÃO MONSTRO 2026-04-11 (Matheus, via Claude) — resumo executivo:
+SESSAO MONSTRO 2026-04-12 — ETL real + Frontend completo
 
-  ## Setup real de credenciais (2 de 3 integrações 100% operacionais)
+  ## ETL Nuvemshop (COMPLETO — dados reais fluindo)
 
-  ### Conta Azul
-  * App DEV auto-criada pelo portal no cadastro — credenciais salvas
-    como CONTA_AZUL_DEV_* no .env.local
-  * App PROD "Miranda Dashboard" criada manualmente no portal
-    (CNPJ Stepads 32.972.296/0001-07) — client_id 8ha8nfo...
-  * Smoke test da app PROD: login form carrega, redirect_uri aceito
-  * Miranda (aloalo@mirandaestudio.com.br) autorizou a app PROD via
-    fluxo OAuth real com 2FA — code trocado por tokens via
-    POST /oauth2/token com Basic auth
-  * REFRESH_TOKEN real salvo em CONTA_AZUL_REFRESH_TOKEN
-    (single-use, 2 semanas — precisa ser rotacionado a cada uso)
-  * Smoke test GET /v1/categorias → 200 OK, 165 categorias reais
+  * Full sync executado: 5928 orders + 4913 customers + 43 checkouts
+    + ~10k sale_items inseridos no Supabase
+  * Modo incremental implementado: 12s vs 10min do full sync
+  * 5+ fixes em Zod schemas para campos nullable descobertos em dados
+    reais (address, billing, contact, price, total, I18n, completed_at)
+  * total_price fix: fallback price x quantity quando API omite o campo
+  * Views DROP + CREATE: v_*_produtos agora agrupa por
+    sale_items.product_name em vez de products.product_id (97% dos items
+    tinham product_id null porque Miranda nao preenche SKU no catalogo)
+  * Arquivos: src/etl/nuvemshop/sync.ts, run.ts
 
-  ### Nuvemshop
-  * App "Miranda Dashboard" (#29599) criada no Partners Portal
-    (distribuição: "Para os seus clientes" — privada, não marketplace)
-  * Dados básicos preenchidos: categoria, URLs (incluindo redirect
-    https://miranda-estudio-dashboard.vercel.app/api/auth/nuvemshop/callback),
-    4 permissões read-only (Customers, Orders, Products, Contents)
-  * 3 webhook URLs LGPD placeholder cadastradas (store-redact,
-    customers-redact, customers-data-request) — devolverão 404 até
-    serem implementadas (ver task nova T44 no backlog)
-  * App instalada na loja real "Miranda Estúdio" (store_id 1124025)
-    pelo Matheus como admin da loja
-  * Access_token NÃO-EXPIRANTE gerado + store_id real salvos em
-    NUVEMSHOP_ACCESS_TOKEN e NUVEMSHOP_STORE_ID
-  * Smoke test GET /products?per_page=1 → 200 OK, x-total-count = 431,
-    primeiro produto "Camiseta Confia Na Bahia" confirmando que a
-    integração lê dados reais da Miranda
+  ## ETL Conta Azul (COMPLETO — dados reais fluindo)
 
-  ### Meta Ads
-  * Conta `dev@stepads.com.br` criada no developers.facebook.com,
-    mas ficou em "período de validação" — bloqueado pelo lado humano
-  * Mensagem pro representante Miranda enviada pedindo BM ID,
-    Ad Account ID, acesso pra criar System User, e as decisões
-    de escopo pendentes (checkout pede gênero? birthday? attribution?)
-  * Sem progresso técnico possível até a Miranda responder E a conta
-    Facebook dev sair da validação
+  * T45 RESOLVIDA: descoberto que GET /v1/notas-fiscais/{chave_acesso}
+    retorna XML (nao JSON). Parser implementado com fast-xml-parser.
+  * Full sync 1 ano: 545 NF-e + 1196 sale_items inseridos no Supabase
+  * Modo incremental implementado: 10s vs 8min do full sync
+  * Janela de 15 dias max no endpoint de lista — ETL faz chunking em
+    janelas de 14 dias automaticamente
+  * normalizeState() criado em src/lib/brazil.ts — mapeia "Bahia" -> "BA"
+    etc. com 93.5% de cobertura
+  * Refresh_token persistence resolvida via tabela etl_config no Supabase
+  * Arquivos: src/etl/conta-azul/sync.ts, run.ts,
+    src/integrations/conta-azul/nfe-parser.ts
 
-  ## Live API exploration (dados reais da Miranda)
+  ## Frontend Next.js (COMPLETO — 4 abas funcionando)
 
-  Com os tokens na mão, foram feitos ~15 curls exploratórios contra os
-  dois APIs pra VALIDAR o que o MAPEAMENTO supunha e descobrir o que
-  faltava. Descobertas consolidadas nos appendixes dos mapping docs:
+  * Next.js 16 + App Router + Tailwind 4 + Recharts
+  * Rodando localmente em localhost:3000
+  * 4 abas implementadas:
+    - Visao Geral (faturamento total, donut canal, ranking produtos)
+    - Nuvemshop (faturamento, produtos, geografia, abandonados)
+    - Loja Fisica (faturamento, produtos, demografia por estado)
+    - Meta Ads (placeholder — aguardando desbloqueio humano)
+  * Componentes: KpiCard (com badges de % change), RevenueChart (bar),
+    ChannelDonut (pie), GeographyChart, TopProductsTable, SimpleTable,
+    NavTabs, PeriodFilter
+  * Period filter (7d/15d/30d/90d/1ano) via URL search params, funciona
+    em todas as abas
+  * KPI comparison: busca 2x periodo e calcula % change vs periodo anterior
+  * force-dynamic em todas as paginas de dados (sem stale cache)
+  * service_role em Server Components (seguro pq e server-only code)
 
-  - docs/producao/MAPEAMENTO_CONTA_AZUL.txt §A1-A8
-  - docs/producao/MAPEAMENTO_NUVEMSHOP.txt §A1-A10
+  ## Infraestrutura
 
-  Resumo das descobertas mais importantes:
-  * Conta Azul: base URL correta é api-v2.contaazul.com (não api.),
-    auth é AWS Cognito (scopes openid+profile+aws.cognito.signin.user.admin
-    FIXOS, sem granularidade), 3 wrappers de pagination diferentes
-    na mesma API (/categorias PT, /produtos e /pessoas EN, /notas-fiscais
-    bare sem total), /v1/pessoas mistura clientes com fornecedores
-    (filtrar por perfis: ["Cliente"]), endpoint de DETALHE de NF-e
-    ainda não foi descoberto (portal de doc tem WAF que bloqueia WebFetch),
-    tamanho_pagina é enum (10/20/50/100/200/500/1000).
-  * Nuvemshop: plano BÁSICO confirmado (40/2rps, não 400/20rps),
-    431 produtos, 5925 orders, 4910 customers, 42 abandoned checkouts,
-    header é "Authentication: bearer" (lowercase, sic — diferente do
-    "Authorization: Bearer" padrão OAuth), campos multilíngue são objetos
-    {pt,es,en}, Cloudflare GRU (São Paulo) na infra.
+  * GitHub Actions cron rodando a cada 30 minutos (sync Nuvemshop + Conta Azul)
+  * Arquivo: .github/workflows/sync-nuvemshop.yml
+  * etl_config table no Supabase para persistencia do refresh_token
+  * Migration: supabase/migrations/20260412150000_etl_config_table.sql
+  * Migration: supabase/migrations/20260412120000_fix_product_views_group_by_name.sql
+  * npm scripts: dev, build, sync:nuvemshop, sync:nuvemshop:full,
+    sync:contaazul, sync:contaazul:full
+  * Deps adicionadas: @supabase/supabase-js, fast-xml-parser, next,
+    react, recharts
 
-  ## Caminho B Etapa 1 — Base de código TypeScript (109 testes ✅)
+  ## Dados reais no Supabase
 
-  Começamos o Caminho B com Nuvemshop + Conta Azul (Meta Ads fica pra
-  depois que saírem da validação + Miranda responder).
+  * customers: 5441
+  * sales: 6493
+  * sale_items: 11293
+  * abandoned_checkouts: 48
+  * etl_config: 1 (refresh_token)
+  * products: 10 (seed only — Miranda nao preenche SKU, documentado
+    em PENDENCIAS_MIRANDA.txt)
 
-  Arquivos criados (20 no total):
+  ## Novos arquivos criados
 
-  Configs:
-  - package.json (ESM + zod + vitest + msw + typescript)
-  - tsconfig.json (strict + noUncheckedIndexedAccess + noUnusedLocals)
-  - vitest.config.ts (globals: false, setupFiles)
-  - package-lock.json (141 deps instaladas via npm install)
-
-  Shared libs:
-  - src/lib/errors.ts    — IntegrationError → HttpError →
-                           {Unauthorized,NotFound,RateLimit}Error
-                           + ValidationError. Com `instanceof` check
-                           explícito.
-  - src/lib/http.ts      — fetchJson() wrapper com timeout/abort e
-                           mapping de status codes pra classes de erro
-  - src/lib/i18n.ts      — extractLocalized() pra campos {pt,es,en}
-
-  Canonical:
-  - src/canonical/types.ts    — CanonicalSale, CanonicalCustomer,
-                                CanonicalProduct, CanonicalAbandonedCheckout
-                                (bate com schema Supabase)
-  - src/canonical/index.ts
-
-  Nuvemshop integration (5 arquivos):
-  - src/integrations/nuvemshop/schemas.ts   (7 Zod schemas)
-  - src/integrations/nuvemshop/types.ts     (via z.infer)
-  - src/integrations/nuvemshop/client.ts    (NuvemshopClient com 9
-                                             métodos + parse de
-                                             link header + rate limit
-                                             headers)
-  - src/integrations/nuvemshop/mapper.ts    (6 pure functions +
-                                             safeParseMoney)
-  - src/integrations/nuvemshop/index.ts
-
-  Conta Azul integration (6 arquivos):
-  - src/integrations/conta-azul/schemas.ts  (4 raw schemas + 3
-                                             wrapper helpers genéricos:
-                                             ptWrapperSchema,
-                                             enWrapperSchema,
-                                             bareWrapperSchema)
-  - src/integrations/conta-azul/types.ts
-  - src/integrations/conta-azul/client.ts   (ContaAzulClient com
-                                             listCategorias/Produtos/
-                                             Pessoas/NotasFiscais)
-  - src/integrations/conta-azul/auth.ts     (exchangeCodeForTokens,
-                                             refreshAccessToken,
-                                             ContaAzulTokenManager com
-                                             rotação automática e
-                                             callback onRefresh)
-  - src/integrations/conta-azul/mapper.ts   (isContaAzulCustomer filter,
-                                             mapPessoaToCanonicalCustomer,
-                                             mapProdutoToCanonicalProduct,
-                                             mapContaAzulProdutoVariacoes,
-                                             mapNotaFiscalToPartialSale
-                                             com discriminator __partial,
-                                             mapNotaFiscalStatus)
-  - src/integrations/conta-azul/index.ts
-
-  Tests (4 arquivos, 109 testes):
-  - tests/setup.ts (MSW server global, onUnhandledRequest: 'error')
-  - tests/integrations/nuvemshop/mapper.test.ts  (38 tests)
-  - tests/integrations/nuvemshop/client.test.ts  (16 tests)
-  - tests/integrations/conta-azul/mapper.test.ts (30 tests)
-  - tests/integrations/conta-azul/client.test.ts (13 tests)
-  - tests/integrations/conta-azul/auth.test.ts   (12 tests)
-
-  Executar: `npm install && npm test` → 5 test files passed, 109 tests
-  passed, 1.01s.
-
-  ## Segurança + higiene
-
-  - .env.local populado (gitignored) com secrets reais das 2 fontes
-  - .gitignore blindado com regras defensivas (cofre.*, secrets.*,
-    credentials.*, scratch.*, prints*/, /*.jpg, /onde*) depois de 2
-    incidentes onde arquivos com credenciais ficaram no root da pasta
-  - Credenciais que passaram pelo chat estão na "track list de rotação"
-    (task T47 nova no backlog) — NÃO urgente, mas precisa ser feito
-    antes de o dashboard ir pra produção com dados reais fluindo
-  - Cofre de senhas Stepads AINDA não foi configurado — task T46
-    nova no backlog (Bitwarden free recomendado)
-
-  ## Tasks novas criadas no backlog
-
-  - T44 — Implementar webhooks LGPD da Nuvemshop (store redact,
-          customers redact, customers data request) antes de produção
-  - T45 — Descobrir endpoint de DETALHE de NF-e do Conta Azul
-          (/v1/notas-fiscais/{?}) pra completar o CanonicalSale
-  - T46 — Setup cofre de senhas Stepads (1P/Bitwarden) — remover
-          dependência do .env.local como fonte da verdade
-  - T47 — Rotacionar secrets que passaram pelo chat antes de produção
-
-  ## Próximo passo MESMO imediato pra quem pegar o projeto amanhã
-
-  Ver §5 abaixo. A árvore de decisão principal é:
-  (1) começa ETL real Conta Azul (T7/T8 — precisa descobrir NF-e
-      detail endpoint primeiro)
-  OU
-  (2) começa ETL real Nuvemshop (T14+ — plug-and-play com o
-      código que já existe)
-  OU
-  (3) começa frontend Next.js (Caminho A completo)
-  OU
-  (4) implementa webhooks LGPD stubs (T44 — crítica pré-produção)
-
-- SYNC DE ESTADO (2026-04-11, sessão pós-push do sócio):
-  Descoberto que a migration de views (20260411130000_dashboard_views.sql)
-  já havia sido APLICADA no Supabase remoto pelo sócio junto com o push
-  5e949da — apenas não tinha sido refletido nos docs. Confirmado rodando
-  `SELECT viewname FROM pg_views WHERE schemaname='public' AND viewname
-  LIKE 'v_%'` no SQL Editor, retornou as 14 views esperadas.
-  Dados das views também validados com:
-    SELECT source, sum(gross_revenue) FROM v_visao_geral_daily GROUP BY source;
-  Retornou: conta_azul = 1857.70, nuvemshop = 1548.70.
-  Isso bate LINHA A LINHA com a soma das vendas `status='paid'` do
-  seed (11 CA excluindo CA-1006 cancelled de 129.90, e 7 NS excluindo
-  NS-2006 pending de 189.90). Views e seed estão saudáveis.
-  NOTA: o valor esperado anterior (~2149.40 / ~1549.50) era chute
-  impreciso do sócio — já corrigido aqui e no comentário do seed.sql.
-  STATUS_ATUAL atualizado. Próximo passo imediato deixa de ser "aplicar
-  migration" e passa a ser "decidir Caminho A vs Caminho B" (ver §5).
-
-
-- T30 + T33 (primeira ocorrência) CONCLUÍDAS: 14 views do dashboard
-  criadas em supabase/migrations/20260411130000_dashboard_views.sql.
-  * Visão Geral (2): v_visao_geral_daily, v_visao_geral_top_produtos
-  * Loja Física (3): v_loja_fisica_daily, v_loja_fisica_produtos,
-    v_loja_fisica_estado
-  * Nuvemshop (5): v_nuvemshop_daily, v_nuvemshop_produtos,
-    v_nuvemshop_geografia, v_nuvemshop_genero, v_nuvemshop_idade,
-    v_nuvemshop_abandonados
-  * Meta Ads (4): v_meta_campanha_daily, v_meta_ranking_campanhas,
-    v_meta_ranking_conjuntos, v_meta_ranking_criativos
-  Convenções (ver DECISOES.txt 2026-04-11 — Views do dashboard):
-    - Granularidade DIÁRIA ou por entidade. Single-row KPIs
-      ficam a cargo do frontend (SUM/AVG com WHERE de período).
-    - Timezone America/Sao_Paulo aplicado na view via
-      `(sale_date at time zone 'America/Sao_Paulo')::date`.
-    - Filtro de revenue = status='paid' apenas. partially_paid
-      da Nuvemshop já é mapeado pra 'paid' no canônico.
-    - Visão Geral NÃO inclui Meta Ads (reforça decisão 2026-04-10).
-    - Meta Ads: v_meta_campanha_daily só usa level='campaign' pra
-      evitar double-counting (adset/ad somariam em cima do total).
-    - Segurança postergada: views sem policies, só service_role
-      consulta por enquanto. Revisitar quando o frontend existir.
-  Validações sugeridas na migration (comentadas no fim do arquivo).
-  Migration APLICADA no Supabase remoto em 2026-04-11 (confirmado
-  via pg_views na sessão de sync pós-push).
-
-- SEEDS e FIXTURES criados para trabalho offline:
-  * supabase/seed.sql — dev seed destrutivo (TRUNCATE RESTART
-    IDENTITY CASCADE) com 10 produtos, 12 clientes, 20 vendas
-    (12 CA + 8 NS), 35 sale_items, 5 abandoned_checkouts, 35
-    meta_ads_insights (1 campanha × 2 adsets × 2 ads × 7 dias).
-    Nicho fictício: boutique de moda/acessórios. Datas relativas
-    a now() — seed continua "fresco" conforme o tempo passa.
-    Aplicar via SQL Editor do Supabase ou `supabase db reset`.
-  * tests/fixtures/api-responses/ — 11 arquivos JSON imitando
-    respostas reais das 3 APIs (shapes baseados nos MAPEAMENTO
-    §5). Usáveis por msw/nock nos testes dos HTTP clients:
-      conta-azul/    sales_list, sale_detail, customer_detail
-      nuvemshop/     orders_list, order_detail, customer_detail,
-                     abandoned_checkout, product_detail
-      meta-ads/      insights_campaign, insights_adset, insights_ad
-    IDs e nomes são consistentes com o seed.sql — a mesma
-    camiseta aparece nos dois, facilita rastreio raw → canônico.
-
-- T27 CONCLUÍDA: schema inicial do Supabase criado em
-  supabase/migrations/20260411120000_initial_schema.sql.
-  - 10 tabelas raw_* (staging, append-only) cobrindo Conta Azul,
-    Nuvemshop e Meta Ads. Padrão: id bigserial + source_id +
-    payload jsonb + ingested_at.
-  - 6 tabelas canônicas: products, customers, sales, sale_items,
-    abandoned_checkouts, meta_ads_insights. FKs entre elas,
-    CHECK constraints pros enums (status, gender, age_range, level),
-    unique (source, source_id) pra idempotência de UPSERT.
-  - RLS habilitado em TODAS as 16 tabelas, sem policies
-    (default deny pra anon/authenticated). ETL vai rodar com
-    service_role que tem bypass.
-  - Índices pras queries previstas (sales por data, meta_ads por
-    dia/nível, sale_items por sale_id/sku).
-  - Unique index no meta_ads_insights usa coalesce pra lidar com
-    adset_id/ad_id nullable (truque necessário pq PG trata null
-    como "diferente de null" em unique constraint).
-  - supabase/README.md criado com instruções de aplicar via CLI
-    ou SQL Editor.
-  - 8 convenções de modelagem registradas em DECISOES.txt
-    (2026-04-11 — Convenções do schema inicial). Qualquer migration
-    nova deve seguir o mesmo padrão.
-
-- CONTEXTO DA SESSÃO: cliente informou que as autenticações das 3
-  fontes (Conta Azul, Nuvemshop, Meta Ads) vão demorar pra chegar.
-  Decidido adiantar tudo que NÃO depende de credencial real:
-  começar pelo schema, depois seeds/fixtures, depois types/clients/
-  auth handlers (testados com mocks), depois ETL de consolidação,
-  depois views, depois frontend com mock. Ordem validada com o
-  usuário. Ver próximo passo em §5.
-
-- T1c CONCLUÍDA: projeto Vercel criado e vinculado ao repositório
-  Dev-Stepads/miranda-estudio-dashboard.
-  URL de produção: https://miranda-estudio-dashboard.vercel.app
-  Painel do projeto: https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
-  Team slug: dev-1871s-projects  (slug gerado automaticamente pela Vercel
-  para a conta dev@stepads.com.br — confirmado pelo Matheus em 2026-04-10)
-  Primeiro deploy sem código de app (esperado nesta fase — o importante
-  é o projeto estar criado e com o Git conectado para auto-deploy futuro).
-
-  Notas operacionais sobre como o import foi feito (importante caso
-  alguém precise repetir em outra máquina):
-  - O repo está na conta pessoal Dev-Stepads, mas o Vercel user opera
-    logado via GitHub studiocode1020.
-  - Foi necessário:
-    (a) instalar o Vercel GitHub App na conta Dev-Stepads;
-    (b) adicionar studiocode1020 como Collaborator no repo;
-    (c) em repo de conta pessoal NÃO existe papel "Admin" — Collaborator
-        já é o nível máximo e é suficiente para a Vercel;
-    (d) conectar Dev-Stepads como segunda Login Connection no Vercel
-        user (Account Settings → Login Connections) para o repo aparecer
-        no dropdown de import.
-  - Repo foi tornado público durante o troubleshooting. Avaliar se deve
-    voltar a ser privado após o projeto estabilizar.
-
-- BACKLOG_MIRANDA.txt: T1c e T4 marcadas como [x].
-- STATUS_ATUAL.txt: checkbox Vercel marcado, link atualizado, T4
-  marcada como concluída, observação de região Supabase limpa.
-- Parte 2 concluída: as 3 env vars do Supabase adicionadas no projeto
-  Vercel em Settings → Environment Variables, nos 3 environments
-  (Production, Preview, Development):
-    SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
-- Região do Supabase CONFIRMADA em South America / São Paulo
-  (verificado pelo Matheus em 2026-04-10).
-- T4 CONCLUÍDA: mapeamento técnico da API Conta Azul preenchido em
-  /docs/producao/MAPEAMENTO_CONTA_AZUL.txt.
-  Research feita em duas rodadas:
-    1. Pesquisa web das docs públicas (portal 403 no WebFetch, usado
-       FAQ, LinkApi, changelog, repos GitHub oficiais e não-oficiais)
-    2. Validação VISUAL direta no dashboard real da Miranda via
-       Playwright/CDP conectado ao OperaGX do Matheus em modo debug.
-       Screenshots salvos em /debug_screenshots/ para referência.
-  Decisões oficiais registradas em DECISOES.txt (4 novas):
-    - Usar API NOVA v1 (OAuth 2.0), não a legada
-    - ETL será 100% polling (sem webhooks)
-    - Aba Loja Física NÃO terá gênero nem faixa etária (dados
-      inexistentes no Conta Azul da Miranda, validado direto na UI)
-    - Filtro de canal de venda via campo "vendedor_responsavel"
-      (valor "LOJA FÍSICA" confirmado na venda #16138)
-  Gaps críticos resolvidos:
-    - GAP #1 (gênero): ❌ CONFIRMADO INVIÁVEL → escopo reduzido
-    - GAP #2 (idade): ❌ CONFIRMADO INVIÁVEL → escopo reduzido
-    - GAP #3 (itens inline): parecem vir inline na UI, mas é preciso
-      confirmar na API real — mantido como [VER] na T7
-    - GAP estado: ✅ MELHOR QUE ESPERADO — estado vem direto no
-      endereço do cliente, DDD vira só fallback de edge case
-  Descobertas positivas:
-    - Campo "vendedor_responsavel" resolve separação de canais
-    - Status de venda confirmados: Cancelados / Previstos / Aprovados
-    - Vendas PDV e Vendas tradicionais aparecem juntas em uma lista
-      única (não precisa de dois endpoints)
-  Pendências que NÃO foram resolvidas nesta rodada e ficam pra T7:
-    - Verificar se produto tem campo SKU (não foi validado na UI,
-      faltou visitar o módulo Produtos / Estoque)
-    - Mapear valores completos do campo "vendedor_responsavel"
-    - Confirmar se /v1/sales aceita "expand=items" para evitar N+1
-    - Ver status de "Integrações" / API no painel
-  Arquivos relacionados atualizados nesta rodada:
-    - MODELAGEM_DADOS.txt: removidas views v_loja_fisica_demografia_*
-    - REGRAS_CONSOLIDACAO.txt: §4 reescrito com tabela de
-      disponibilidade por fonte
-    - README.md: descrição da aba "Loja Física" ajustada
-
-- T6 CONCLUÍDA: mapeamento técnico da API Meta Ads (Marketing API)
-  preenchido em /docs/producao/MAPEAMENTO_META_ADS.txt.
-  Research via docs oficiais do Meta for Developers.
-  Decisões oficiais registradas em DECISOES.txt (5 novas):
-    - Usar System User Token (não expira) — requer criar no BM
-      da Miranda com scope ads_read
-    - Attribution window = 7d_click + 1d_view (padrão do Meta;
-      7d_view e 28d_view foram REMOVIDOS em 2026-01-12)
-    - ETL 100% polling de 30 em 30 min (webhook não cobre métricas)
-    - Coleta defensiva de 7 dias com UPSERT (Meta recalcula histórico)
-    - Travar versão v25.0 da Graph API até revisão trimestral
-  Atenções importantes descobertas:
-    - Demografia do Meta é do PÚBLICO alcançado, não dos compradores.
-      Labels do dashboard devem deixar isso claro (vs. demografia de
-      comprador que vem da Nuvemshop)
-    - Reach com breakdown age/gender limitado a 13 meses de histórico
-    - Rate limit BUC (Business Use Case) — quota compartilhada por
-      ad account, precisamos ler headers X-Business-Use-Case em
-      cada chamada
-    - Access tier inicial é "development" por default; pode ser
-      necessário subir pra "standard" via App Review se hit rate
-      limit em T25
-  Gaps pra T23 (precisa coordenação com a Miranda):
-    - Business Manager ID
-    - Ad Account ID (act_XXXXXXXXX)
-    - Criar System User no BM da Miranda + assignar ad account
-    - Confirmar attribution window em uso (default 7d_click+1d_view)
-    - Confirmar action_type de purchase no Pixel deles
-  Arquivo relacionado atualizado:
-    - REGRAS_CONSOLIDACAO.txt §7.2 (attribution window resolvido)
-
-- T5 CONCLUÍDA: mapeamento técnico da API Nuvemshop preenchido em
-  /docs/producao/MAPEAMENTO_NUVEMSHOP.txt.
-  Research feita via docs públicas — o portal da Nuvemshop
-  (tiendanube.github.io/api-documentation) é acessível via WebFetch,
-  diferente do da Conta Azul. Não foi necessário validação visual
-  dessa vez porque a doc oficial é completa e legível.
-  Decisões oficiais registradas em DECISOES.txt (3 novas):
-    - Nuvemshop: arquitetura híbrida webhooks primários + polling
-      defensivo
-    - Data canônica de venda por fonte (Nuvemshop usa paid_at)
-    - Gate crítico: gênero/idade do dashboard inteiro dependem agora
-      APENAS da Nuvemshop + duas configurações no painel da Miranda
-  Descobertas positivas:
-    - Access token Nuvemshop não expira (vs refresh token single-use
-      de 2 semanas do Conta Azul)
-    - Webhooks eliminam dependência de polling agressivo
-    - SKU existe no item do pedido (products[].sku) e em variants[]
-    - Gênero (campo padrão extra.gender) e birthday (custom field)
-      existem no modelo da Nuvemshop — depende de a Miranda coletar
-    - Geografia vem estruturada (default_address.province), sem
-      necessidade de fallback DDD
-  Descobertas de atenção:
-    - Header de auth é "Authentication: bearer" (sic), não
-      "Authorization" — pegadinha comum
-    - User-Agent obrigatório (sem ele = 400)
-    - Rate limit é leaky bucket 40/2rps (10x pra planos Next/Evolution)
-    - Retenção de abandoned checkouts: 30 dias (API) / 90 dias
-      (deleção definitiva) → ETL precisa polling frequente
-  Gaps que NÃO podem esperar até T13/T18:
-    - Miranda pede gênero no checkout da Nuvemshop? (gate)
-    - Miranda tem custom field de birthday configurado? (gate)
-  Arquivos relacionados atualizados:
-    - REGRAS_CONSOLIDACAO.txt §1.2 (data canônica) e §2.2
-      (status Nuvemshop)
-
-- Contexto herdado dos pushes anteriores (não refeito nesta sessão):
-  estrutura /docs e /src, arquivos de contexto e produção, README.md,
-  CLAUDE.md, T1a (GitHub) e T1b (Supabase) já concluídos.
+  * PENDENCIAS_MIRANDA.txt (7 itens Miranda + 1 item interno I1)
+  * src/lib/brazil.ts, src/lib/supabase.ts
+  * src/etl/nuvemshop/sync.ts, run.ts
+  * src/etl/conta-azul/sync.ts, run.ts
+  * src/integrations/conta-azul/nfe-parser.ts
+  * src/scripts/explore-conta-azul.ts, fetch-nfe-xml.ts, debug-nfe-list.ts
+  * app/ — full Next.js frontend (layout, pages, components)
+  * .github/workflows/sync-nuvemshop.yml
+  * supabase/migrations/20260412120000_fix_product_views_group_by_name.sql
+  * supabase/migrations/20260412150000_etl_config_table.sql
 
 --------------------------------------------------------
-2. O que está funcionando
+2. O que esta funcionando
 --------------------------------------------------------
-- Estrutura de documentação completa e sincronizada
-- Backlog documentado com tasks T1–T47 (T44-T47 adicionadas nesta sessão)
-- Repositório GitHub ativo e conectado ao projeto local
-- Projeto Supabase ativo com schema + seed + 14 views aplicados
-- Projeto Vercel ativo, env vars Supabase configuradas
-- .gitignore blindado contra vazamento de credenciais (cofre.*, prints*/,
-  /*.jpg, /onde*, secrets.*, credentials.*, scratch.*, notes.local.*)
-
-- ✅ Conta Azul PROD totalmente operacional:
-  * App PROD "Miranda Dashboard" registrada (client_id 8ha8nfo...)
-  * App DEV auto-criada pelo portal (client_id 3fpivjt...)
-  * Refresh_token REAL bindado à Miranda (aloalo@mirandaestudio.com.br)
-    salvo em CONTA_AZUL_REFRESH_TOKEN no .env.local
-  * Smoke test contra /v1/categorias retornou 165 categorias reais
-  * ContaAzulTokenManager implementado com rotação automática do
-    refresh_token via callback onRefresh
-
-- ✅ Nuvemshop totalmente operacional:
-  * App "Miranda Dashboard" (#29599) registrada (Partners Portal)
-  * App instalada na loja real Miranda Estúdio (store_id 1124025)
-  * access_token não-expirante salvo em NUVEMSHOP_ACCESS_TOKEN
-  * 4 permissões read concedidas: Customers, Orders, Products, Contents
-  * Smoke test contra /products retornou 431 produtos reais da Miranda
-  * NuvemshopClient consome via "Authentication: bearer" (pegadinha)
-
-- ✅ Caminho B base de código TypeScript com 109 unit tests passando:
-  * Stack TS + ESM + vitest + msw + zod (Node 24+)
-  * 20 arquivos criados em src/ e tests/
-  * 5 test files — 54 Nuvemshop + 55 Conta Azul tests
-  * Zero erros no typecheck (tsc --noEmit)
-  * Zero erros no vitest (1.01s total run)
+- ETL Nuvemshop: full sync + incremental, rodando via GitHub Actions cron
+  a cada 30 min. 5928 orders, 4913 customers, 43 checkouts reais no banco.
+- ETL Conta Azul: full sync + incremental, rodando via GitHub Actions cron
+  a cada 30 min. 545 NF-e, 1196 sale_items reais no banco.
+  Refresh_token persistido via etl_config table (resolve CI/cron).
+- Frontend Next.js 16: 4 abas (Visao Geral, Nuvemshop, Loja Fisica,
+  Meta Ads placeholder) com period filter e KPI comparison funcionando
+  em localhost:3000.
+- Supabase: 6493 sales, 11293 sale_items, 5441 customers, 48 abandoned
+  checkouts — tudo real da Miranda.
+- Views do dashboard corrigidas: agrupam por product_name (nao product_id).
+- GitHub Actions: cron a cada 30 min sincronizando ambas as fontes.
+- 109+ unit tests passando (base Caminho B).
+- Conta Azul + Nuvemshop auth totalmente operacionais.
 
 --------------------------------------------------------
-3. O que ainda não está pronto
+3. O que ainda nao esta pronto
 --------------------------------------------------------
-- ❌ Meta Ads (bloqueado por 2 lados humanos):
-  * Conta dev@stepads.com.br no developers.facebook.com em "período
-    de validação" — precisa sair antes de criar o App Business
-  * Miranda precisa fornecer: Business Manager ID, Ad Account ID,
-    acesso pra criar System User no BM dela, attribution window em uso,
-    action_type de purchase no Pixel
-  * Mensagem enviada ao representante — aguardando resposta
-  * Nenhum progresso técnico possível até esses 2 bloqueios saírem
+- Meta Ads (bloqueado por 2 lados humanos):
+  * Conta dev@stepads.com.br em validacao no developers.facebook.com
+  * Miranda precisa fornecer: BM ID, Ad Account ID, acesso ao BM
+  * Nenhum progresso tecnico possivel ate esses bloqueios sairem
 
-- ⏸ ETL real das 2 fontes já autorizadas (T7-T26):
-  * Caminho B (tipos + clients + mappers + testes) CONCLUÍDO
-  * Falta: loop de polling / scheduler / workers / insert no canonical
-  * Conta Azul T7/T8 adicionalmente precisa: DESCOBRIR o endpoint de
-    DETALHE de NF-e (portal de doc bloqueado por WAF, tentar
-    manualmente no navegador humano). Ver task T45 nova.
+- Webhooks LGPD Nuvemshop (T44):
+  * 3 URLs placeholder cadastradas mas rotas NAO existem no Vercel
+  * Critico antes de producao real com dados de clientes fluindo
 
-- ⚠ Webhooks LGPD da Nuvemshop cadastrados como PLACEHOLDER:
-  * 3 URLs cadastradas na app (/api/webhooks/nuvemshop/lgpd/{store-redact,
-    customers-redact,customers-data-request}) mas AS ROTAS NÃO EXISTEM
-    no Vercel — retornarão 404 quando Nuvemshop pingar
-  * Não é crítico hoje (Miranda não pediu deleção, não há dados
-    fluindo pro nosso banco ainda) mas BLOQUEIA produção real
-  * Ver task T44 nova no backlog
+- Deploy Vercel do frontend:
+  * Frontend funciona localmente, falta validar deploy no Vercel
+  * Env vars de Supabase ja estao configuradas no Vercel
 
-- ⚠ Cofre de senhas Stepads ainda não existe:
-  * .env.local no disco do Matheus é a fonte da verdade interina
-  * Sócio não consegue puxar credenciais sem passar pelo chat
-  * Ver task T46 nova no backlog
+- QA/Validacao (T36-T42):
+  * Nenhuma validacao formal feita ainda
+  * Faturamento precisa ser cruzado com dados reais da Miranda
 
-- ⚠ Secrets que passaram pelo chat durante a sessão:
-  * CONTA_AZUL_CLIENT_SECRET PROD (do push do Matheus)
-  * CONTA_AZUL_REFRESH_TOKEN (do fluxo OAuth real)
-  * NUVEMSHOP_CLIENT_SECRET (do push do Matheus)
-  * NUVEMSHOP_ACCESS_TOKEN (do curl de exchange)
-  * Esses devem ser ROTACIONADOS antes de produção real
-  * Ver task T47 nova no backlog
+- Cofre de senhas Stepads (T46):
+  * .env.local no disco do Matheus e a fonte da verdade interina
+  * Bloqueia revezamento seguro
 
-- ⏸ Gates pendentes com o representante Miranda (não bloqueiam Caminho B):
-  * Aprovação do escopo reduzido da Loja Física (sem gênero/idade)
-  * Checkout da Nuvemshop pede gênero? (Gate N#1)
-  * Existe custom field de birthday configurado? (Gate N#2)
-  * partially_paid entra no faturamento? (recomendação = sim)
-  * attribution window do Meta Ads
+- Secrets que passaram pelo chat (T47):
+  * Devem ser rotacionados antes de producao real
 
-- ⏸ Frontend Next.js (Caminho A) — não iniciado. Pode ser feito em
-  paralelo com Caminho B ou depois.
+- Regras de consolidacao de produtos (T29):
+  * SKU nao e usado pela Miranda na Nuvemshop
+  * Consolidacao por nome e o fallback atual
+
+- Gates pendentes com representante Miranda:
+  * Checkout Nuvemshop pede genero? (Gate N#1)
+  * Custom field de birthday? (Gate N#2)
+  * partially_paid no faturamento? (recomendacao = sim)
+  * Attribution window do Meta Ads
 
 --------------------------------------------------------
 4. Bloqueios encontrados
 --------------------------------------------------------
-- Nenhum no momento.
-
-Histórico do troubleshooting desta sessão (para referência futura):
-- Vercel não listava o repo Dev-Stepads/miranda-estudio-dashboard no
-  import porque a sessão Vercel estava autenticada via OAuth
-  studiocode1020 enquanto o repo estava em outra conta pessoal. Resolvido
-  adicionando Dev-Stepads em Login Connections no Vercel user. Tornar
-  o repo público NÃO resolveu o problema (era questão de OAuth, não de
-  visibilidade). Collaborator também não basta sozinho.
+- META ADS: conta dev@stepads.com.br em validacao + Miranda nao
+  respondeu com BM ID / Ad Account ID / acesso ao BM.
+- COFRE DE SENHAS: proximo do revezamento nao consegue credenciais
+  sem pedir ao Matheus (T46).
+- LGPD: webhooks placeholder vao retornar 404 se Nuvemshop pingar.
+  Nao e urgente enquanto nao houver dados fluindo em producao, mas
+  precisa ser resolvido antes do go-live.
 
 --------------------------------------------------------
-5. Próximo passo exato para quem assumir
+5. Proximo passo exato para quem assumir
 --------------------------------------------------------
-ANTES DE COMEÇAR (setup por pessoa, ver CLAUDE.md seção 6):
+ANTES DE COMECAR:
   - git pull
-  - cp .env.example .env.local
-  - ⚠ ATENÇÃO: o cofre de senhas Stepads AINDA NÃO foi configurado
-    (task T46 pendente). Por enquanto, as credenciais estão no
-    .env.local da máquina do Matheus. Para outra pessoa puxar:
-      Opção 1 (interim): pedir ao Matheus pra copiar via canal seguro
-      Opção 2 (melhor):  configurar o cofre Bitwarden/1P primeiro
-                         (T46) e depois todo mundo puxa de lá
-    NUNCA passar secrets por chat/Slack/email sem canal criptografado.
-  - npm install  (primeira vez instala 141 deps)
-  - npm test     (valida que os 109 tests passam na sua máquina)
+  - cp .env.example .env.local (preencher com credenciais do cofre
+    ou pedir ao Matheus)
+  - npm install
+  - npm test (validar 109+ tests)
+  - npm run dev (frontend em localhost:3000)
 
-PRÓXIMO PASSO IMEDIATO — Escolher qual das 4 frentes atacar
+PROXIMO PASSO IMEDIATO — 3 frentes abertas por prioridade:
 
-  CONTEXTO: Caminho B (bases TypeScript) está completo pras 2 fontes
-  autorizadas (Conta Azul + Nuvemshop). O que falta é:
-    - ETL real (loops de polling, workers, inserts no canonical)
-    - Descoberta do endpoint de detalhe de NF-e (pra completar Conta Azul)
-    - Webhooks LGPD stubs (pré-produção)
-    - Frontend Next.js (Caminho A)
-    - Meta Ads (bloqueado por humanos)
+  FRENTE 1 — Deploy Vercel + QA (RECOMENDACAO FORTE)
+    O frontend esta pronto localmente. Proximo:
+    1.1. Fazer push do codigo frontend e validar deploy no Vercel
+    1.2. Testar as 4 abas com dados reais no ambiente de producao
+    1.3. Cruzar faturamento do dashboard com relatorios reais da Miranda
+         (QA tasks T36-T42)
+    1.4. Ajustar filtros/KPIs conforme feedback
 
-  FRENTE 1 — Conta Azul ETL real (T7 + T8)
-    1.1. DESCOBRIR o endpoint de detalhe de NF-e. Estratégia:
-         abrir developers.contaazul.com/docs/sales-apis-openapi no
-         navegador humano (WebFetch é bloqueado por WAF), procurar
-         por GET /v1/notas-fiscais/{...} e anotar o path exato.
-         Possíveis: por chave_acesso, por numero_nota, ou por UUID
-         interno não exposto na lista. Ver DECISOES.txt 2026-04-11.
-    1.2. Adicionar método getNotaFiscalDetail() no ContaAzulClient
-         + schema Zod + tipo derivado.
-    1.3. Escrever mergePartialSaleWithDetail() no mapper.
-    1.4. Escrever o loop de polling pagina por página filtrando por
-         data_inicial/data_final (janela de 7-30 dias configurable).
-    1.5. Testar contra Supabase (service_role) com inserts reais na
-         tabela `sales` via @supabase/supabase-js (NOVA DEPENDÊNCIA,
-         adicionar ao package.json).
+  FRENTE 2 — Webhooks LGPD (T44) + robustez do ETL
+    2.1. Criar 3 API routes Next.js para LGPD:
+         /api/webhooks/nuvemshop/lgpd/store-redact
+         /api/webhooks/nuvemshop/lgpd/customers-redact
+         /api/webhooks/nuvemshop/lgpd/customers-data-request
+    2.2. Validar HMAC com NUVEMSHOP_CLIENT_SECRET
+    2.3. Implementar logica de DELETE/export conforme MAPEAMENTO_NUVEMSHOP.txt §A9
+    2.4. Monitorar GitHub Actions cron — garantir que ETL incremental
+         esta rodando sem erros
 
-  FRENTE 2 — Nuvemshop ETL real (T14, T15, T16, T17-T22)
-    PLUG-AND-PLAY em relação ao Caminho B. Não precisa descobrir
-    endpoint novo. Roteiro:
-    2.1. Escrever scheduler (cron + coleta incremental via
-         created_at_min/max) que chama o NuvemshopClient e insere
-         no canonical via @supabase/supabase-js.
-    2.2. Webhook handler (endpoint Vercel /api/webhooks/nuvemshop)
-         com validação HMAC-SHA256 — OPCIONAL pra MVP, mas reduz
-         latência de polling.
-    2.3. Implementar stubs LGPD (T44) — 3 endpoints Vercel que
-         processam os webhooks de redact / data request.
-    Mais fácil que Conta Azul porque o schema já está totalmente
-    descoberto e o token não expira.
+  FRENTE 3 — Meta Ads (BLOQUEADO — aguardando humanos)
+    Nao comecar ate:
+    (a) Conta Facebook dev sair da validacao
+    (b) Miranda fornecer BM ID + Ad Account ID + acesso ao BM
 
-  FRENTE 3 — Frontend Next.js (Caminho A)
-    Dá pra começar em paralelo com ETL. O Supabase já tem schema +
-    seed + views prontos, então dá pra montar o dashboard consumindo
-    direto via PostgREST (@supabase/supabase-js). Stack sugerida:
-    Next.js 15 + App Router + Tailwind + shadcn/ui + Recharts. Pode
-    rodar contra os dados de seed enquanto o ETL real não estiver
-    pronto — a diferença é transparente pro frontend.
+  PENDENCIAS MIRANDA (ver PENDENCIAS_MIRANDA.txt):
+    7 itens pendentes de acao da Miranda + 1 item interno (I1 filter)
 
-  FRENTE 4 — Meta Ads (bloqueado até humanos responderem)
-    Só vai poder começar quando:
-    (a) Conta Facebook dev@stepads.com.br sair da validação
-    (b) Miranda responder com BM ID, Ad Account ID, acesso ao BM
-    Sem essas 2 coisas, qualquer linha de código Meta Ads é fanfic.
-
-  RECOMENDAÇÃO DO CLAUDE DA SESSÃO 2026-04-11:
-    Começar por FRENTE 2 (Nuvemshop ETL). Motivos:
-    - Não precisa descobrir endpoint novo
-    - Token não expira (sem refresh flow pra mexer)
-    - Plug direto no código que já existe
-    - Resulta em dados reais no Supabase mais rápido (gratificação)
-    - LGPD stubs (T44) ficam naturalmente no caminho
-
-    Depois, FRENTE 1 (Conta Azul ETL) com o endpoint já descoberto.
-    Depois, FRENTE 3 (Next.js) consumindo os dados reais.
-    Meta Ads quando os humanos responderem.
-
-  GATES PENDENTES COM O REPRESENTANTE (não bloqueiam trabalho técnico,
-  mas precisam ser resolvidos antes da ETAPA 8/QA):
-    - aba Loja Física sem gênero/idade (aprovação)
-    - checkout Nuvemshop pede gênero? (Gate N#1)
-    - custom field de birthday na Nuvemshop? (Gate N#2)
-    - partially_paid entra no faturamento? (recomendação = sim)
-    - attribution window do Meta Ads
-
-PRÓXIMO PASSO HISTÓRICO — Consolidação pós-descoberta (pré-schema)
-
-  ETAPA 2 (Descoberta técnica) está CONCLUÍDA. T4, T5, T6 fechadas.
-  Todos os 3 mapeamentos têm visão clara dos endpoints, campos,
-  autenticação, rate limits, gaps e riscos. O projeto agora está
-  em um "gate de preparação" antes de começar implementação.
-
-  Ações que PRECEDEM qualquer linha de código da Etapa 3:
-
-  1. [x] [MATHEUS] Fechar OperaGX em modo debug — RESOLVIDO (2026-04-11)
-     Verificado nesta sessão: porta 9222 não tem listener, nenhum
-     processo opera.exe está rodando com --remote-debugging-port.
-     Higiene de segurança concluída.
-
-  2. [MATHEUS → REPRESENTANTE] Repassar ao representante da Miranda:
-     a) DECISÃO: aba "Loja Física" do dashboard NÃO terá gênero nem
-        faixa etária (Conta Azul não coleta esses dados). Essas
-        análises ficam concentradas na aba Nuvemshop.
-        → Pedir ciência e aprovação do representante.
-     b) GATE N#1: o checkout da Nuvemshop da Miranda pede gênero?
-        → Pedir pra verificar e, se não pedir, pedir pra ativar
-          OU aceitar que gênero sai do escopo TOTAL do dashboard.
-     c) GATE N#2: existe custom field tipo "date" de aniversário
-        no cadastro de cliente da Nuvemshop?
-        → Mesmo tratamento: verificar, ativar se puder, OU aceitar
-          que faixa etária sai do escopo total.
-     d) PENDÊNCIA Nuvemshop: partially_paid entra no faturamento
-        do e-commerce? (nossa recomendação = sim; confirmar)
-     e) PENDÊNCIA Meta Ads: qual attribution window a Miranda usa
-        no Ads Manager hoje? Nossa aposta é 7d_click + 1d_view
-        (default do Meta). Se for diferente, adaptar o ETL.
-
-  3. [MATHEUS → CLIENTE MIRANDA] Pedir informações técnicas:
-     a) Conta Azul: credenciais para registrar app no
-        developers-portal.contaazul.com
-     b) Meta Ads:
-        - Business Manager ID
-        - Ad Account ID (act_XXXXXXXXX)
-        - Acesso/colaboração para criar System User no BM
-        - Se usam criativos em vídeo (importa pros fields video_*)
-
-  4. [MATHEUS] Coletar as credenciais dos 3 serviços e guardar
-     no cofre Stepads em "Miranda Dashboard — .env.local":
-       # Conta Azul (criar no portal dev)
-       CONTAAZUL_CLIENT_ID=
-       CONTAAZUL_CLIENT_SECRET=
-       # Nuvemshop (criar no Partners Portal)
-       NUVEMSHOP_APP_ID=
-       NUVEMSHOP_CLIENT_ID=
-       NUVEMSHOP_CLIENT_SECRET=
-       # Meta Ads (criar app em developers.facebook.com)
-       META_APP_ID=
-       META_APP_SECRET=
-       META_SYSTEM_USER_TOKEN=
-       META_AD_ACCOUNT_ID=
-       META_BUSINESS_MANAGER_ID=
-
-DEPOIS DESSAS AÇÕES — começar Etapa 3 (implementação):
-
-  Primeira task: T7 — Autenticação Conta Azul.
-  Segunda:       T8 — Coleta de vendas Conta Azul.
-  ... (ver backlog)
-
-  A ordem recomendada é: Conta Azul → Nuvemshop → Meta Ads,
-  porque Conta Azul é a mais arriscada (API legada recém
-  desativada, refresh token single-use, sem sandbox).
-
-DEPOIS DISSO — T6: mapear tecnicamente a API da Meta Ads
-
-  5. Mesmo padrão em MAPEAMENTO_META_ADS.txt: Graph API,
-     access tokens de longa duração, endpoints de insights por nível
-     (campaign/adset/ad), atribuição window, rate limits e cotas,
-     fields canônicos que a gente já quer (spend, impressions, reach,
-     clicks, purchases, purchase_value, purchase_roas).
-
-DEPOIS DE T4-T6 — começar implementação:
-
-  6. T7 (autenticação Conta Azul) — primeira tarefa de código.
-     Antes de começar T7, o Matheus precisa:
-       - Criar conta em https://developers-portal.contaazul.com/
-       - Registrar aplicação "Miranda Dashboard" com redirect_uri
-       - Guardar CONTAAZUL_CLIENT_ID e CONTAAZUL_CLIENT_SECRET no
-         cofre Stepads (item "Miranda Dashboard — .env.local")
-     Ver seção 9 do MAPEAMENTO_CONTA_AZUL.txt para detalhes.
+  GATES COM REPRESENTANTE (nao bloqueiam trabalho tecnico):
+    - Genero no checkout Nuvemshop (Gate N#1)
+    - Birthday custom field (Gate N#2)
+    - Attribution window Meta Ads
 
 --------------------------------------------------------
 6. Arquivos principais alterados
 --------------------------------------------------------
-- Toda a estrutura inicial de /docs e /src (primeira vez)
-- README.md
+- src/etl/nuvemshop/sync.ts, run.ts (ETL real)
+- src/etl/conta-azul/sync.ts, run.ts (ETL real)
+- src/integrations/conta-azul/nfe-parser.ts (XML parser)
+- src/lib/brazil.ts (normalizeState)
+- src/lib/supabase.ts (client helper)
+- app/ (full Next.js frontend)
+- .github/workflows/sync-nuvemshop.yml (cron)
+- supabase/migrations/20260412*.sql (2 migrations)
+- PENDENCIAS_MIRANDA.txt (novo)
+- Schemas Zod corrigidos (5+ nullable fixes)
 
 --------------------------------------------------------
 7. Como testar
 --------------------------------------------------------
-- Ainda não há código executável. Validação nesta fase = ler os docs e confirmar que o backlog está claro.
+- npm test — 109+ unit tests
+- npm run dev — frontend em localhost:3000 (precisa .env.local com
+  SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY)
+- npm run sync:nuvemshop — sync incremental Nuvemshop
+- npm run sync:nuvemshop:full — sync completo Nuvemshop
+- npm run sync:contaazul — sync incremental Conta Azul
+- npm run sync:contaazul:full — sync completo Conta Azul
 
 --------------------------------------------------------
-8. Observações para o Claude
+8. Observacoes para o Claude
 --------------------------------------------------------
-- Contexto importante: projeto será revezado entre várias pessoas. Ler HANDOFF antes de qualquer alteração é OBRIGATÓRIO.
-- Regra de negócio importante: Visão Geral = Loja Física + Nuvemshop consolidados. NÃO inclui Meta Ads no faturamento (Meta Ads é atribuição, não venda).
-- Cuidado ao alterar: não mexer em /docs/context sem ler o que já está lá. DECISOES.txt é append-only — nunca apagar decisões antigas, apenas marcar como revertidas se necessário.
-- Segurança: credenciais de login do Conta Azul e Nuvemshop foram compartilhadas em chat e devem ser trocadas pelo usuário. Nunca commitar .env.
+- REGRA: Visao Geral = Loja Fisica + Nuvemshop. NAO inclui Meta Ads.
+- REGRA: DECISOES.txt e append-only.
+- CUIDADO: NF-e do Conta Azul retorna XML, nao JSON. Parser em
+  src/integrations/conta-azul/nfe-parser.ts.
+- CUIDADO: 15 dias max na janela do endpoint de lista de NF-e.
+  ETL faz chunking em 14 dias.
+- CUIDADO: 97% dos sale_items tem product_id null. Views agrupam
+  por product_name, nao por product_id.
+- CUIDADO: refresh_token do Conta Azul e single-use. Persistencia
+  via etl_config table no Supabase.
