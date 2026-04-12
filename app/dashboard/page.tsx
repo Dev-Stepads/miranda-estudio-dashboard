@@ -43,7 +43,7 @@ export default async function VisaoGeralPage({
     fetchTopCustomers(10),
     fetchRecentOrders(10),
     fetchCustomerRecurrence(),
-    fetchMonthlyComparison(12),
+    fetchMonthlyComparison(36),
   ]);
 
   // Split previous period data

@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type { MonthlyData } from '../lib/queries';
 
 interface MonthlyComparisonProps {
@@ -9,24 +12,56 @@ function formatBRL(value: number): string {
 }
 
 function formatMonth(month: string): string {
-  const [year, m] = month.split('-');
+  const parts = month.split('-');
+  const m = parts[1] ?? '01';
   const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const idx = Number(m) - 1;
-  return `${months[idx] ?? m}/${year?.slice(2)}`;
+  return months[idx] ?? m;
 }
 
 export function MonthlyComparison({ data }: MonthlyComparisonProps) {
-  // Find max revenue for bar width
-  const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
+  // Extract available years from data
+  const years = [...new Set(data.map(d => d.month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+  const [selectedYear, setSelectedYear] = useState(years[0] ?? new Date().getFullYear().toString());
+
+  // Filter by selected year
+  const filtered = data.filter(d => d.month.startsWith(selectedYear));
+  const maxRevenue = Math.max(...filtered.map(d => d.revenue), 1);
+
+  // Totals for the year
+  const totalRevenue = filtered.reduce((s, r) => s + r.revenue, 0);
+  const totalOrders = filtered.reduce((s, r) => s + r.orders, 0);
+  const totalAvgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="p-4 sm:p-6 pb-3">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Comparativo Mensal
-        </h3>
-        <p className="text-xs sm:text-sm text-gray-400 mt-1">Evolução mês a mês (todas as fontes)</p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Comparativo Mensal
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5">Evolução mês a mês (todas as fontes)</p>
+          </div>
+          {/* Year filter */}
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+            {years.map((year) => (
+              <button
+                key={year}
+                onClick={() => setSelectedYear(year)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  selectedYear === year
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                {year}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -39,7 +74,7 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
             </tr>
           </thead>
           <tbody>
-            {data.map((row, i) => (
+            {filtered.map((row, i) => (
               <tr
                 key={row.month}
                 className={`border-t border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
@@ -84,6 +119,24 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
               </tr>
             ))}
           </tbody>
+          {/* Year total footer */}
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
+              <td className="px-4 sm:px-6 py-3 font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
+                Total {selectedYear}
+              </td>
+              <td className="px-4 sm:px-6 py-3 font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
+                {formatBRL(totalRevenue)}
+              </td>
+              <td className="px-4 sm:px-6 py-3 text-right font-bold text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm">
+                {totalOrders.toLocaleString('pt-BR')}
+              </td>
+              <td className="px-4 sm:px-6 py-3 text-right font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
+                {formatBRL(totalAvgTicket)}
+              </td>
+              <td className="px-4 sm:px-6 py-3" />
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
