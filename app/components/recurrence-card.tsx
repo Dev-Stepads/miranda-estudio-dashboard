@@ -17,39 +17,6 @@ interface RecurrenceCardProps {
   totalRepeatRate: number;
 }
 
-const COLORS_DONUT = ['#94a3b8', '#10b981'];
-
-function MiniDonut({ firstTime, repeat }: { firstTime: number; repeat: number }) {
-  const data = [
-    { name: 'Primeira compra', value: firstTime },
-    { name: 'Recorrentes', value: repeat },
-  ];
-
-  return (
-    <div className="w-20 h-20 shrink-0">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={22}
-            outerRadius={35}
-            paddingAngle={2}
-            dataKey="value"
-            label={false}
-          >
-            {data.map((_entry, index) => (
-              <Cell key={index} fill={COLORS_DONUT[index % COLORS_DONUT.length]} />
-            ))}
-          </Pie>
-          <Tooltip formatter={(value) => [`${Number(value).toLocaleString('pt-BR')} clientes`]} />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
 export function RecurrenceCard({ sources, totalFirstTime, totalRepeat, totalRepeatRate }: RecurrenceCardProps) {
   const total = totalFirstTime + totalRepeat;
   if (total === 0) return null;
@@ -62,21 +29,47 @@ export function RecurrenceCard({ sources, totalFirstTime, totalRepeat, totalRepe
       <p className="text-xs text-gray-400 mb-5">Clientes que compraram mais de 1 vez</p>
 
       {/* Consolidado */}
-      <div className="flex items-center gap-5 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
-        <MiniDonut firstTime={totalFirstTime} repeat={totalRepeat} />
-        <div>
-          <p className="text-3xl sm:text-4xl font-bold text-emerald-600">{totalRepeatRate}%</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">taxa de recompra geral</p>
-          <div className="flex gap-3 mt-2 text-xs">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
+        {/* Donut grande centralizado */}
+        <div className="w-40 h-40 sm:w-48 sm:h-48 shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'Primeira compra', value: totalFirstTime },
+                  { name: 'Recorrentes', value: totalRepeat },
+                ]}
+                cx="50%"
+                cy="50%"
+                innerRadius={45}
+                outerRadius={70}
+                paddingAngle={2}
+                dataKey="value"
+                label={false}
+              >
+                <Cell fill="#94a3b8" />
+                <Cell fill="#10b981" />
+              </Pie>
+              <Tooltip formatter={(value) => [`${Number(value).toLocaleString('pt-BR')} clientes`]} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Stats à direita */}
+        <div className="text-center sm:text-left">
+          <p className="text-4xl sm:text-5xl font-bold text-emerald-600">{totalRepeatRate}%</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">taxa de recompra geral</p>
+          <div className="flex gap-4 mt-3 text-xs justify-center sm:justify-start">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
               <span className="text-gray-600 dark:text-gray-300">{totalRepeat.toLocaleString('pt-BR')} recorrentes</span>
             </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" />
               <span className="text-gray-600 dark:text-gray-300">{totalFirstTime.toLocaleString('pt-BR')} primeira compra</span>
             </span>
           </div>
+          <p className="text-xs text-gray-400 mt-2">{(totalFirstTime + totalRepeat).toLocaleString('pt-BR')} clientes no total</p>
         </div>
       </div>
 
