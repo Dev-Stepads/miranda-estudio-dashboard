@@ -112,21 +112,34 @@ export default async function NuvemshopPage({
       {/* Avg Ticket Chart */}
       <AvgTicketChart data={daily.map(d => ({ day: d.day, avg_ticket: d.avg_ticket }))} />
 
-      {/* Two columns: Geography + Abandoned */}
+      {/* Geography by state + by city */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
         <GeographyChart data={geoData} />
 
         <SimpleTable
-          title="Carrinhos Abandonados"
-          subtitle="Por dia (últimos 30 dias)"
+          title="Top Cidades"
+          subtitle="Ranking por faturamento (e-commerce)"
           columns={[
-            { key: 'day', label: 'Data', format: 'text' },
-            { key: 'abandoned_count', label: 'Qtd', align: 'right', format: 'number' },
-            { key: 'total_amount', label: 'Valor', align: 'right', format: 'currency' },
+            { key: 'city', label: 'Cidade' },
+            { key: 'state', label: 'UF' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
           ]}
-          rows={abandoned.slice(0, 10) as unknown as Record<string, unknown>[]}
+          rows={geography.slice(0, 15) as unknown as Record<string, unknown>[]}
         />
       </div>
+
+      {/* Abandoned */}
+      <SimpleTable
+        title="Carrinhos Abandonados"
+        subtitle="Por dia (últimos 30 dias)"
+        columns={[
+          { key: 'day', label: 'Data', format: 'text' },
+          { key: 'abandoned_count', label: 'Qtd', align: 'right', format: 'number' },
+          { key: 'total_amount', label: 'Valor', align: 'right', format: 'currency' },
+        ]}
+        rows={abandoned.slice(0, 10) as unknown as Record<string, unknown>[]}
+      />
 
       {/* Top Products + Top Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
