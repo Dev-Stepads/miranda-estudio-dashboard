@@ -138,6 +138,33 @@ export async function syncCustomers(ctx: SyncContext): Promise<SyncResult> {
   );
   ctx.log(`  Total customers fetched: ${rawCustomers.length}`);
 
+  // Pre-load ALL existing customers from DB (Supabase limits to 1000/query, so paginate)
+  let preloadPage = 0;
+  const PRELOAD_SIZE = 1000;
+  let preloadTotal = 0;
+
+  while (true) {
+    const { data: batch } = await ctx.supabase
+      .from('customers')
+      .select('customer_id, source_customer_id')
+      .eq('source', 'nuvemshop')
+      .range(preloadPage * PRELOAD_SIZE, (preloadPage + 1) * PRELOAD_SIZE - 1);
+
+    if (batch === null || batch.length === 0) break;
+
+    for (const row of batch) {
+      ctx.customerLookup.set(
+        String(row.source_customer_id),
+        row.customer_id as number,
+      );
+    }
+    preloadTotal += batch.length;
+    if (batch.length < PRELOAD_SIZE) break;
+    preloadPage++;
+  }
+
+  ctx.log(`  Pre-loaded ${preloadTotal} existing customers into lookup (${ctx.customerLookup.size} unique)`);
+
   // 2. Map + upsert in batches
   const BATCH_SIZE = 100;
   for (let i = 0; i < rawCustomers.length; i += BATCH_SIZE) {
