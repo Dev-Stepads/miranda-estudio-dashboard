@@ -136,16 +136,21 @@ export interface TopCustomer {
   avg_ticket: number;
 }
 
-/** Top customers by revenue */
-export async function fetchTopCustomers(limit: number = 15): Promise<TopCustomer[]> {
+/** Top customers by revenue. Optional source filter. */
+export async function fetchTopCustomers(limit: number = 15, source?: string): Promise<TopCustomer[]> {
   const supabase = getSupabase();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('v_top_customers')
     .select('*')
     .order('total_revenue', { ascending: false })
     .limit(limit);
 
+  if (source !== undefined) {
+    query = query.eq('source', source);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
   return (data ?? []) as TopCustomer[];
 }

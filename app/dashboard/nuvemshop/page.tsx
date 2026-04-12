@@ -5,6 +5,7 @@ import {
   fetchTopProducts,
   fetchGeography,
   fetchAbandoned,
+  fetchTopCustomers,
   parsePeriod,
 } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
@@ -21,12 +22,13 @@ export default async function NuvemshopPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
-  const [daily, prevDaily, topProducts, geography, abandoned] = await Promise.all([
+  const [daily, prevDaily, topProducts, geography, abandoned, topCustomers] = await Promise.all([
     fetchNuvemshopDaily(period.days, params.from, params.to),
     fetchNuvemshopDaily(period.days * 2),
     fetchTopProducts(20),
     fetchGeography(15),
     fetchAbandoned(),
+    fetchTopCustomers(10, 'nuvemshop'),
   ]);
 
   // KPIs
@@ -126,17 +128,30 @@ export default async function NuvemshopPage({
         />
       </div>
 
-      {/* Top Products Nuvemshop */}
-      <SimpleTable
-        title="Top Produtos Nuvemshop"
-        subtitle="Ranking por faturamento (e-commerce)"
-        columns={[
-          { key: 'product_name', label: 'Produto' },
-          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
-          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-        ]}
-        rows={nsProducts.slice(0, 20) as unknown as Record<string, unknown>[]}
-      />
+      {/* Top Products + Top Customers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+        <SimpleTable
+          title="Top Produtos"
+          subtitle="Ranking por faturamento (e-commerce)"
+          columns={[
+            { key: 'product_name', label: 'Produto' },
+            { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
+            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          ]}
+          rows={nsProducts.slice(0, 15) as unknown as Record<string, unknown>[]}
+        />
+        <SimpleTable
+          title="Top Clientes"
+          subtitle="Ranking por faturamento (e-commerce)"
+          columns={[
+            { key: 'name', label: 'Cliente' },
+            { key: 'state', label: 'UF' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          ]}
+          rows={topCustomers as unknown as Record<string, unknown>[]}
+        />
+      </div>
     </div>
   );
 }

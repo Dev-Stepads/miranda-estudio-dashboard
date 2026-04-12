@@ -94,6 +94,10 @@ function paymentCodeToName(code: string): string {
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
+  // Keep ALL values as strings — we parse numbers manually where needed.
+  // Without this, CPF "02667427505" becomes 2667427505 (leading zero lost)
+  // and tPag "03" becomes 3 (payment code lookup fails).
+  parseTagValue: false,
   // Force these tags to always be arrays (XML returns object when single item)
   isArray: (_name, jpath) => {
     return jpath === 'nfeProc.NFe.infNFe.det' ||
