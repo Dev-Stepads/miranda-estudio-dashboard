@@ -29,18 +29,35 @@ Etapa 6 — Consolidacao: CONCLUIDA (2026-04-12)
          [x] T30 dataset Visao Geral via views (2026-04-11)
          [x] T33 views do dashboard (2026-04-11, corrigidas 2026-04-12)
          [x] Views corrigidas: group by product_name em vez de product_id (2026-04-12)
-Etapa 7 — Dashboard: EM ANDAMENTO (2026-04-12)
-         [x] T31 aba Visao Geral — KPIs, donut canal, ranking produtos (2026-04-12)
-         [x] T32 aba Loja Fisica — faturamento, produtos, estado (2026-04-12)
-         [x] T33 aba Nuvemshop — faturamento, produtos, geografia, abandonados (2026-04-12)
+Etapa 7 — Dashboard: CONCLUIDA (exceto Meta Ads) (2026-04-12)
+         [x] T31 aba Visao Geral — KPIs, donut canal, ranking produtos,
+             resumo executivo, mapa Brasil, comparativo mensal com filtro
+             de ano, recorrencia clientes (split por fonte), top clientes,
+             pedidos recentes, avg ticket chart (2026-04-12)
+         [x] T32 aba Loja Fisica — faturamento, produtos com SKU, mapa
+             Brasil, top clientes, avg ticket chart (2026-04-12)
+         [x] T33 aba Nuvemshop — faturamento, produtos com %, top cidades,
+             mapa Brasil, top clientes, avg ticket, abandonados (2026-04-12)
          [~] T34 aba Meta Ads — placeholder (bloqueado por T23)
-         [x] T35 filtros — period filter 7d/15d/30d/90d/1ano + date picker custom
-             + filtro persiste entre abas via search params (2026-04-12)
-         [x] Mobile responsive — header, tabs, cards, charts, tables (2026-04-12)
-         [x] Deploy Vercel — live em miranda-estudio-dashboard.vercel.app (2026-04-12)
-Etapa 8 — QA: PARCIAL
-         [x] Customer linkage fix — 5936/5936 orders com customer_id (2026-04-12)
-         [x] Raw table dedup — unique index + upsert ignoreDuplicates (2026-04-12)
+         [x] T35 filtros — period filter 7d/15d/30d/90d/1ano + date picker
+             custom (from/to) + filtro persiste entre abas (2026-04-12)
+         [x] Mobile responsive (2026-04-12)
+         [x] Dark mode com toggle (2026-04-12)
+         [x] Auto-refresh a cada 5 min (2026-04-12)
+         [x] Deploy Vercel — live em miranda-estudio-dashboard.vercel.app
+         [x] Mapa do Brasil interativo (react-simple-maps choropleth)
+         [x] Comparativo mensal com filtro de ano + total anual
+         [x] Recorrencia de clientes split por fonte + donut consolidado
+         [x] Top clientes em todas as 3 abas
+         [x] % participacao nos top produtos
+         [x] Top cidades na aba Nuvemshop
+Etapa 8 — QA: CONCLUIDA (2026-04-12)
+         [x] T36 Validacao Conta Azul — APROVADO
+         [x] T37 Validacao Nuvemshop — APROVADO (cross-check API OK)
+         [x] T39 Validacao consolidacao — APROVADO
+         [x] Customer linkage fix — 7058/7058 orders com customer_id (100%)
+         [x] Raw table dedup — unique index + upsert ignoreDuplicates
+         [x] Revisao completa final: banco, views, Vercel, Actions, testes
 Etapa 9 — Divida tecnica: PARCIAL
          [~] T44 LGPD webhooks — stubs respondendo 200 (falta implementacao real)
          [x] T45 NF-e detail — RESOLVIDO
