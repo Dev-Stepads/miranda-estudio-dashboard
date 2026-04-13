@@ -36,14 +36,12 @@ export default async function NuvemshopPage({
   const totalOrders = daily.reduce((sum, r) => sum + r.orders_count, 0);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Previous period for comparison
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
+  // Previous period for comparison — use date strings to avoid timezone issues
   const prevRevenue = prevDaily
-    .filter(r => new Date(r.day) < cutoff)
+    .filter(r => r.day < period.since)
     .reduce((sum, r) => sum + r.gross_revenue, 0);
   const prevOrders = prevDaily
-    .filter(r => new Date(r.day) < cutoff)
+    .filter(r => r.day < period.since)
     .reduce((sum, r) => sum + r.orders_count, 0);
 
   const totalAbandoned = abandoned.reduce((sum, r) => sum + r.abandoned_count, 0);

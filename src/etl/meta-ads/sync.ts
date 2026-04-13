@@ -264,5 +264,40 @@ export async function syncMetaAds(
     results.push(await syncLevel(ctx, level));
   }
 
+  // Cleanup raw tables — retain only last 90 days to prevent unbounded growth.
+  // With cron every 30 min, raw tables grow ~11k rows/day without cleanup.
+  await cleanupRawTables(ctx);
+
   return results;
+}
+
+// ------------------------------------------------------------
+// Raw table retention — delete rows older than 90 days
+// ------------------------------------------------------------
+
+const RAW_RETENTION_DAYS = 90;
+
+async function cleanupRawTables(ctx: MetaSyncContext): Promise<void> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RAW_RETENTION_DAYS);
+  const cutoffStr = cutoff.toISOString().split('T')[0]!;
+
+  const tables = [
+    'raw_meta_insights_campaign',
+    'raw_meta_insights_adset',
+    'raw_meta_insights_ad',
+  ];
+
+  for (const table of tables) {
+    const { count, error } = await ctx.supabase
+      .from(table)
+      .delete({ count: 'exact' })
+      .lt('date_start', cutoffStr);
+
+    if (error) {
+      ctx.log(`  ⚠ cleanup ${table}: ${error.message}`);
+    } else if (count && count > 0) {
+      ctx.log(`  🧹 ${table}: deleted ${count} rows older than ${cutoffStr}`);
+    }
+  }
 }

@@ -39,6 +39,7 @@ jobs:
         run: npx tsx src/etl/nuvemshop/run.ts
 
       - name: Sync Conta Azul (incremental)
+        if: success()
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -50,6 +51,7 @@ jobs:
         run: npx tsx src/etl/conta-azul/run.ts
 
       - name: Sync Meta Ads (incremental — upsert defensivo dos ultimos 7 dias)
+        if: success()
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

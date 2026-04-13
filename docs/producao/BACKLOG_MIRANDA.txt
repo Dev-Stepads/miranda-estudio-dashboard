@@ -128,12 +128,12 @@ ETAPA 5 — INTEGRACAO META ADS
          - run.ts: CLI (default incremental 7d, --full = 90d)
         API version: v25.0 travada (D5)
         Attribution: 7d_click + 1d_view (D2)
-[x] T25 Implementar coleta de conversao — 2026-04-13
-        Mapper cobre 5 action types pra purchase (purchase,
-        offsite_conversion.fb_pixel_purchase, omni_purchase,
-        onsite_web_purchase, web_in_store_purchase). Se a Miranda
-        usar custom action_type, adicionar em PURCHASE_ACTION_TYPES
-        em mapper.ts.
+[x] T25 Implementar coleta de conversao — 2026-04-13 (fix 2026-04-13b)
+        Mapper usa pickFirstActionByPriority() — pega o PRIMEIRO
+        action_type encontrado por prioridade (canonico = "purchase").
+        FIX 2026-04-13b: versao anterior somava 5 action_types que
+        sao aliases do mesmo evento, causando 5x overcount em compras
+        e ROAS. Validado: dados 100% match com API apos fix.
 [x] T26 Criar ranking de criativos/campanhas/conjuntos — 2026-04-13
         Views ja existiam no schema (v_meta_ranking_*). Adicionada
         view nova v_meta_account_daily pra agregacao conta-inteira/

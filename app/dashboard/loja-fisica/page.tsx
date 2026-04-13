@@ -29,11 +29,9 @@ export default async function LojaFisicaPage({
   const totalOrders = caDaily.reduce((sum, r) => sum + r.orders_count, 0);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Previous period for comparison
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
+  // Previous period for comparison — use date strings to avoid timezone issues
   const prevCaDaily = prevDailyRevenue
-    .filter(r => r.source === 'conta_azul' && new Date(r.day) < cutoff);
+    .filter(r => r.source === 'conta_azul' && r.day < period.since);
   const prevRevenue = prevCaDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
   const prevOrders = prevCaDaily.reduce((sum, r) => sum + r.orders_count, 0);
 

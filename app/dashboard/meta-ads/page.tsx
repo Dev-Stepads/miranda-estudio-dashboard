@@ -33,6 +33,7 @@ export default async function MetaAdsPage({
   // ---- KPIs atual ----
   const totalSpend = daily.reduce((s, r) => s + r.spend, 0);
   const totalImpressions = daily.reduce((s, r) => s + r.impressions, 0);
+  const totalReach = daily.reduce((s, r) => s + r.reach, 0);
   const totalClicks = daily.reduce((s, r) => s + r.clicks, 0);
   const totalPurchases = daily.reduce((s, r) => s + r.purchases, 0);
   const totalPurchaseValue = daily.reduce((s, r) => s + r.purchase_value, 0);
@@ -43,9 +44,9 @@ export default async function MetaAdsPage({
   const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
 
   // ---- Periodo anterior p/ comparação ----
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
-  const prev = prevDaily.filter((r) => new Date(r.date) < cutoff);
+  // Compare date strings directly (YYYY-MM-DD) to avoid timezone issues.
+  // period.since is already in São Paulo timezone from parsePeriod().
+  const prev = prevDaily.filter((r) => r.date < period.since);
   const prevSpend = prev.reduce((s, r) => s + r.spend, 0);
   const prevPurchases = prev.reduce((s, r) => s + r.purchases, 0);
   const prevPurchaseValue = prev.reduce((s, r) => s + r.purchase_value, 0);
@@ -106,9 +107,9 @@ export default async function MetaAdsPage({
           subtitle="clique de link"
         />
         <KpiCard
-          title="Dias com spend"
-          value={formatNumber(daily.filter((r) => r.spend > 0).length)}
-          subtitle={`de ${daily.length} no período`}
+          title="Alcance"
+          value={formatNumber(totalReach)}
+          subtitle={`${formatNumber(totalImpressions)} impressões`}
         />
       </section>
 
@@ -128,11 +129,21 @@ export default async function MetaAdsPage({
           { key: 'total_purchase_value', label: 'Valor compras', align: 'right', format: 'currency' },
           { key: 'roas_str', label: 'ROAS', align: 'right' },
         ]}
-        rows={campaignRanking.map((c) => ({
-          ...c,
-          campaign_name: c.campaign_name ?? '(sem nome)',
-          roas_str: `${c.roas.toFixed(2)}x`,
-        })) as unknown as Record<string, unknown>[]}
+        rows={campaignRanking.map((c) => {
+          // Append short ID suffix when multiple campaigns share the same name
+          const sameNameCount = campaignRanking.filter(
+            (o) => o.campaign_name === c.campaign_name,
+          ).length;
+          const displayName =
+            sameNameCount > 1
+              ? `${c.campaign_name ?? '(sem nome)'} (#…${c.campaign_id.slice(-4)})`
+              : (c.campaign_name ?? '(sem nome)');
+          return {
+            ...c,
+            campaign_name: displayName,
+            roas_str: `${c.roas.toFixed(2)}x`,
+          };
+        }) as unknown as Record<string, unknown>[]}
       />
 
       {/* Ranking de criativos */}

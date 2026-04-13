@@ -751,3 +751,138 @@ DECISÕES REGISTRADAS
   Impacto:  Nenhum no codigo (regra ja respeitada nas queries e
             views de Visao Geral). O disclaimer visual evita que
             o usuario final interprete errado os numeros da aba.
+
+[2026-04-13] [DADOS] Meta Ads: purchase action_types sao aliases, nao
+             somar — usar pickFirstActionByPriority
+  Contexto: O mapper original (T25) somava 5 action_types de purchase
+            (purchase, offsite_conversion.fb_pixel_purchase,
+            omni_purchase, onsite_web_purchase, web_in_store_purchase)
+            assumindo que seriam tipos distintos de compra. Na pratica,
+            a API Meta retorna o MESMO evento sob todos os 5 aliases
+            simultaneamente, com valores identicos. Resultado: compras
+            e purchase_value estavam 5x inflados no banco, e ROAS
+            consequentemente 5x maior que o real.
+  Decisao:  Substituido sumActionsByType() por pickFirstActionByPriority()
+            em src/integrations/meta-ads/mapper.ts. O mapper agora
+            percorre os tipos em ordem de prioridade (canonico =
+            "purchase" primeiro) e retorna o valor do PRIMEIRO encontrado.
+            Se a Miranda usar um Pixel que so emite um tipo nao-canonico,
+            o fallback pega automaticamente.
+  Impacto:  Todos os dados de Meta Ads no Supabase foram re-sincronizados
+            apos o fix (npm run sync:meta-ads:full). Validacao cruzada
+            com API confirmou MATCH EXATO (Apr 6-12: 17 purchases,
+            R$5932.97). ROAS agora reflete o valor real.
+
+[2026-04-13] [DADOS] Seed data de meta_ads_insights removida do Supabase
+  Contexto: O seed.sql continha uma campanha ficticia "Coleção Outono
+            2026" (ID 23847562341) com datas relativas (now() - interval
+            '7 days'). Essa seed se movia com o tempo e poluia a janela
+            recente do dashboard, somando spend e compras inexistentes
+            aos dados reais. A campanha nao existe na API Meta.
+  Decisao:  Deletados 35 registros com campaign_id='23847562341' do
+            Supabase. O seed.sql nao foi alterado (ele so roda em
+            setup inicial e seria sobrescrito pelo ETL real de qualquer
+            forma), mas se alguem rodar seed novamente, devera limpar
+            meta_ads_insights depois.
+  Impacto:  Spend e impressions nos dias Apr 4-10 estavam inflados
+            (ex: Apr 6 mostrava R$218,52 em vez de R$73,52 real).
+            Apos limpeza + re-sync, todos os valores batem com a API.
+
+[2026-04-13] [ARQUITETURA] PostgREST limit explicito nas queries Meta Ads
+  Contexto: PostgREST (camada REST do Supabase) impoe limit default de
+            1000 rows em TODOS os planos (free, pro, enterprise). Queries
+            sem .limit() explicito sao truncadas silenciosamente. As
+            queries de ranking Meta Ads consultam tabelas base agregando
+            em JS. Com 9+ campanhas e filtro de 1 ano (365 dias),
+            fetchMetaCampaignRanking teria 3285 rows truncadas em 1000,
+            produzindo rankings incorretos.
+  Decisao:  Adicionado .limit(10000) em fetchMetaDaily,
+            fetchMetaCampaignRanking e fetchMetaAdRanking.
+  Impacto:  Rankings agora corretos para qualquer periodo de filtro.
+
+[2026-04-13] [ARQUITETURA] Retention policy de 90 dias em raw_meta_insights_*
+  Contexto: O sync.ts insere payloads brutos em raw_meta_insights_campaign,
+            raw_meta_insights_adset e raw_meta_insights_ad a cada run do
+            ETL (append-only, sem dedup). Com cron de 30 min (48 runs/dia)
+            e ~238 rows/run, as tabelas cresceriam ~11k rows/dia ou ~4.2M
+            rows/ano. No plano free do Supabase (500 MB), isso atingiria
+            o limite em meses.
+  Decisao:  Ao final de cada syncMetaAds(), rodar cleanupRawTables() que
+            deleta registros com date_start < (hoje - 90 dias). 90 dias
+            eh suficiente para debugging e auditoria.
+  Impacto:  Raw tables estabilizam em ~(34 campanhas * 90 dias * 48 daily
+            writes)/dedup ≈ tamanho gerenciavel. Se precisar de historico
+            bruto maior, ajustar RAW_RETENTION_DAYS em sync.ts.
+
+[2026-04-13] [DADOS] PostgREST limit explicito em TODAS as queries diarias
+  Contexto: Alem das queries de Meta Ads (corrigidas acima), as queries
+            de Visao Geral e Nuvemshop TAMBEM estavam sendo truncadas.
+            v_visao_geral_daily tinha 2000+ rows (885 dias NS + 115 CA
+            x 2 fontes) e v_nuvemshop_daily tinha 1820 rows. Ambas
+            truncadas silenciosamente em 1000 pelo PostgREST default.
+            fetchDailyRevenue(period.days * 2) com filtro de 1 ano
+            retornava 1000 rows em vez de 1460 → KPIs de comparacao
+            incorretos na Visao Geral.
+  Decisao:  Adicionado .limit(10000) em fetchDailyRevenue e
+            fetchNuvemshopDaily. fetchMonthlyComparison ja tinha
+            paginacao propria (nao afetado).
+  Impacto:  Corrige KPIs de comparacao e graficos na Visao Geral,
+            Nuvemshop e Loja Fisica para periodos longos (1 ano).
+
+[2026-04-13] [ARQUITETURA] Timezone: parsePeriod() agora usa
+             America/Sao_Paulo explicitamente
+  Contexto: CLAUDE.md regra 3.2 diz "Tudo em America/Sao_Paulo".
+            Porem, parsePeriod() usava new Date() que no Vercel
+            (server em UTC) calculava "hoje" como UTC. Apos 21h SP
+            (00h UTC), o dia corrente no dashboard avancava 1 dia
+            em relacao ao banco (que armazena datas em SP). Isso
+            causava off-by-one nos filtros de periodo e comparacao.
+            Mesmo problema nos filtros de periodo anterior das 4
+            abas: usavam new Date(r.day) que parseia como UTC.
+  Decisao:  parsePeriod() agora usa Intl.DateTimeFormat com
+            timeZone='America/Sao_Paulo' (sem dependencia externa).
+            Filtros de periodo anterior nas 4 abas agora comparam
+            strings YYYY-MM-DD diretamente (r.day < period.since)
+            em vez de construir Date objects.
+  Impacto:  Dashboard inteiro agora consistente com timezone SP.
+            Sem off-by-one em nenhum horario do dia.
+
+[2026-04-13] [INTEGRACAO] Conta Azul: saveRefreshToken deve LANCAR erro
+  Contexto: O refresh_token do Conta Azul e single-use. Se o ETL consome
+            o token antigo, recebe um novo, mas falha ao salvar no
+            Supabase, o token novo se perde. Proximo run falha
+            permanentemente (token antigo ja foi invalidado).
+  Decisao:  saveRefreshToken() agora faz throw em vez de console.error
+            quando o upsert falha. O erro propaga e o cron reporta
+            falha, permitindo intervencao antes do token expirar.
+  Impacto:  Cron pode falhar se Supabase estiver fora, mas isso e
+            preferivel a perder o token silenciosamente.
+
+[2026-04-13] [DADOS] Conta Azul: fix off-by-one no chunking de NF-e
+  Contexto: O ETL quebra o periodo em janelas de 14 dias. A logica
+            original calculava windowEnd = start + 14 dias, depois
+            avancava start = windowEnd + 1 dia. NF-e emitidas
+            exatamente no windowEnd caiam em gap de 24h entre janelas.
+  Decisao:  Alterado para (MAX_WINDOW_DAYS - 1) no calculo de
+            windowEnd, garantindo janelas de 13 dias inclusivos
+            (ex: Apr 1-13, Apr 14-27). Sem gap.
+  Impacto:  Recupera vendas que estavam sendo puladas em boundaries.
+
+[2026-04-13] [DADOS] Conta Azul: quantidade fracionaria preservada
+  Contexto: NF-e permite quantidades fracionarias (1.5L, 0.25kg).
+            O ETL usava Math.round() na quantidade, arredondando
+            1.5 para 2 e corrompendo o calculo de receita por item.
+  Decisao:  Removido Math.round(). Coluna quantity no banco aceita
+            numeric, entao valores fracionarios sao armazenados
+            corretamente.
+  Impacto:  Ranking de produtos e receita por item ficam precisos.
+
+[2026-04-13] [ARQUITETURA] GitHub Actions: fail-fast entre ETL steps
+  Contexto: Se o step de Nuvemshop falhasse, Conta Azul e Meta Ads
+            rodavam mesmo assim, desperdicando minutos do Actions
+            e mascarando o erro original.
+  Decisao:  Adicionado if: success() nos steps de Conta Azul e
+            Meta Ads. Se qualquer step anterior falhar, os
+            subsequentes sao pulados.
+  Impacto:  Cron reporta falha mais rapidamente e nao executa
+            trabalho desnecessario.

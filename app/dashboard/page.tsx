@@ -46,15 +46,9 @@ export default async function VisaoGeralPage({
     fetchMonthlyComparison(36),
   ]);
 
-  // Split previous period data
-  const now = new Date();
-  const currentCutoff = new Date(now.getTime() - period.days * 24 * 60 * 60 * 1000);
-  const previousCutoff = new Date(now.getTime() - period.days * 2 * 24 * 60 * 60 * 1000);
-
-  const prevPeriodRevenue = previousRevenue.filter((r) => {
-    const d = new Date(r.day);
-    return d >= previousCutoff && d < currentCutoff;
-  });
+  // Split previous period data using date strings (YYYY-MM-DD) to avoid
+  // timezone issues. period.since is in São Paulo timezone from parsePeriod().
+  const prevPeriodRevenue = previousRevenue.filter((r) => r.day < period.since);
 
   // Current period KPIs
   const totalRevenue = currentRevenue.reduce((sum, r) => sum + r.gross_revenue, 0);
@@ -92,16 +86,17 @@ export default async function VisaoGeralPage({
         <p className="text-sm mt-2 opacity-80">
           {formatNumber(totalOrders)} pedidos
           {' · '}ticket médio {formatBRL(avgTicket)}
-          {percentChange(totalRevenue, prevTotalRevenue) !== null && (
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
-              (percentChange(totalRevenue, prevTotalRevenue) ?? 0) >= 0
-                ? 'bg-white/20'
-                : 'bg-red-400/30'
-            }`}>
-              {(percentChange(totalRevenue, prevTotalRevenue) ?? 0) >= 0 ? '↑' : '↓'}{' '}
-              {Math.abs(percentChange(totalRevenue, prevTotalRevenue) ?? 0).toFixed(1)}% vs período anterior
-            </span>
-          )}
+          {(() => {
+            const pct = percentChange(totalRevenue, prevTotalRevenue);
+            if (pct === null || !Number.isFinite(pct)) return null;
+            return (
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                pct >= 0 ? 'bg-white/20' : 'bg-red-400/30'
+              }`}>
+                {pct >= 0 ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}% vs período anterior
+              </span>
+            );
+          })()}
         </p>
       </div>
 

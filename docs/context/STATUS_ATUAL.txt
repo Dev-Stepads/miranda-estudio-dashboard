@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-13 (Meta Ads IMPLEMENTADO end-to-end — falta rodar migration + add secrets no GitHub)
+Ultima atualizacao: 2026-04-13c (auditoria completa do codebase — 13 fixes aplicados em ETLs, frontend, SQL e CI)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -28,8 +28,8 @@ Etapa 5 — Integracao Meta Ads: CONCLUIDA (codigo) — aguarda
              em 7 dias, 61780 impressions, 2641 clicks)
          [x] T24 coleta de metricas — ETL completo em
              src/etl/meta-ads/ + src/integrations/meta-ads/
-         [x] T25 coleta de conversao — mapper cobre 5 action types
-             de purchase
+         [x] T25 coleta de conversao — mapper usa pickFirstActionByPriority
+             (fix 2026-04-13b: era sumAll, causava 5x overcount)
          [x] T26 ranking campanhas/conjuntos/criativos — views
              existentes + v_meta_account_daily nova
 Etapa 6 — Consolidacao: CONCLUIDA (2026-04-12)
@@ -144,27 +144,30 @@ INTEGRACOES — progresso por fonte
   [x] Transformacao carrinhos abandonados (T22) — (2026-04-12)
   Dados no Supabase: 5948 sales NS + ~10k sale_items NS + 4913 customers + 48 checkouts
 
-[META ADS] — CODIGO PRONTO (2026-04-13), aguarda aplicacao remota
+[META ADS] — ATIVADO EM PRODUCAO (2026-04-13b)
   [x] Mapeamento tecnico (T6) — 2026-04-10
   [x] Autenticacao (T23) — 2026-04-13
        - BM ID: 130431116357346
        - Ad Account ID: act_5204712552960295
-       - System User: StepadsDashboard (camelcase — "Stepads
-         Dashboard ETL" foi rejeitado pelo Meta)
-       - App Marketing: "Miranda Dashboard ETL" (dev mode,
-         ownership na conta FB "Angelo Meirelles")
+       - System User: StepadsDashboard
+       - App Marketing: "Miranda Dashboard ETL"
        - Token validado: dados reais da Miranda fluindo
   [x] Coleta de metricas (T24) — ETL completo
-  [x] Transformacao KPIs (T25) — 5 action types pra purchase
+  [x] Transformacao KPIs (T25) — mapper corrigido (pickFirstActionByPriority)
   [x] Ranking criativos/campanhas (T26) — views + frontend completo
-  [ ] Falta (nao-bloqueia desenvolvimento):
-       - Aplicar migration 20260413120000 no Supabase remoto
-       - Adicionar secrets no GitHub (META_SYSTEM_USER_TOKEN +
-         META_AD_ACCOUNT_ID) pro cron rodar
-       - Rodar `npm run sync:meta-ads:full` uma vez pra trazer
-         historico (90 dias)
-       - Popular .env.local (na maquina do Matheus) com as 3
-         META_* vars pra testar local
+  [x] Migration 20260413120000 aplicada no Supabase — 2026-04-13b
+  [x] Secrets adicionados no GitHub Actions — 2026-04-13b
+  [x] Full sync 508 rows (90 dias) — 2026-04-13b
+  [x] Seed data ficticia removida (35 rows) — 2026-04-13b
+  [x] Validacao cruzada API vs Supabase — MATCH EXATO — 2026-04-13b
+  [x] .limit(10000) nas queries Meta Ads (previne truncamento PostgREST)
+  [x] Retention policy 90d em raw_meta_insights_* (previne crescimento ilimitado)
+  [x] KPI Reach adicionado (substituiu "Dias com spend")
+  [x] Desambiguacao de campanhas com mesmo nome no ranking
+  [x] .limit(10000) em fetchDailyRevenue + fetchNuvemshopDaily (dados truncados!)
+  [x] Timezone fix: parsePeriod() usa America/Sao_Paulo (Vercel roda UTC)
+  [x] Filtros de periodo anterior corrigidos em todas as 4 abas
+  Dados no Supabase: 508 insights (154 campaign + 160 adset + 194 ad)
 
 --------------------------------------------------------
 CONSOLIDACAO E DASHBOARD
@@ -176,7 +179,9 @@ CONSOLIDACAO E DASHBOARD
 [x] Aba Visao Geral (T31) — KPIs + donut + ranking (2026-04-12)
 [x] Aba Loja Fisica (T32) — faturamento + produtos + estado (2026-04-12)
 [x] Aba Nuvemshop (T33 aba) — faturamento + produtos + geografia + abandonados (2026-04-12)
-[~] Aba Meta Ads (T34) — placeholder (bloqueado por T23)
+[x] Aba Meta Ads (T34) — COMPLETA com dados reais (2026-04-13b)
+         8 KPIs, grafico, ranking campanhas, ranking criativos.
+         Seed data ficticia removida, purchases corrigidos.
 [x] Filtros globais (T35) — period filter 7d/15d/30d/90d/1ano (2026-04-12)
 
 --------------------------------------------------------
@@ -191,14 +196,9 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
-- META ADS: totalmente DESTRAVADO. Todo o setup manual + codigo
-  completo. Falta apenas 3 passos operacionais quando Matheus
-  estiver na maquina usual:
-    1. Aplicar migration 20260413120000 no Supabase remoto
-    2. Adicionar 2 secrets no GitHub (META_SYSTEM_USER_TOKEN +
-       META_AD_ACCOUNT_ID)
-    3. Popular .env.local + rodar `npm run sync:meta-ads:full`
-       pra hidratar 90 dias de historico
+- META ADS: RESOLVIDO. Todos os 6 passos operacionais executados
+  (2026-04-13b). Dados reais fluindo. 2 bugfixes aplicados (purchases
+  5x overcount + seed data ficticia). Falta apenas git push (passo 6).
 - COFRE DE SENHAS STEPADS (bloqueio operacional): task T46 pendente.
 - LGPD WEBHOOKS (bloqueio pre-producao): task T44 pendente.
 - OWNERSHIP DA APP META (divida tecnica): a app Marketing esta sob

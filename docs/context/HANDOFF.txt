@@ -4,15 +4,79 @@ HANDOFF — Dashboard Miranda Studio
 
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-13
-RESPONSAVEL: sessao curta 2026-04-13 — inicio do setup Meta Ads (T23)
+RESPONSAVEL: sessao 2026-04-13b — ativacao Meta Ads em producao + bugfixes
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-13) — META ADS END-TO-END IMPLEMENTADO
+0. SESSAO ATUAL (2026-04-13b) — META ADS ATIVADO + 2 BUGFIXES CRITICOS
 --------------------------------------------------------
-Sessao longa: destravou T23-T26 completamente. Setup manual do
-Facebook + ETL + migration + frontend + cron, tudo feito. Token
-validado com dados reais da Miranda.
+Sessao de ativacao: executou os 6 passos operacionais (secao 0 do
+handoff anterior) + revisou dados e descobriu 2 bugs criticos:
+
+  BUG 1 (CRITICO) — Purchases 5x overcounted no mapper
+    A API Meta retorna o MESMO evento de compra sob 5 action_types
+    (purchase, offsite_conversion.fb_pixel_purchase, omni_purchase,
+    onsite_web_purchase, web_in_store_purchase) com valores identicos.
+    O mapper somava todos, inflando compras e ROAS por 5x.
+    FIX: alterado src/integrations/meta-ads/mapper.ts — agora usa
+    pickFirstActionByPriority() em vez de sumActionsByType(). Pega
+    o PRIMEIRO tipo encontrado por prioridade (canonico = "purchase").
+
+  BUG 2 (ALTO) — Seed data ficticia poluindo dados reais
+    Campanha "Coleção Outono 2026" (ID 23847562341) do supabase/seed.sql
+    usava datas relativas (now() - interval) e se movia no tempo,
+    sempre poluindo a janela recente. Essa campanha NAO existe na API.
+    FIX: deletados 35 registros de seed da tabela meta_ads_insights.
+
+  VALIDACAO POS-FIX — dados 100% batendo com API:
+    Periodo Apr 6-12: spend=R$1073.65, impressions=61780, clicks=2641,
+    purchases=17, purchase_value=R$5932.97 — MATCH EXATO com API.
+
+  Passos operacionais executados:
+    [x] Passo 1 — .env.local populado com META_* vars
+    [x] Passo 2 — Migration 20260413120000 aplicada no Supabase
+    [x] Passo 3 — Secrets adicionados no GitHub Actions
+    [x] Passo 4 — npm run sync:meta-ads:full (508 rows, 90 dias)
+    [x] Passo 5 — Validacao cruzada API vs Supabase (2 bugs encontrados e fixados)
+    [ ] Passo 6 — Deploy (git push) — PENDENTE
+
+  FIXES ADICIONAIS (mesma sessao):
+    [x] P1 — .limit(10000) em fetchMetaCampaignRanking, fetchMetaAdRanking
+        e fetchMetaDaily (PostgREST default 1000 truncava silenciosamente)
+    [x] P2 — Retention policy de 90 dias nas raw_meta_insights_* tables
+        (sem cleanup, cresciam ~11k rows/dia com cron de 30 min)
+    [x] P3 — KPI "Dias com spend" substituido por "Alcance (Reach)"
+        (metrica mais relevante para analise de midia)
+    [x] P4 — Campanhas com mesmo nome no ranking agora mostram sufixo
+        do ID (#...XXXX) para desambiguacao
+    [x] P5 — .limit(10000) em fetchDailyRevenue e fetchNuvemshopDaily
+        (v_visao_geral_daily tinha 2000+ rows e v_nuvemshop_daily
+        1820 rows — AMBAS ja estavam sendo truncadas em 1000)
+    [x] P6 — Timezone fix: parsePeriod() agora usa Intl.DateTimeFormat
+        com timeZone='America/Sao_Paulo' (antes usava new Date() que
+        no Vercel roda em UTC, causando off-by-one apos 21h SP)
+    [x] P7 — Filtros de periodo anterior em TODAS as 4 abas corrigidos
+        para comparar strings YYYY-MM-DD diretamente em vez de
+        new Date() (que fazia parse em UTC)
+
+  AUDITORIA COMPLETA DO CODEBASE (mesma sessao):
+    [x] C1 — saveRefreshToken agora lanca erro se upsert falhar
+        (antes logava e engolia — perdia token single-use)
+    [x] C2 — Date chunking Conta Azul: fix off-by-one nas janelas
+        de 14 dias (NF-e em boundary eram puladas)
+    [x] C3 — Math.round(quantidade) removido (perdia precisao
+        em itens fracionarios como litros/kg)
+    [x] C4 — GitHub Actions: if: success() nos steps Conta Azul
+        e Meta Ads (fail-fast se step anterior falhar)
+    [x] H1 — sale_items delete+insert com snapshot/rollback
+    [x] H2 — Mapa de pagamentos completado (codigos 10-14,19,90)
+    [x] H3 — v_loja_fisica_estado: filtro c.state IS NOT NULL
+        + indice sale_items.product_name (migration nova)
+    [x] H4 — toSaoPauloDateStr: ! removido, optional chaining
+    [x] H5 — formatCurrency: guard NaN/Infinity nos graficos
+    [x] M1 — raw payload inserts Nuvemshop com error check
+    [x] M3 — percentChange() chamada 1x em vez de 3x
+    [x] M5 — Conta Azul: XML salvo em raw ANTES do parse
 
 O que foi feito nesta sessao (ordem cronologica):
 

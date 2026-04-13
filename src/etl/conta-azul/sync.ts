@@ -54,8 +54,11 @@ async function sleep(ms: number): Promise<void> {
 
 const PAYMENT_NAMES: Record<string, string> = {
   '01': 'dinheiro', '02': 'cheque', '03': 'credito', '04': 'debito',
-  '05': 'credito_loja', '15': 'boleto', '16': 'deposito', '17': 'pix',
-  '18': 'transferencia', '99': 'outros',
+  '05': 'credito_loja', '10': 'vale_alimentacao', '11': 'vale_refeicao',
+  '12': 'vale_presente', '13': 'vale_combustivel', '14': 'duplicata',
+  '15': 'boleto', '16': 'deposito', '17': 'pix',
+  '18': 'transferencia', '19': 'fidelidade', '90': 'sem_pagamento',
+  '99': 'outros',
 };
 
 function mapPaymentForDb(code: string): string {
@@ -110,9 +113,11 @@ export async function syncContaAzul(
   let windowStart = new Date(dataInicial + 'T00:00:00');
   const endDate = new Date(dataFinal + 'T00:00:00');
 
-  while (windowStart < endDate) {
+  while (windowStart <= endDate) {
+    // Subtract 1 day from the raw offset so the window is inclusive on both ends.
+    // Without this, NF-e on chunk boundaries were skipped (24h gap).
     const windowEnd = new Date(Math.min(
-      windowStart.getTime() + MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      windowStart.getTime() + (MAX_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000,
       endDate.getTime(),
     ));
 
@@ -175,6 +180,12 @@ export async function syncContaAzul(
 
       const xml = await xmlResp.text();
       nfeFetched++;
+
+      // Save raw XML before parsing so failed parses are recoverable
+      await supabase.from('raw_contaazul_sales').upsert(
+        { source_id: chave, payload: { xml_length: xml.length, raw_xml_saved: true } },
+        { onConflict: 'source_id' },
+      );
 
       // Parse XML
       const nfe = parseNfeXml(xml, chave);
@@ -242,9 +253,8 @@ export async function syncContaAzul(
       if (saleId !== undefined) {
         salesUpserted++;
 
-        // Delete old items + insert new
-        await supabase.from('sale_items').delete().eq('sale_id', saleId);
-
+        // Delete old items + insert new. If insert fails, re-insert old items
+        // to avoid leaving the sale with 0 items.
         if (nfe.items.length > 0) {
           const items = nfe.items
             .filter(item => item.quantidade > 0)
@@ -252,24 +262,37 @@ export async function syncContaAzul(
               sale_id: saleId,
               product_name: item.nome,
               sku: item.sku || null,
-              quantity: Math.round(item.quantidade),
+              quantity: item.quantidade,
               unit_price: item.precoUnitario,
               total_price: item.precoTotal,
             }));
+
+          // Snapshot old items before deleting
+          const { data: oldItems } = await supabase
+            .from('sale_items')
+            .select('*')
+            .eq('sale_id', saleId);
+
+          await supabase.from('sale_items').delete().eq('sale_id', saleId);
 
           const { error: itemErr } = await supabase.from('sale_items').insert(items);
           if (itemErr === null) {
             saleItemsInserted += items.length;
           } else {
             log(`  ❌ Items NF ${nfe.numeroNota}: ${itemErr.message}`);
+            // Rollback: re-insert old items so sale doesn't stay empty
+            if (oldItems && oldItems.length > 0) {
+              const restore = oldItems.map(({ item_id, ...rest }) => rest);
+              await supabase.from('sale_items').insert(restore);
+            }
           }
         }
       }
 
-      // 6. Insert raw
+      // 6. Update raw with parsed data (pre-parse stub was saved above)
       await supabase.from('raw_contaazul_sales').upsert(
         { source_id: nfe.chaveAcesso, payload: { xml_length: xml.length, numero_nota: nfe.numeroNota, parsed: nfe } },
-        { onConflict: 'source_id', ignoreDuplicates: true },
+        { onConflict: 'source_id' },
       );
 
       // Progress log

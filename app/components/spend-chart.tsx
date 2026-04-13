@@ -23,6 +23,7 @@ interface SpendChartProps {
 }
 
 function formatCurrency(value: number) {
+  if (!Number.isFinite(value)) return '—';
   if (value >= 1000) return `R$${(value / 1000).toFixed(1)}k`;
   return `R$${value.toFixed(0)}`;
 }

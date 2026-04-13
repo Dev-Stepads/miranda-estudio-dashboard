@@ -85,10 +85,11 @@ async function saveRefreshToken(supabase: SupabaseClient, newToken: string): Pro
     );
 
   if (error !== null) {
-    console.error(`  ❌ Failed to save refresh_token to Supabase: ${error.message}`);
-  } else {
-    console.log('  ✅ Refresh token saved to Supabase etl_config');
+    // CRITICAL: rethrow — the old token is already consumed (single-use).
+    // If we swallow this, the next run will fail permanently.
+    throw new Error(`Failed to save refresh_token to Supabase: ${error.message}`);
   }
+  console.log('  ✅ Refresh token saved to Supabase etl_config');
 }
 
 function formatDate(d: Date): string {

@@ -43,6 +43,23 @@ export interface AbandonedData {
   total_amount: number;
 }
 
+/**
+ * Format a Date to YYYY-MM-DD in the dashboard timezone (America/Sao_Paulo).
+ * Using Intl to avoid pulling in date-fns-tz dependency.
+ */
+function toSaoPauloDateStr(d: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === 'year')?.value ?? '0000';
+  const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+  const day = parts.find((p) => p.type === 'day')?.value ?? '01';
+  return `${y}-${m}-${day}`;
+}
+
 /** Parse period from searchParams: supports { days } or { from, to } */
 export function parsePeriod(params: { days?: string; from?: string; to?: string }): {
   since: string;
@@ -60,8 +77,8 @@ export function parsePeriod(params: { days?: string; from?: string; to?: string 
   const now = new Date();
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   return {
-    since: since.toISOString().split('T')[0]!,
-    until: now.toISOString().split('T')[0]!,
+    since: toSaoPauloDateStr(since),
+    until: toSaoPauloDateStr(now),
     days,
     label: `Últimos ${days} dias`,
   };
@@ -71,10 +88,13 @@ export function parsePeriod(params: { days?: string; from?: string; to?: string 
 export async function fetchDailyRevenue(days: number = 30, from?: string, to?: string): Promise<DailyRevenue[]> {
   const supabase = getSupabase();
 
+  // PostgREST default limit = 1000. With 2 sources x 730 days (1-year
+  // comparison period), this view can return 1460 rows → silently truncated.
   let query = supabase
     .from('v_visao_geral_daily')
     .select('day, source, orders_count, gross_revenue')
-    .order('day', { ascending: true });
+    .order('day', { ascending: true })
+    .limit(10000);
 
   if (from && to) {
     query = query.gte('day', from).lte('day', to);
@@ -108,10 +128,12 @@ export async function fetchTopProducts(limit: number = 20): Promise<TopProduct[]
 export async function fetchNuvemshopDaily(days: number = 30, from?: string, to?: string): Promise<NuvemshopDaily[]> {
   const supabase = getSupabase();
 
+  // v_nuvemshop_daily has 1820+ rows (2020–2026). PostgREST truncates at 1000.
   let query = supabase
     .from('v_nuvemshop_daily')
     .select('*')
-    .order('day', { ascending: true });
+    .order('day', { ascending: true })
+    .limit(10000);
 
   if (from && to) {
     query = query.gte('day', from).lte('day', to);
@@ -376,7 +398,8 @@ export async function fetchMetaDaily(
   let query = supabase
     .from('v_meta_account_daily')
     .select('*')
-    .order('date', { ascending: true });
+    .order('date', { ascending: true })
+    .limit(10000);
 
   if (from && to) {
     query = query.gte('date', from).lte('date', to);
@@ -404,9 +427,12 @@ export async function fetchMetaCampaignRanking(
 ): Promise<MetaRankingRow[]> {
   const supabase = getSupabase();
 
+  // PostgREST default limit = 1000 rows. With 9+ campaigns x 365 days
+  // a 1-year filter hits 3000+ rows → silently truncated. Explicit limit.
   let query = supabase
     .from('v_meta_campanha_daily')
-    .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value');
+    .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value')
+    .limit(10000);
 
   if (from && to) {
     query = query.gte('date', from).lte('date', to);
@@ -470,10 +496,12 @@ export async function fetchMetaAdRanking(
 
   // v_meta_ranking_criativos soma todo o histórico — pra respeitar
   // período, consultamos a tabela base e agregamos aqui.
+  // PostgREST default limit = 1000. 15+ ads x 365 days = 5000+ rows.
   let query = supabase
     .from('meta_ads_insights')
     .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, date')
-    .eq('level', 'ad');
+    .eq('level', 'ad')
+    .limit(10000);
 
   if (from && to) {
     query = query.gte('date', from).lte('date', to);

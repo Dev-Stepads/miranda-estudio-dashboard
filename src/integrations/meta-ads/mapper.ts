@@ -21,16 +21,24 @@
 import type { MetaAction, MetaInsightsRow, CanonicalMetaInsight } from './types.ts';
 
 /**
- * Action types that count as "purchase" for this project.
- * If Miranda's Pixel uses a different event name, add it here.
+ * Purchase action types in PRIORITY ORDER (first match wins).
+ *
+ * Meta returns the SAME purchase event under multiple aliases
+ * simultaneously (purchase, omni_purchase, offsite_conversion.fb_pixel_purchase,
+ * etc.) — all with identical values. Summing them causes 5x overcount.
+ *
+ * We pick the FIRST matching type found in the array, which gives us
+ * exactly one count per purchase event. "purchase" is the canonical
+ * type returned by Meta in 2026; the others are fallbacks in case
+ * Miranda's Pixel setup only emits a non-canonical type.
  */
-const PURCHASE_ACTION_TYPES = new Set([
+const PURCHASE_ACTION_PRIORITY = [
   'purchase',
   'offsite_conversion.fb_pixel_purchase',
   'omni_purchase',
   'onsite_web_purchase',
   'web_in_store_purchase',
-]);
+];
 
 export function mapInsightToCanonical(
   raw: MetaInsightsRow,
@@ -43,8 +51,8 @@ export function mapInsightToCanonical(
     return null;
   }
 
-  const purchases = sumActionsByType(raw.actions ?? [], PURCHASE_ACTION_TYPES);
-  const purchaseValue = sumActionsByType(raw.action_values ?? [], PURCHASE_ACTION_TYPES);
+  const purchases = pickFirstActionByPriority(raw.actions ?? [], PURCHASE_ACTION_PRIORITY);
+  const purchaseValue = pickFirstActionByPriority(raw.action_values ?? [], PURCHASE_ACTION_PRIORITY);
 
   return {
     date: raw.date_start,
@@ -74,14 +82,18 @@ function parseNumeric(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function sumActionsByType(
+/**
+ * Find the FIRST action type (by priority) that exists in the actions
+ * array and return its numeric value. This avoids double-counting when
+ * Meta returns the same event under multiple aliases.
+ */
+function pickFirstActionByPriority(
   actions: MetaAction[],
-  types: Set<string>,
+  priorityTypes: string[],
 ): number {
-  let total = 0;
-  for (const action of actions) {
-    if (!types.has(action.action_type)) continue;
-    total += parseNumeric(action.value);
+  for (const type of priorityTypes) {
+    const found = actions.find((a) => a.action_type === type);
+    if (found) return parseNumeric(found.value);
   }
-  return total;
+  return 0;
 }

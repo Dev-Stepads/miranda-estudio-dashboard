@@ -213,7 +213,8 @@ export async function syncCustomers(ctx: SyncContext): Promise<SyncResult> {
       source_id: String(raw.id),
       payload: raw as unknown as Record<string, unknown>,
     }));
-    await ctx.supabase.from('raw_nuvemshop_customers').upsert(rawPayloads, { onConflict: 'source_id', ignoreDuplicates: true });
+    const { error: rawErr } = await ctx.supabase.from('raw_nuvemshop_customers').upsert(rawPayloads, { onConflict: 'source_id', ignoreDuplicates: true });
+    if (rawErr) ctx.log(`  ⚠ raw_nuvemshop_customers: ${rawErr.message}`);
   }
 
   const durationMs = Date.now() - start;
@@ -345,7 +346,8 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
         source_id: String(raw.id),
         payload: raw as unknown as Record<string, unknown>,
       }));
-      await ctx.supabase.from('raw_nuvemshop_orders').upsert(rawPayloads, { onConflict: 'source_id', ignoreDuplicates: true });
+      const { error: rawOrdErr } = await ctx.supabase.from('raw_nuvemshop_orders').upsert(rawPayloads, { onConflict: 'source_id', ignoreDuplicates: true });
+      if (rawOrdErr) ctx.log(`  ⚠ raw_nuvemshop_orders: ${rawOrdErr.message}`);
 
       inserted += saleIdMap.size;
       ctx.log(`  batch ${batchNum}/${totalBatches}: ${saleIdMap.size} sales + ${allItems.length} items`);
@@ -405,10 +407,11 @@ export async function syncAbandonedCheckouts(ctx: SyncContext): Promise<SyncResu
       }
 
       // Raw payload for history
-      await ctx.supabase.from('raw_nuvemshop_abandoned_checkouts').upsert(
+      const { error: rawAbErr } = await ctx.supabase.from('raw_nuvemshop_abandoned_checkouts').upsert(
         { source_id: String(raw.id), payload: raw as unknown as Record<string, unknown> },
         { onConflict: 'source_id', ignoreDuplicates: true },
       );
+      if (rawAbErr) ctx.log(`  ⚠ raw_nuvemshop_abandoned_checkouts: ${rawAbErr.message}`);
 
       inserted++;
     } catch (err) {
