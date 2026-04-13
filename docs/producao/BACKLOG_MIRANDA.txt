@@ -80,11 +80,74 @@ ETAPA 4 — INTEGRACAO NUVEMSHOP
 --------------------------------------------------------
 ETAPA 5 — INTEGRACAO META ADS
 --------------------------------------------------------
-[!] T23 Implementar autenticacao Meta Ads — BLOQUEADO
-        Conta dev em validacao + Miranda nao forneceu BM ID/Ad Account
-[ ] T24 Implementar coleta de metricas
-[ ] T25 Implementar coleta de conversao
-[ ] T26 Criar ranking de criativos/campanhas/conjuntos
+[x] T23 Implementar autenticacao Meta Ads — 2026-04-13
+        Setup manual do Facebook (~1h) + validacao end-to-end.
+        [x] BM ID: 130431116357346
+        [x] Ad Account ID: 5204712552960295 (API: act_5204712552960295)
+        [x] "Controle Total" concedido pela Lucca Cardoso (Miranda)
+            no BM via convite ao dev@stepads.com.br (2026-04-13)
+        [x] Workaround conta FB alternativa: dev@stepads.com.br foi
+            rejeitada pelo Facebook no cadastro de conta FB. Convite
+            aceito via conta "Angelo Meirelles" (ver DECISOES
+            2026-04-13 "App Marketing sob conta FB alternativa")
+        [x] 2FA via app de autenticacao ativado na conta FB (politica
+            Meta pra Controle Total — sem 2FA o BM nao libera)
+        [x] App Marketing "Miranda Dashboard ETL" criada em
+            developers.facebook.com, tipo Business, caso de uso
+            "Criar e gerenciar anuncios com a API de Marketing"
+        [x] META_APP_ID + META_APP_SECRET coletados (nao escritos em
+            arquivos do repo — passaram pelo chat; T47 pra rotacao)
+        [x] System User "StepadsDashboard" criado no BM (nome inicial
+            "Stepads Dashboard ETL" foi rejeitado pelo Meta — usamos
+            camelcase sem espacos)
+        [x] App Marketing atribuida ao System User em Configuracoes
+            da Empresa > Aplicativos > Miranda Dashboard ETL >
+            Adicionar pessoas (destrava o fluxo de gerar token)
+        [x] Ad Account atribuida ao System User com permissao "Ver
+            desempenho"
+        [x] Token permanente gerado (scopes ads_read +
+            business_management, "Nunca expira")
+        [x] Token validado end-to-end via curl contra Graph API v25.0:
+             GET /act_5204712552960295 → "Miranda Estudio - Conta
+               de anuncios", BRL, America/Sao_Paulo, status=ACTIVE
+             GET /act_5204712552960295/insights last_7d →
+               spend R$1073,65 / 61780 impressions / 2641 clicks /
+               CTR 4,27% / CPC R$0,41 (dados REAIS da Miranda)
+        [ ] Adicionar segundo admin FB na app Marketing (mitigacao
+            de ownership — nao bloqueante, fazer depois)
+[x] T24 Implementar coleta de metricas — 2026-04-13
+        src/integrations/meta-ads/ + src/etl/meta-ads/
+         - client.ts: MetaAdsClient com paginacao cursor + BUC rate
+           limit (backoff @80%, honor estimated_time_to_regain)
+         - rate-limit.ts: parser X-Business-Use-Case-Usage +
+           X-Ad-Account-Usage
+         - schemas.ts: Zod com passthrough pra robustez
+         - mapper.ts: raw -> canonical, extrai purchases de actions[]
+         - sync.ts: campaign -> adset -> ad, chunking mensal,
+           upsert defensivo 7d (decisao D4)
+         - run.ts: CLI (default incremental 7d, --full = 90d)
+        API version: v25.0 travada (D5)
+        Attribution: 7d_click + 1d_view (D2)
+[x] T25 Implementar coleta de conversao — 2026-04-13
+        Mapper cobre 5 action types pra purchase (purchase,
+        offsite_conversion.fb_pixel_purchase, omni_purchase,
+        onsite_web_purchase, web_in_store_purchase). Se a Miranda
+        usar custom action_type, adicionar em PURCHASE_ACTION_TYPES
+        em mapper.ts.
+[x] T26 Criar ranking de criativos/campanhas/conjuntos — 2026-04-13
+        Views ja existiam no schema (v_meta_ranking_*). Adicionada
+        view nova v_meta_account_daily pra agregacao conta-inteira/
+        dia via migration 20260413120000.
+        Frontend em app/dashboard/meta-ads/page.tsx com:
+         - 8 KPI cards (spend, purchases, ROAS, CPA, impressions,
+           clicks, CPC, dias com spend) + comparacao vs periodo ant.
+         - ComposedChart spend (bar) + purchase_value (line)
+         - Ranking de campanhas (period-scoped)
+         - Ranking de criativos nivel ad (period-scoped)
+         - Disclaimer: Meta Ads NAO soma no faturamento da Visao
+           Geral (CLAUDE.md 3.1)
+         - Empty-state pra quando ETL ainda nao rodou
+        Novo componente app/components/spend-chart.tsx
 
 --------------------------------------------------------
 ETAPA 6 — CONSOLIDACAO
@@ -111,7 +174,11 @@ ETAPA 7 — DASHBOARD
          Faturamento, produtos, demografia por estado.
 [x] T33 Criar aba Nuvemshop — 2026-04-12
          Faturamento, produtos, geografia, abandonados.
-[~] T34 Criar aba Meta Ads — placeholder (bloqueado por T23)
+[x] T34 Criar aba Meta Ads — 2026-04-13
+         Substituiu o placeholder por aba completa com KPIs (spend,
+         ROAS, CPA, CPC, CTR, purchases), grafico de serie temporal
+         spend vs purchase_value, ranking de campanhas e ranking
+         de criativos. Ver detalhes em T26.
 [x] T35 Criar filtros globais — 2026-04-12
          Period filter 7d/15d/30d/90d/1ano via URL search params.
          Funciona em todas as abas. KPI comparison busca 2x periodo

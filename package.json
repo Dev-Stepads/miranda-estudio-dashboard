@@ -15,7 +15,9 @@
     "sync:nuvemshop": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts",
     "sync:nuvemshop:full": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts --full",
     "sync:contaazul": "tsx --env-file=.env.local src/etl/conta-azul/run.ts",
-    "sync:contaazul:full": "tsx --env-file=.env.local src/etl/conta-azul/run.ts --full"
+    "sync:contaazul:full": "tsx --env-file=.env.local src/etl/conta-azul/run.ts --full",
+    "sync:meta-ads": "tsx --env-file=.env.local src/etl/meta-ads/run.ts",
+    "sync:meta-ads:full": "tsx --env-file=.env.local src/etl/meta-ads/run.ts --full"
   },
   "repository": {
     "type": "git",

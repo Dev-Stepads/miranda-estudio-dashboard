@@ -3,9 +3,244 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-12
-RESPONSAVEL: Matheus (sessao longa 2026-04-12 via Claude)
+DATA: 2026-04-13
+RESPONSAVEL: sessao curta 2026-04-13 — inicio do setup Meta Ads (T23)
 BRANCH: main
+
+--------------------------------------------------------
+0. SESSAO ATUAL (2026-04-13) — META ADS END-TO-END IMPLEMENTADO
+--------------------------------------------------------
+Sessao longa: destravou T23-T26 completamente. Setup manual do
+Facebook + ETL + migration + frontend + cron, tudo feito. Token
+validado com dados reais da Miranda.
+
+O que foi feito nesta sessao (ordem cronologica):
+
+  FASE 1 — SETUP MANUAL DO FACEBOOK (~1h de UI clicking)
+  ------
+  * Recebidos da Miranda (Lucca Cardoso):
+      BM ID: 130431116357346
+      Ad Account ID: 5204712552960295 (API: act_5204712552960295)
+      Permissao: Controle Total no BM
+  * Descoberto: dev@stepads.com.br foi REJEITADA pelo Facebook no
+    cadastro de conta FB. Decisao: usar conta FB alternativa
+    "Angelo Meirelles" pra aceitar o convite e operar o BM.
+    (Ver DECISOES 2026-04-13 — ownership risk documentado)
+  * 2FA ativado na conta FB (politica Meta pra Controle Total —
+    sem 2FA a Central de Contas bloqueia acesso)
+  * App Marketing "Miranda Dashboard ETL" criada em
+    developers.facebook.com (tipo Business, caso de uso Marketing API)
+  * App ID + App Secret coletados (ficam no chat — T47 pra rotacao)
+  * System User "StepadsDashboard" criado no BM (nome com espacos
+    foi rejeitado — usamos camelcase)
+  * App Marketing atribuida ao System User (passo que a gente
+    esquece, mas sem ele o "Gerar token" aparece vazio: erro
+    "Nenhuma permissao disponivel")
+  * Ad Account atribuida ao System User com permissao "Ver desempenho"
+  * Token permanente gerado (ads_read + business_management,
+    "Nunca expira")
+
+  FASE 2 — VALIDACAO END-TO-END (curl)
+  ------
+  * GET /act_5204712552960295 retornou:
+      name = "Miranda Estudio - Conta de anuncios"
+      status = ATIVA (1)
+      currency = BRL
+      timezone_name = America/Sao_Paulo
+      business.id = 130431116357346 (match BM)
+  * GET /act_5204712552960295/insights last_7d retornou:
+      spend = R$ 1073,65
+      impressions = 61780
+      clicks = 2641
+      CTR = 4,27%
+      CPC = R$ 0,41
+      purchases/value vieram no payload completo
+  * Confirmado: tudo funcionando, scopes OK, conta ativa.
+
+  FASE 3 — CODIGO ETL + FRONTEND
+  ------
+  Novos arquivos criados:
+    src/integrations/meta-ads/
+      - schemas.ts        (Zod, passthrough defensivo)
+      - types.ts          (z.infer + CanonicalMetaInsight)
+      - rate-limit.ts     (parser X-Business-Use-Case-Usage + decisao
+                           de backoff com threshold 80%)
+      - client.ts         (MetaAdsClient: getAdAccount, listInsights
+                           com paginacao cursor + backoff automatico)
+      - mapper.ts         (raw -> canonical, extrai purchases de
+                           actions[] por multiplos action_types)
+    src/etl/meta-ads/
+      - sync.ts           (syncMetaAds + syncLevel: campaign -> adset
+                           -> ad, chunking mensal, upsert defensivo
+                           nos ultimos 7 dias per D4)
+      - run.ts            (CLI: default incremental 7d, --full = 90d,
+                           --days N custom)
+    app/components/
+      - spend-chart.tsx   (ComposedChart: spend bar + purchase_value
+                           linha, com formatacao BRL)
+    supabase/migrations/
+      - 20260413120000_meta_ads_account_view.sql
+        Contem 2 coisas:
+         (1) Fix de schema: drop do unique index com expression
+             (coalesce(...,'')) + substituicao por UNIQUE CONSTRAINT
+             real em colunas simples. Columns adset_id e ad_id agora
+             sao NOT NULL DEFAULT ''. Necessario porque Supabase JS
+             upsert onConflict so funciona com constraint em colunas
+             simples, nao com expression indexes.
+         (2) View nova v_meta_account_daily (agregacao conta-inteira
+             por dia, apenas level='campaign' pra evitar double-count)
+    .github/workflows/sync-nuvemshop.yml
+      - RENOMEADO no header: "Sync ETL (Nuvemshop + Conta Azul + Meta Ads)"
+      - Novo step "Sync Meta Ads (incremental)" no final
+      - timeout-minutes: 15 -> 20
+
+  Arquivos modificados:
+    app/dashboard/meta-ads/page.tsx  (REESCRITO — substituiu
+      placeholder por aba completa com 8 KPI cards, grafico,
+      2 rankings, disclaimer, empty-state)
+    app/lib/queries.ts  (adicionadas fetchMetaDaily,
+      fetchMetaCampaignRanking, fetchMetaAdRanking + interfaces)
+    package.json  (scripts sync:meta-ads + sync:meta-ads:full)
+    .env.example  (vars META_* com docstring + default do
+      META_AD_ACCOUNT_ID e META_BUSINESS_ID preenchidos pq nao
+      sao credenciais)
+
+Nenhum codigo foi alterado nas ETLs de Nuvemshop ou Conta Azul.
+
+O QUE O MATHEUS PRECISA FAZER NA MAQUINA DELE (essa maquina atual
+  nao tem .env.local — Matheus esta em maquina nao-habitual):
+
+  PASSO 1 — Garantir .env.local com as META_* vars
+    Adicionar (ou atualizar) em .env.local:
+      META_APP_ID=<valor que passou pelo chat>
+      META_APP_SECRET=<valor que passou pelo chat — T47 rotaciona depois>
+      META_SYSTEM_USER_TOKEN=<valor que passou pelo chat — T47 rotaciona depois>
+      META_AD_ACCOUNT_ID=act_5204712552960295
+      META_BUSINESS_ID=130431116357346
+      META_API_VERSION=v25.0
+    Os valores exatos passaram pelo chat desta sessao —
+    Matheus tem o historico, ou pode regenerar via BM (token)
+    e developers.facebook.com (app_id, app_secret).
+
+  PASSO 2 — Aplicar a migration no Supabase
+    No painel do Supabase > SQL Editor, rodar o conteudo de:
+      supabase/migrations/20260413120000_meta_ads_account_view.sql
+    Ela eh idempotente (drop if exists + create or replace) entao
+    pode rodar mais de uma vez sem problema.
+
+  PASSO 3 — Adicionar secrets no GitHub
+    Settings > Secrets and variables > Actions > New repository secret:
+      META_SYSTEM_USER_TOKEN = <o token>
+      META_AD_ACCOUNT_ID = act_5204712552960295
+    (META_APP_ID, META_APP_SECRET e META_BUSINESS_ID NAO sao
+    necessarios no cron — o ETL so precisa do token + account_id)
+
+  PASSO 4 — Primeiro sync full
+    cd para o repo, rodar:
+      npm install  (se nao atualizou deps recentemente)
+      npm run sync:meta-ads:full
+    Isso vai puxar os ultimos 90 dias de insights para os 3 niveis
+    (campaign, adset, ad). Deve levar alguns minutos. Output mostra
+    progresso por nivel + resumo final.
+
+  PASSO 5 — Ver no frontend
+    npm run dev
+    Abrir localhost:3000 > Meta Ads. Ja deve mostrar KPIs, grafico,
+    rankings com dados reais.
+
+  PASSO 6 — Deploy
+    git push
+    Vercel redeploy automatico. O cron de 30 min ja esta configurado
+    pra rodar Meta Ads junto com Nuvemshop e Conta Azul.
+
+DIVIDAS TECNICAS NOVAS ABERTAS NESTA SESSAO:
+  * T47 lista adicional: META_APP_SECRET + META_SYSTEM_USER_TOKEN
+    passaram pelo chat, rotacionar antes de producao real
+  * Ownership da app Marketing: mitigacao pendente (adicionar 2o
+    admin FB quando houver conta disponivel — ver DECISOES)
+
+NENHUM CODIGO DE NUVEMSHOP OU CONTA AZUL FOI TOCADO.
+
+--------------------------------------------------------
+0b. SESSAO ANTERIOR — apagar quando ja nao for util
+--------------------------------------------------------
+
+Fatos novos descobertos hoje:
+  * Miranda (Lucca Cardoso) forneceu:
+      - BM ID: 130431116357346
+      - Ad Account ID: 5204712552960295
+        (para Marketing API usar como act_5204712552960295)
+      - Permissao "Controle Total" dada a dev@stepads.com.br no BM
+  * Bloqueio novo: dev@stepads.com.br NAO foi aprovada pelo Facebook
+    no cadastro de conta FB pessoal. Sem conta FB, nao da pra
+    administrar app no developers.facebook.com nem aceitar convite
+    de BM logado com essa conta.
+  * Workaround acordado: usar conta FB alternativa ("Angelo Ribeiro"
+    no momento) para aceitar o convite do BM da Miranda. Facebook
+    permite vincular o convite a qualquer conta FB logada quando
+    clica no link — nao precisa corresponder ao email convidado.
+  * Decisao formal salva em DECISOES.txt (2026-04-13). Inclui risco
+    de ownership: se a conta FB "Angelo Ribeiro" for perdida, a app
+    Marketing que ela criar fica orfa (token do System User continua
+    funcionando, mas perde-se administracao).
+
+Onde parou (passo-a-passo do Facebook):
+  [x] Aceite inicial do convite em business.facebook.com aberto
+  [x] Formulario "Meta Business Portfolio" pagina 1 de 3 preenchido
+  [x] 2FA via app de autenticacao ativado na conta FB "Angelo Ribeiro"
+      (politica Meta exigia para Controle Total no BM)
+  [x] Acesso ao BM da Miranda confirmado no business.facebook.com
+  [x] App Marketing "Miranda Dashboard ETL" criada em
+      developers.facebook.com:
+        - Tipo: Business
+        - Caso de uso: "Criar e gerenciar anuncios com a API de Marketing"
+        - Associada ao BM da Miranda (130431116357346)
+        - Modo: Desenvolvimento (nao precisa publicar — System User
+          Token funciona em Development tier)
+  [x] META_APP_ID e META_APP_SECRET coletados via
+      Configuracoes do app > Basico
+      (valores NAO escritos neste arquivo — ficam so no chat da
+       sessao ate serem escritos em .env.local na secao 4 do
+       passo a passo; T47 marca esses 2 secrets pra rotacao
+       porque passaram pelo chat)
+  [~] TRAVADO AGORA: criar System User "StepadsDashboard (nome final — "Stepads Dashboard ETL" foi rejeitado
+      pelo Meta por conter espacos/acronimo, usamos camelcase)" no BM
+      da Miranda em business.facebook.com > Configuracoes da empresa
+      > Usuarios > Usuarios do sistema
+
+Proximo passo EXATO quando retomar:
+  1. Ir em https://business.facebook.com/ > seletor de BM >
+     Miranda Estudio
+  2. Engrenagem (canto inferior esquerdo) > "Configuracoes da
+     empresa" (Business Settings)
+  3. Menu esquerdo: Usuarios > Usuarios do sistema > Adicionar
+     - Nome: "StepadsDashboard (nome final — "Stepads Dashboard ETL" foi rejeitado
+      pelo Meta por conter espacos/acronimo, usamos camelcase)"
+     - Funcao: Funcionario (Employee)
+  4. Selecionar o System User recem-criado > "Adicionar ativos":
+     - Tipo: Contas de Anuncios
+     - Selecionar act_5204712552960295
+     - Permissao: "Ver desempenho" (View Performance)
+  5. Voltando na tela do System User > "Gerar novo token"
+     - App: selecionar "Miranda Dashboard ETL"
+     - Token expires in: NEVER (essencial — senao ETL quebra em 60d)
+     - Scopes: marcar ads_read + business_management
+     - Gerar
+  6. COPIAR O TOKEN IMEDIATAMENTE (Facebook nao mostra de novo)
+  7. Mandar o token pro Claude — ele popula .env.local com os 3
+     secrets de uma vez e comeca o codigo (secao 5 deste handoff)
+  8. Opcional (mitigacao nao-bloqueante): voltar em
+     developers.facebook.com > Miranda Dashboard ETL >
+     Configuracoes > Basico > Funcoes do app > Administradores >
+     adicionar segundo admin FB (mitigacao de ownership — ver
+     DECISOES 2026-04-13)
+
+Arquivos de referencia nesta sessao:
+  * capturas salvas em /c/Users/User/Desktop/miranda/:
+      - captura permissao lucca.png  (print da permissao Controle Total)
+      - convite miranda.png          (print pagina 1 de 3 do convite)
+      - codigo verificacao.png       (print tela de 2FA)
+      - alteracao de conta.png       (print Central de Contas — onde travou)
 
 --------------------------------------------------------
 1. O que foi feito neste push
@@ -113,10 +348,13 @@ SESSAO MONSTRO 2026-04-12 — ETL real + Frontend completo
 --------------------------------------------------------
 3. O que ainda nao esta pronto
 --------------------------------------------------------
-- Meta Ads (bloqueado por 2 lados humanos):
-  * Conta dev@stepads.com.br em validacao no developers.facebook.com
-  * Miranda precisa fornecer: BM ID, Ad Account ID, acesso ao BM
-  * Nenhum progresso tecnico possivel ate esses bloqueios sairem
+- Meta Ads (EM ANDAMENTO — ver secao 0 deste handoff):
+  * BM ID, Ad Account ID e permissao no BM JA foram fornecidos
+    pela Miranda (Lucca Cardoso) em 2026-04-13
+  * dev@stepads.com.br foi rejeitada pelo Facebook — workaround
+    com conta FB alternativa em andamento
+  * Travado no passo de 2FA obrigatorio na Central de Contas
+  * Codigo ainda nao foi tocado — frente continua 100% manual
 
 - Webhooks LGPD Nuvemshop (T44):
   * 3 URLs placeholder cadastradas mas rotas NAO existem no Vercel
@@ -150,8 +388,14 @@ SESSAO MONSTRO 2026-04-12 — ETL real + Frontend completo
 --------------------------------------------------------
 4. Bloqueios encontrados
 --------------------------------------------------------
-- META ADS: conta dev@stepads.com.br em validacao + Miranda nao
-  respondeu com BM ID / Ad Account ID / acesso ao BM.
+- META ADS (parcialmente destravado em 2026-04-13):
+  * Miranda JA forneceu BM ID (130431116357346), Ad Account ID
+    (5204712552960295) e permissao Controle Total no BM.
+  * dev@stepads.com.br foi REJEITADA pelo Facebook no cadastro
+    de conta FB. Decisao: usar conta FB alternativa para aceitar
+    o convite (ver DECISOES 2026-04-13).
+  * Bloqueio atual: 2FA obrigatorio na Central de Contas da conta
+    FB alternativa. Proximo passo em secao 0.
 - COFRE DE SENHAS: proximo do revezamento nao consegue credenciais
   sem pedir ao Matheus (T46).
 - LGPD: webhooks placeholder vao retornar 404 se Nuvemshop pingar.
@@ -169,30 +413,27 @@ ANTES DE COMECAR:
   - npm test (validar 109+ tests)
   - npm run dev (frontend em localhost:3000)
 
-PROXIMO PASSO IMEDIATO — 3 frentes abertas por prioridade:
+PROXIMO PASSO IMEDIATO — META ADS ATIVAR EM PRODUCAO
 
-  FRENTE 1 — Deploy Vercel + QA (RECOMENDACAO FORTE)
-    O frontend esta pronto localmente. Proximo:
-    1.1. Fazer push do codigo frontend e validar deploy no Vercel
-    1.2. Testar as 4 abas com dados reais no ambiente de producao
-    1.3. Cruzar faturamento do dashboard com relatorios reais da Miranda
-         (QA tasks T36-T42)
-    1.4. Ajustar filtros/KPIs conforme feedback
+  Todo o codigo, migration, frontend e cron ja foram feitos nesta
+  sessao. O que falta eh operacional (nao-codigo) e precisa ser
+  feito na maquina usual do Matheus (esta maquina nao tem o
+  .env.local). Ver secao 0 para o passo-a-passo.
 
-  FRENTE 2 — Webhooks LGPD (T44) + robustez do ETL
-    2.1. Criar 3 API routes Next.js para LGPD:
-         /api/webhooks/nuvemshop/lgpd/store-redact
-         /api/webhooks/nuvemshop/lgpd/customers-redact
-         /api/webhooks/nuvemshop/lgpd/customers-data-request
-    2.2. Validar HMAC com NUVEMSHOP_CLIENT_SECRET
-    2.3. Implementar logica de DELETE/export conforme MAPEAMENTO_NUVEMSHOP.txt §A9
-    2.4. Monitorar GitHub Actions cron — garantir que ETL incremental
-         esta rodando sem erros
+  Resumo dos 6 passos operacionais (detalhados na secao 0):
+    1. Popular .env.local com as META_* vars
+    2. Aplicar migration 20260413120000 no Supabase remoto
+    3. Adicionar secrets (META_SYSTEM_USER_TOKEN +
+       META_AD_ACCOUNT_ID) no GitHub
+    4. Rodar `npm run sync:meta-ads:full` pra hidratar 90d
+    5. Validar aba Meta Ads no frontend local
+    6. git push pro cron pegar
 
-  FRENTE 3 — Meta Ads (BLOQUEADO — aguardando humanos)
-    Nao comecar ate:
-    (a) Conta Facebook dev sair da validacao
-    (b) Miranda fornecer BM ID + Ad Account ID + acesso ao BM
+  FRENTES EM STANDBY:
+    - LGPD webhooks (T44): critico pre-producao real
+    - Cofre de senhas (T46): bloqueia revezamento seguro
+    - Rotacao de secrets (T47): inclui agora META_APP_SECRET +
+      META_SYSTEM_USER_TOKEN que passaram pelo chat nesta sessao
 
   PENDENCIAS MIRANDA (ver PENDENCIAS_MIRANDA.txt):
     7 itens pendentes de acao da Miranda + 1 item interno (I1 filter)

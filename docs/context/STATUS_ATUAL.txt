@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-12 (sessao monstro ETL + frontend)
+Ultima atualizacao: 2026-04-13 (Meta Ads IMPLEMENTADO end-to-end — falta rodar migration + add secrets no GitHub)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -21,9 +21,17 @@ Etapa 4 — Integracao Nuvemshop: CONCLUIDA (2026-04-12)
          [x] T15 coleta clientes — full sync 4913 customers (2026-04-12)
          [x] T16 coleta abandoned — full sync 43 checkouts (2026-04-12)
          [x] T17-T22 transformacoes — todos os mappers + ETL real rodando (2026-04-12)
-Etapa 5 — Integracao Meta Ads: BLOQUEADA
-         [ ] T23 auth — bloqueado (conta dev em validacao + Miranda nao respondeu)
-         [ ] T24-T26 — dependem de T23
+Etapa 5 — Integracao Meta Ads: CONCLUIDA (codigo) — aguarda
+         aplicacao da migration + secrets GitHub (2026-04-13)
+         [x] T23 auth — token validado end-to-end via curl
+             (dados reais da Miranda retornaram: spend R$1073,65
+             em 7 dias, 61780 impressions, 2641 clicks)
+         [x] T24 coleta de metricas — ETL completo em
+             src/etl/meta-ads/ + src/integrations/meta-ads/
+         [x] T25 coleta de conversao — mapper cobre 5 action types
+             de purchase
+         [x] T26 ranking campanhas/conjuntos/criativos — views
+             existentes + v_meta_account_daily nova
 Etapa 6 — Consolidacao: CONCLUIDA (2026-04-12)
          [x] T27 schema canonico (2026-04-11)
          [x] T30 dataset Visao Geral via views (2026-04-11)
@@ -136,12 +144,27 @@ INTEGRACOES — progresso por fonte
   [x] Transformacao carrinhos abandonados (T22) — (2026-04-12)
   Dados no Supabase: 5948 sales NS + ~10k sale_items NS + 4913 customers + 48 checkouts
 
-[META ADS] — BLOQUEADO
+[META ADS] — CODIGO PRONTO (2026-04-13), aguarda aplicacao remota
   [x] Mapeamento tecnico (T6) — 2026-04-10
-  [ ] Autenticacao (T23) — BLOQUEADO
-  [ ] Coleta de metricas (T24)
-  [ ] Transformacao KPIs (T25)
-  [ ] Ranking criativos/campanhas (T26)
+  [x] Autenticacao (T23) — 2026-04-13
+       - BM ID: 130431116357346
+       - Ad Account ID: act_5204712552960295
+       - System User: StepadsDashboard (camelcase — "Stepads
+         Dashboard ETL" foi rejeitado pelo Meta)
+       - App Marketing: "Miranda Dashboard ETL" (dev mode,
+         ownership na conta FB "Angelo Meirelles")
+       - Token validado: dados reais da Miranda fluindo
+  [x] Coleta de metricas (T24) — ETL completo
+  [x] Transformacao KPIs (T25) — 5 action types pra purchase
+  [x] Ranking criativos/campanhas (T26) — views + frontend completo
+  [ ] Falta (nao-bloqueia desenvolvimento):
+       - Aplicar migration 20260413120000 no Supabase remoto
+       - Adicionar secrets no GitHub (META_SYSTEM_USER_TOKEN +
+         META_AD_ACCOUNT_ID) pro cron rodar
+       - Rodar `npm run sync:meta-ads:full` uma vez pra trazer
+         historico (90 dias)
+       - Popular .env.local (na maquina do Matheus) com as 3
+         META_* vars pra testar local
 
 --------------------------------------------------------
 CONSOLIDACAO E DASHBOARD
@@ -168,11 +191,21 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
-- META ADS (bloqueio humano): conta dev@stepads.com.br no
-  developers.facebook.com em "periodo de validacao", E a Miranda
-  nao respondeu com BM ID / Ad Account ID / acesso ao BM.
+- META ADS: totalmente DESTRAVADO. Todo o setup manual + codigo
+  completo. Falta apenas 3 passos operacionais quando Matheus
+  estiver na maquina usual:
+    1. Aplicar migration 20260413120000 no Supabase remoto
+    2. Adicionar 2 secrets no GitHub (META_SYSTEM_USER_TOKEN +
+       META_AD_ACCOUNT_ID)
+    3. Popular .env.local + rodar `npm run sync:meta-ads:full`
+       pra hidratar 90 dias de historico
 - COFRE DE SENHAS STEPADS (bloqueio operacional): task T46 pendente.
 - LGPD WEBHOOKS (bloqueio pre-producao): task T44 pendente.
+- OWNERSHIP DA APP META (divida tecnica): a app Marketing esta sob
+  conta FB "Angelo Meirelles". Se essa conta for perdida, a app
+  fica orfa (token continua funcionando ate rotacao manual).
+  Mitigacao: adicionar segundo admin FB em Settings > Roles quando
+  houver 2a conta disponivel. Ver DECISOES 2026-04-13.
 
 --------------------------------------------------------
 PROXIMO MARCO

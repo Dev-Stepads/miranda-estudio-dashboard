@@ -1,4 +1,4 @@
-name: Sync ETL (Nuvemshop + Conta Azul)
+name: Sync ETL (Nuvemshop + Conta Azul + Meta Ads)
 
 on:
   # Roda a cada 30 minutos automaticamente
@@ -10,9 +10,9 @@ on:
 
 jobs:
   sync:
-    name: Nuvemshop Incremental Sync
+    name: Incremental Sync (all sources)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -48,3 +48,12 @@ jobs:
           # The ETL writes the new rotated token back to the table after each run.
           # CONTA_AZUL_REFRESH_TOKEN env var is only used as fallback on first run.
         run: npx tsx src/etl/conta-azul/run.ts
+
+      - name: Sync Meta Ads (incremental — upsert defensivo dos ultimos 7 dias)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          META_SYSTEM_USER_TOKEN: ${{ secrets.META_SYSTEM_USER_TOKEN }}
+          META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+          META_API_VERSION: 'v25.0'
+        run: npx tsx src/etl/meta-ads/run.ts

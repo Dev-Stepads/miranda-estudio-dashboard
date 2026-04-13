@@ -658,3 +658,96 @@ DECISÕES REGISTRADAS
             ficam como o valor original.
   Impacto:  Todas as insercoes no campo customer_state passam por
             normalizeState(). Dashboard exibe UF padronizado.
+
+[2026-04-13] [INTEGRACAO] App Marketing do Meta Ads criada sob conta FB alternativa
+  Contexto: A conta dev@stepads.com.br nao foi aprovada pelo Facebook
+            na tentativa de criar uma conta pessoal FB (Facebook
+            rejeitou o cadastro). Sem conta FB, nao e possivel
+            criar/administrar uma app no developers.facebook.com.
+            Em paralelo, a Miranda (representante Lucca Cardoso)
+            concedeu "Controle Total" no BM da Miranda (ID
+            130431116357346) via convite por email para
+            dev@stepads.com.br. O convite precisa ser aceito por uma
+            conta FB logada — e o Facebook permite vincular o convite
+            a QUALQUER conta FB que esteja logada no momento do clique,
+            nao precisa corresponder ao email convidado.
+  Decisao:  Usar uma conta FB alternativa (no momento: "Angelo
+            Ribeiro") para aceitar o convite e operar o BM da Miranda.
+            A app Marketing no developers.facebook.com sera criada sob
+            essa mesma conta. O System User criado no BM da Miranda
+            gera token permanente que continua funcionando
+            independentemente da conta FB que criou a app — o token
+            vive no BM, nao na conta individual.
+  Impacto:  Ownership da app fica atrelada a conta FB que criou.
+            Risco: se a conta FB for perdida (banimento do FB, pessoa
+            sai da empresa, exclusao), perde-se o controle
+            administrativo da app (nao da pra regerar app_secret,
+            editar webhooks, submeter App Review). O token do System
+            User continua funcionando ate rotacao manual.
+            Mitigacao imediata (a fazer logo apos criar a app):
+            adicionar um segundo admin FB em Settings > Roles >
+            Administrators. Mitigacao de longo prazo: quando
+            dev@stepads.com.br for aprovada pelo Facebook, transferir
+            ownership da app pra ela. Documentar como divida em T47.
+
+[2026-04-13] [OPERACIONAL] 2FA obrigatorio em qualquer conta FB com
+             acesso ao BM da Miranda
+  Contexto: Ao tentar aceitar o convite do BM da Miranda (permissao
+            "Controle Total"), o Facebook bloqueia o fluxo na "Central
+            de Contas" exigindo 2FA ativo na conta FB. Isso e
+            politica do Meta para contas com permissoes elevadas em
+            BMs — nao da pra contornar.
+  Decisao:  Toda conta FB do revezamento Stepads que for operar o BM
+            da Miranda precisa ter 2FA via app de autenticacao (Google
+            Authenticator / Authy / Microsoft Authenticator). NAO usar
+            2FA por SMS (quebra se trocar numero). Os codigos de
+            recuperacao (10 codigos de uso unico) devem ser guardados
+            no cofre Stepads (quando T46 sair) — por enquanto num txt
+            local fora do repo.
+  Impacto:  Onboarding de nova pessoa no revezamento requer setup de
+            2FA antes de qualquer trabalho no Meta Ads. Adicionar isso
+            ao setup inicial no CLAUDE.md secao 6 quando a app for
+            criada e o fluxo estiver validado ponta-a-ponta.
+
+[2026-04-13] [DADOS] Meta Ads unique constraint: drop expression
+             index, trocar por constraint real em colunas simples
+  Contexto: O schema original (migration 20260411120000) criou um
+            unique index com expressao:
+              create unique index uq_meta_insights on meta_ads_insights (
+                date, level, campaign_id, coalesce(adset_id,''), coalesce(ad_id,'')
+              );
+            A intencao era tratar adset_id/ad_id NULL (em rows do
+            nivel campaign, por exemplo) como tuplas unicas. Mas o
+            Supabase JS client `.upsert({ onConflict: '...' })` so
+            funciona com UNIQUE CONSTRAINT real em colunas SIMPLES —
+            expression indexes nao sao alcancaveis via PostgREST
+            `on_conflict`. Isso quebra o upsert do ETL.
+  Decisao:  Migration 20260413120000_meta_ads_account_view.sql
+            transforma adset_id/ad_id em NOT NULL DEFAULT '' e
+            substitui o expression index por UNIQUE CONSTRAINT real:
+              UNIQUE (date, level, campaign_id, adset_id, ad_id)
+            Semantica preservada: '' = "nao aplicavel pro nivel"
+            (campaign rows tem adset_id='' e ad_id=''). Views
+            existentes ja filtram por level, entao '' nao aparece
+            nos rankings.
+  Impacto:  Upsert do ETL Meta Ads funciona via Supabase JS. O
+            mapper continua produzindo null no canonical type (boa
+            semantica), mas o sync converte pra '' no boundary do
+            upsert. Futuro: se alguma feature precisar de "rows
+            tipicamente sem adset_id", verificar se esse default
+            atrapalha.
+
+[2026-04-13] [FRONTEND] Meta Ads fora do faturamento da Visao Geral
+             (reforco)
+  Contexto: A regra ja existia (CLAUDE.md 3.1 + DECISOES 2026-04-10
+            "Escopo da Visao Geral"). Ao implementar a aba Meta Ads
+            em 2026-04-13, foi facil esquecer e somar spend/
+            purchase_value no KPI total do dashboard.
+  Decisao:  A aba Meta Ads tem um disclaimer de topo (faixa amber)
+            reforcando que Meta Ads e ATRIBUICAO de midia, nao
+            venda. O valor de compras do Meta NAO eh somado no
+            faturamento da Visao Geral. Venda real vem apenas de
+            Loja Fisica (Conta Azul) + Nuvemshop.
+  Impacto:  Nenhum no codigo (regra ja respeitada nas queries e
+            views de Visao Geral). O disclaimer visual evita que
+            o usuario final interprete errado os numeros da aba.

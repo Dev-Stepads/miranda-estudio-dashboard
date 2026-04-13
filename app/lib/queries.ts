@@ -326,6 +326,215 @@ export async function fetchCustomerRecurrence(): Promise<CustomerRecurrence[]> {
   return (data ?? []) as CustomerRecurrence[];
 }
 
+// ============================================================
+// Meta Ads
+// ============================================================
+
+export interface MetaDailyRow {
+  date: string;
+  spend: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  purchases: number;
+  purchase_value: number;
+  ctr_pct: number;
+  cpc: number;
+  cpm: number;
+  roas: number;
+}
+
+export interface MetaRankingRow {
+  campaign_id: string;
+  campaign_name: string | null;
+  total_spend: number;
+  total_impressions: number;
+  total_clicks: number;
+  total_purchases: number;
+  total_purchase_value: number;
+  roas: number;
+}
+
+export interface MetaAdsetRankingRow extends MetaRankingRow {
+  adset_id: string;
+  adset_name: string | null;
+}
+
+export interface MetaAdRankingRow extends MetaAdsetRankingRow {
+  ad_id: string;
+  ad_name: string | null;
+}
+
+/** Meta Ads daily series (account-level totals). */
+export async function fetchMetaDaily(
+  days: number = 30,
+  from?: string,
+  to?: string,
+): Promise<MetaDailyRow[]> {
+  const supabase = getSupabase();
+
+  let query = supabase
+    .from('v_meta_account_daily')
+    .select('*')
+    .order('date', { ascending: true });
+
+  if (from && to) {
+    query = query.gte('date', from).lte('date', to);
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    query = query.gte('date', since.toISOString().split('T')[0]!);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`fetchMetaDaily: ${error.message}`);
+  return (data ?? []) as MetaDailyRow[];
+}
+
+/**
+ * Meta Ads — ranking agregado de campanhas no período.
+ * Somamos em memória a partir da série diária por campanha pra respeitar
+ * o filtro de período (as views de ranking hoje somam tudo que tem no banco).
+ */
+export async function fetchMetaCampaignRanking(
+  days: number = 30,
+  from?: string,
+  to?: string,
+  limit: number = 15,
+): Promise<MetaRankingRow[]> {
+  const supabase = getSupabase();
+
+  let query = supabase
+    .from('v_meta_campanha_daily')
+    .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value');
+
+  if (from && to) {
+    query = query.gte('date', from).lte('date', to);
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    query = query.gte('date', since.toISOString().split('T')[0]!);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`fetchMetaCampaignRanking: ${error.message}`);
+
+  const byCampaign = new Map<string, MetaRankingRow>();
+  for (const row of (data ?? []) as Array<{
+    campaign_id: string;
+    campaign_name: string | null;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    purchases: number;
+    purchase_value: number;
+  }>) {
+    const key = row.campaign_id;
+    const existing = byCampaign.get(key) ?? {
+      campaign_id: key,
+      campaign_name: row.campaign_name,
+      total_spend: 0,
+      total_impressions: 0,
+      total_clicks: 0,
+      total_purchases: 0,
+      total_purchase_value: 0,
+      roas: 0,
+    };
+    existing.total_spend += row.spend ?? 0;
+    existing.total_impressions += row.impressions ?? 0;
+    existing.total_clicks += row.clicks ?? 0;
+    existing.total_purchases += row.purchases ?? 0;
+    existing.total_purchase_value += row.purchase_value ?? 0;
+    byCampaign.set(key, existing);
+  }
+
+  const result = Array.from(byCampaign.values())
+    .map((c) => ({
+      ...c,
+      roas: c.total_spend > 0 ? c.total_purchase_value / c.total_spend : 0,
+    }))
+    .sort((a, b) => b.total_spend - a.total_spend)
+    .slice(0, limit);
+
+  return result;
+}
+
+/** Ranking de criativos (nível ad) no período. */
+export async function fetchMetaAdRanking(
+  days: number = 30,
+  from?: string,
+  to?: string,
+  limit: number = 15,
+): Promise<MetaAdRankingRow[]> {
+  const supabase = getSupabase();
+
+  // v_meta_ranking_criativos soma todo o histórico — pra respeitar
+  // período, consultamos a tabela base e agregamos aqui.
+  let query = supabase
+    .from('meta_ads_insights')
+    .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, date')
+    .eq('level', 'ad');
+
+  if (from && to) {
+    query = query.gte('date', from).lte('date', to);
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    query = query.gte('date', since.toISOString().split('T')[0]!);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`fetchMetaAdRanking: ${error.message}`);
+
+  const byAd = new Map<string, MetaAdRankingRow>();
+  for (const row of (data ?? []) as Array<{
+    ad_id: string | null;
+    ad_name: string | null;
+    adset_id: string | null;
+    adset_name: string | null;
+    campaign_id: string;
+    campaign_name: string | null;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    purchases: number;
+    purchase_value: number;
+  }>) {
+    if (row.ad_id === null) continue;
+    const key = row.ad_id;
+    const existing = byAd.get(key) ?? {
+      ad_id: row.ad_id,
+      ad_name: row.ad_name,
+      adset_id: row.adset_id ?? '',
+      adset_name: row.adset_name,
+      campaign_id: row.campaign_id,
+      campaign_name: row.campaign_name,
+      total_spend: 0,
+      total_impressions: 0,
+      total_clicks: 0,
+      total_purchases: 0,
+      total_purchase_value: 0,
+      roas: 0,
+    };
+    existing.total_spend += row.spend ?? 0;
+    existing.total_impressions += row.impressions ?? 0;
+    existing.total_clicks += row.clicks ?? 0;
+    existing.total_purchases += row.purchases ?? 0;
+    existing.total_purchase_value += row.purchase_value ?? 0;
+    byAd.set(key, existing);
+  }
+
+  const result = Array.from(byAd.values())
+    .map((a) => ({
+      ...a,
+      roas: a.total_spend > 0 ? a.total_purchase_value / a.total_spend : 0,
+    }))
+    .sort((a, b) => b.total_spend - a.total_spend)
+    .slice(0, limit);
+
+  return result;
+}
+
 /** Abandoned checkouts (Nuvemshop) */
 export async function fetchAbandoned(): Promise<AbandonedData[]> {
   const supabase = getSupabase();

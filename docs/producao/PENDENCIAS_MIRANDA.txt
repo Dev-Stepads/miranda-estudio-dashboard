@@ -188,9 +188,36 @@ AÇÃO DA MIRANDA:
 --------------------------------------------------------
 P5. META ADS — INFORMAÇÕES TÉCNICAS PENDENTES
 --------------------------------------------------------
-Status: PENDENTE
-Criticidade: ALTA (bloqueia toda a integração Meta Ads)
+Status: RESOLVIDO (2026-04-13) — nao-bloqueantes restam
+Criticidade: BAIXA (integracao funcionando com defaults)
 Descoberto em: 2026-04-11
+Resolvido em: 2026-04-13
+Progresso final:
+  [x] Item 1 Business Manager ID — 130431116357346
+  [x] Item 2 Ad Account ID — act_5204712552960295
+  [x] Item 3 Acesso ao BM — Lucca Cardoso concedeu "Controle
+      Total". Workaround com conta FB "Angelo Meirelles"
+      (dev@stepads.com.br foi rejeitada pelo Facebook).
+  [ ] Item 4 Attribution window real — assumimos o default do
+      Meta (7d_click + 1d_view). Nao-bloqueante. Confirmar com
+      representante da Miranda quando der; se ela usar setting
+      diferente, nossos numeros divergem dos da plataforma deles
+      (mas ainda serao corretos, apenas metricas diferentes).
+  [ ] Item 5 Criativos em video — nao-bloqueante. ETL atual
+      nao puxa video_* fields. Se descobrirmos que ela usa,
+      adicionar video_play_actions + video_p100_watched_actions
+      + video_avg_time_watched_actions em INSIGHTS_FIELDS no
+      client.ts.
+  [ ] Item 6 Action_type de purchase — MITIGADO via cobertura
+      multipla no mapper (5 types cobertos). Se o KPI "Compras"
+      aparecer zerado apos o primeiro sync, investigar quais
+      action_types aparecem em actions[] e adicionar o custom
+      em PURCHASE_ACTION_TYPES.
+
+Integracao tecnica validada via curl: spend R$1073,65 em
+7 dias, 61780 impressions, 2641 clicks, CTR 4,27%. ETL
+completo em src/etl/meta-ads/ e aba Meta Ads no frontend
+substituindo o placeholder anterior.
 
 PROBLEMA:
   A integração com o Meta Ads depende de informações
