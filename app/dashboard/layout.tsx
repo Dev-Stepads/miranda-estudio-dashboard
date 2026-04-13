@@ -2,6 +2,7 @@ import { NavTabs } from '../components/nav-tabs';
 import { PeriodFilter } from '../components/period-filter';
 import { ThemeToggle } from '../components/theme-toggle';
 import { AutoRefresh } from '../components/auto-refresh';
+import { LogoutButton } from '../components/logout-button';
 
 export default function DashboardLayout({
   children,
@@ -24,8 +25,9 @@ export default function DashboardLayout({
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">Dashboard de Vendas</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <ThemeToggle />
+              <LogoutButton />
             </div>
             <p className="text-xs text-gray-400 hidden md:block">
               {new Date().toLocaleDateString('pt-BR', {
