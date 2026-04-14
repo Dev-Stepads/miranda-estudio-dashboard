@@ -189,9 +189,14 @@ ETAPA 7 — DASHBOARD
            sync.ts, upsert em meta_ads_creatives.
          - Frontend: CreativeRankingTable novo componente com
            thumbnail 40px, colunas Criativo/Invest/Impressões/Cliques/
-           Leads/Compras/Receita/CPL/ROAS.
+           Compras/Receita/ROAS.
          - Workflow: input full_meta_sync no workflow_dispatch pra
-           backfill manual de 90 dias dos leads.
+           backfill manual de 90 dias.
+         - Decisao 2026-04-14b: colunas Leads/CPL removidas do
+           frontend depois de descobrir que o Pixel da Miranda nao
+           emite evento Lead (conta 100% ecom, rastreia so Purchase).
+           Mapper/DB/migration mantidos — se Miranda configurar Lead
+           um dia, so re-exibir as colunas no componente.
 [x] T35 Criar filtros globais — 2026-04-12
          Period filter 7d/15d/30d/90d/1ano via URL search params.
          Funciona em todas as abas. KPI comparison busca 2x periodo

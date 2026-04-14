@@ -135,7 +135,10 @@ export default async function MetaAdsPage({
         }) as unknown as Record<string, unknown>[]}
       />
 
-      {/* Ranking de criativos — com thumbnail, leads e CPL */}
+      {/* Ranking de criativos com thumbnail */}
+      {/* Leads/CPL omitidos — o Pixel da Miranda nao emite eventos de Lead
+          (so Purchase), entao essas colunas seriam 100% vazias. O mapper
+          ainda extrai leads caso um dia seja configurado. */}
       <CreativeRankingTable
         title="Ranking de Criativos"
         subtitle="Anúncios (nível ad) — ordenado por investimento"
@@ -147,10 +150,8 @@ export default async function MetaAdsPage({
           total_spend: a.total_spend,
           total_impressions: a.total_impressions,
           total_clicks: a.total_clicks,
-          total_leads: a.total_leads,
           total_purchases: a.total_purchases,
           total_purchase_value: a.total_purchase_value,
-          cpl: a.cpl,
           roas: a.roas,
         }))}
       />

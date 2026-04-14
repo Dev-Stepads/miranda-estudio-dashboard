@@ -98,8 +98,39 @@ PROXIMO PASSO APOS PUSH (decisao 2026-04-14b):
   3. Matheus vai em Actions > "Sync ETL (Nuvemshop + Conta Azul +
      Meta Ads)" > Run workflow, marca full_meta_sync=true, Run
   4. Workflow roda ~5-10 min (nuvemshop + conta azul + meta full)
-  5. Dashboard em producao mostra thumbnails e leads com 90d
-     de historico
+  5. Dashboard em producao mostra thumbnails com 90d de historico
+
+FOLLOWUP 2026-04-14b (depois do workflow_dispatch rodar):
+  Auditoria pos-sync mostrou que o Pixel da Miranda NAO emite
+  eventos de Lead — todas as linhas de meta_ads_insights tinham
+  leads=0 (rodei select leads=gt.0 e retornou vazio). A conta eh
+  100% e-commerce, rastreia apenas Purchase.
+
+  Decisao: remover colunas Leads/CPL do componente
+  CreativeRankingTable. Manter mapper + migration + sync pipeline
+  intactos — se a Miranda um dia configurar evento Lead no Events
+  Manager (ex: formulario de contato), basta re-exibir as duas
+  colunas no componente sem precisar rodar migration ou backfill.
+
+  Auditoria do sync (confirmada 2026-04-14b):
+    [x] Cron rodando a cada 30 min (confirmado no yml)
+    [x] Janela incremental de 7 dias = defensiva (Meta recalcula
+        atribuicoes por ate 7 dias, upsert corrige)
+    [x] raw_meta_insights_* append-only — ingested_at mais recente
+        reflete a ultima rodada real
+    [x] SyncStatus component le de raw_meta_insights_campaign
+        (correto, nao usa ingested_at do canonical)
+    [x] syncCreatives roda no fim de TODO syncMetaAds (incremental
+        + full)
+    [x] v_meta_account_daily recriada com sum(leads) + cpl e
+        retornando dados reais (ROAS 5.41x no dia 2026-04-14)
+
+  Observacao (nao-bug): meta_ads_insights.ingested_at soh se
+  atualiza na primeira insercao (default now() no schema), nao em
+  upsert. Dados (spend/purchases/etc) SAO atualizados. Se alguem
+  um dia rodar query por ingested_at no canonical, vai parecer
+  "travado" — usar raw_meta_insights_*.ingested_at para
+  monitoramento real do sync.
 
 --------------------------------------------------------
 0a. SESSAO ANTERIOR (2026-04-13b) — META ADS ATIVADO + 2 BUGFIXES CRITICOS

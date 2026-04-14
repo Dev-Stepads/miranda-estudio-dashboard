@@ -19,10 +19,8 @@ export interface CreativeRankingRow {
   total_spend: number;
   total_impressions: number;
   total_clicks: number;
-  total_leads: number;
   total_purchases: number;
   total_purchase_value: number;
-  cpl: number;
   roas: number;
 }
 
@@ -63,16 +61,10 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
                 Cliques
               </th>
               <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                Leads
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Compras
               </th>
               <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Receita
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                CPL
               </th>
               <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 ROAS
@@ -106,16 +98,10 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
                   {formatNumber(row.total_clicks)}
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
-                  {row.total_leads > 0 ? formatNumber(row.total_leads) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
                   {row.total_purchases > 0 ? formatNumber(row.total_purchases) : '—'}
                 </td>
                 <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">
                   {row.total_purchase_value > 0 ? formatBRL(row.total_purchase_value) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
-                  {row.cpl > 0 ? formatBRL(row.cpl) : '—'}
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
                   {row.roas > 0 ? `${row.roas.toFixed(2)}x` : '—'}
@@ -124,7 +110,7 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
                   Sem dados disponíveis
                 </td>
               </tr>
