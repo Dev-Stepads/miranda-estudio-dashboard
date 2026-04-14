@@ -117,7 +117,7 @@ export default async function NuvemshopPage({
         <BrazilMap data={geoData} />
 
         <SimpleTable
-          title="Top Cidades"
+          title="Top Cidades - Completo"
           subtitle="Ranking por faturamento (e-commerce)"
           columns={[
             { key: 'city', label: 'Cidade' },

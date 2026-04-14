@@ -6,7 +6,7 @@ import {
   fetchMetaAdRanking,
   parsePeriod,
 } from '../../lib/queries';
-import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
+import { KpiCard, formatBRL, formatNumber } from '../../components/kpi-cards';
 import { SimpleTable } from '../../components/simple-table';
 import { SpendChart } from '../../components/spend-chart';
 
@@ -18,9 +18,8 @@ export default async function MetaAdsPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
-  const [daily, prevDaily, campaignRanking, adRanking] = await Promise.all([
+  const [daily, campaignRanking, adRanking] = await Promise.all([
     fetchMetaDaily(period.days, params.from, params.to),
-    fetchMetaDaily(period.days * 2),
     fetchMetaCampaignRanking(period.days, params.from, params.to, 15),
     fetchMetaAdRanking(period.days, params.from, params.to, 15),
   ]);
@@ -43,14 +42,6 @@ export default async function MetaAdsPage({
   const cpa = totalPurchases > 0 ? totalSpend / totalPurchases : 0;
   const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
 
-  // ---- Periodo anterior p/ comparação ----
-  // Compare date strings directly (YYYY-MM-DD) to avoid timezone issues.
-  // period.since is already in São Paulo timezone from parsePeriod().
-  const prev = prevDaily.filter((r) => r.date < period.since);
-  const prevSpend = prev.reduce((s, r) => s + r.spend, 0);
-  const prevPurchases = prev.reduce((s, r) => s + r.purchases, 0);
-  const prevPurchaseValue = prev.reduce((s, r) => s + r.purchase_value, 0);
-  const prevRoas = prevSpend > 0 ? prevPurchaseValue / prevSpend : 0;
 
   return (
     <div className="space-y-4 sm:space-y-8">
@@ -68,19 +59,16 @@ export default async function MetaAdsPage({
           title="Investimento"
           value={formatBRL(totalSpend)}
           subtitle={period.label}
-          change={percentChange(totalSpend, prevSpend)}
         />
         <KpiCard
           title="Compras atribuídas"
           value={formatNumber(totalPurchases)}
           subtitle={`${formatBRL(totalPurchaseValue)} em valor`}
-          change={percentChange(totalPurchases, prevPurchases)}
         />
         <KpiCard
           title="ROAS (retorno sobre investimento)"
           value={`${roas.toFixed(2)}x`}
           subtitle={roas > 1 ? 'retorno positivo' : 'retorno abaixo do investido'}
-          change={percentChange(roas, prevRoas)}
         />
         <KpiCard
           title="CPA (custo por compra)"

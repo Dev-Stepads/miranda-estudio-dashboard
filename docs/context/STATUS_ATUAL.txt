@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-13c (auditoria completa do codebase — 13 fixes aplicados em ETLs, frontend, SQL e CI)
+Ultima atualizacao: 2026-04-14 (sessao completa: Meta Ads ativado, auditoria, features, validacao final 49/49 OK)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -46,7 +46,9 @@ Etapa 7 — Dashboard: CONCLUIDA (exceto Meta Ads) (2026-04-12)
              Brasil, top clientes, avg ticket chart (2026-04-12)
          [x] T33 aba Nuvemshop — faturamento, produtos com %, top cidades,
              mapa Brasil, top clientes, avg ticket, abandonados (2026-04-12)
-         [~] T34 aba Meta Ads — placeholder (bloqueado por T23)
+         [x] T34 aba Meta Ads — COMPLETA (2026-04-13/14)
+             8 KPIs, grafico spend vs value, rankings campanhas/criativos
+             CPM no lugar de Reach (reach diario nao eh somavel)
          [x] T35 filtros — period filter 7d/15d/30d/90d/1ano + date picker
              custom (from/to) + filtro persiste entre abas (2026-04-12)
          [x] Mobile responsive (2026-04-12)
