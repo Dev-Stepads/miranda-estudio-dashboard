@@ -34,12 +34,13 @@ export default async function DashboardLayout({
           {/* Top row: logo + date */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-sm sm:text-lg shrink-0">
-                M
-              </div>
+              <img
+                src="/logo-miranda.jpg"
+                alt="Miranda Studio"
+                className="h-8 sm:h-10 w-auto shrink-0"
+              />
               <div>
-                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Miranda Studio</h1>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">Dashboard de Vendas</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Dashboard de Vendas</p>
               </div>
             </div>
             <div className="flex items-center gap-3">

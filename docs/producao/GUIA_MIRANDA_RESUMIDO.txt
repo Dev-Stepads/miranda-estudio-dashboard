@@ -1,0 +1,137 @@
+========================================================
+DASHBOARD MIRANDA STUDIO — GUIA RAPIDO
+========================================================
+
+Acesso: https://miranda-estudio-dashboard.vercel.app
+Login: mirandaestudio
+Senha: DashMiranda@14
+
+Os dados atualizam automaticamente a cada 30 minutos.
+No canto superior direito voce ve o horario da ultima
+atualizacao e quanto falta para a proxima.
+
+========================================================
+FILTRO DE PERIODO
+========================================================
+
+No topo do dashboard voce encontra os filtros:
+  7d | 15d | 30d | 90d | 1 ano
+
+Ao lado tem um calendario para selecionar datas
+personalizadas. Basta escolher a data inicial e final
+e clicar "Aplicar".
+
+TODOS os dados da pagina mudam conforme o periodo
+selecionado: KPIs, graficos, rankings, mapas e tabelas.
+
+========================================================
+ABA: VISAO GERAL
+========================================================
+
+Consolida os dados da Loja Fisica + E-commerce.
+Meta Ads NAO entra no faturamento (e atribuicao de
+midia, nao venda real).
+
+O que voce encontra:
+- Faturamento total (Loja + E-commerce)
+- Quantidade de pedidos e ticket medio
+- Grafico de faturamento diario (barras por canal)
+- Divisao de receita por canal (grafico de pizza)
+- Mapa do Brasil por estado
+- Ticket medio por dia (linha E-commerce vs Loja)
+- Comparativo mensal com % de variacao
+- Recorrencia de clientes (primeira compra vs recorrente)
+- Top Produtos (consolidado)
+- Top Clientes Pessoas (com email e telefone)
+- Top Clientes Empresas (com email e telefone)
+- Pedidos recentes
+
+========================================================
+ABA: NUVEMSHOP (E-commerce)
+========================================================
+
+Dados exclusivos do e-commerce.
+
+O que voce encontra:
+- Faturamento, pedidos, ticket medio, carrinhos abandonados
+- Grafico de faturamento diario
+- Ticket medio por dia
+- Mapa do Brasil + Top Cidades
+- Carrinhos abandonados com nome, email, telefone e
+  produtos que estavam no carrinho (para recuperacao)
+- Top Produtos
+- Top Clientes Pessoas (com contato)
+- Top Clientes Empresas (com contato)
+
+========================================================
+ABA: LOJA FISICA (Conta Azul)
+========================================================
+
+Dados exclusivos da loja fisica (NF-e).
+
+O que voce encontra:
+- Faturamento e quantidade de pedidos
+- Grafico de faturamento diario
+- Ticket medio por dia
+- Compradores por estado (mapa + ranking)
+- Top Produtos
+- Top Clientes Pessoas (com contato)
+- Top Clientes Empresas (com contato)
+
+========================================================
+ABA: META ADS
+========================================================
+
+Metricas de trafego pago do Meta (Facebook + Instagram).
+Os valores de compras sao ATRIBUICAO do Pixel, nao vendas
+reais — por isso ficam separados do faturamento.
+
+O que voce encontra:
+- Investimento total
+- Compras atribuidas e valor
+- ROAS (retorno sobre investimento)
+- CPA (custo por compra)
+- Impressoes e cliques
+- CPC (custo por clique)
+- CPM (custo por mil impressoes)
+- Grafico investimento vs valor atribuido
+- Ranking de campanhas (com ROAS)
+- Ranking de criativos (com ROAS)
+
+========================================================
+FUNCIONALIDADES
+========================================================
+
+DARK MODE
+  Clique no icone de sol/lua no canto superior direito
+  para alternar entre modo claro e escuro.
+
+LOGOUT
+  Clique em "Sair" no canto superior direito.
+
+CARRINHOS ABANDONADOS
+  Na aba Nuvemshop voce ve os carrinhos abandonados com
+  nome, email, telefone e produtos. Use essas informacoes
+  para entrar em contato e recuperar a venda.
+
+TOP CLIENTES
+  Divididos em Pessoas (CPF) e Empresas (CNPJ) com
+  email e telefone para contato direto.
+
+========================================================
+DUVIDAS FREQUENTES
+========================================================
+
+P: Os dados sao em tempo real?
+R: Atualizam a cada 30 minutos.
+
+P: Por que o valor de compras do Meta Ads e diferente
+   das vendas da Nuvemshop?
+R: O Meta conta conversoes via Pixel (atribuicao). A
+   Nuvemshop conta pedidos reais. Sao metricas diferentes.
+
+P: Posso confiar no faturamento?
+R: Sim. Soma apenas vendas PAGAS da Nuvemshop + NF-e
+   EMITIDAS do Conta Azul.
+
+Suporte tecnico: Stepads (Matheus)
