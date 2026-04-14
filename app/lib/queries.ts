@@ -537,16 +537,58 @@ export interface CustomerRecurrence {
   repeat_rate: number;
 }
 
-/** Customer recurrence (repeat vs first-time buyers) */
-export async function fetchCustomerRecurrence(): Promise<CustomerRecurrence[]> {
+/** Customer recurrence (repeat vs first-time buyers), filtered by period */
+export async function fetchCustomerRecurrence(days: number = 30, from?: string, to?: string): Promise<CustomerRecurrence[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  const { data, error } = await supabase
-    .from('v_customer_recurrence')
-    .select('*');
+  // Query sales with customer_id, filtered by period
+  const allRows = await (async () => {
+    const rows: Array<{ customer_id: number; source: string }> = [];
+    let page = 0;
+    while (true) {
+      let q = supabase
+        .from('sales')
+        .select('customer_id, source')
+        .eq('status', 'paid')
+        .not('customer_id', 'is', null)
+        .gte('sale_date', toSPTimestamp(sinceStr))
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      if (to) q = q.lte('sale_date', toSPTimestamp(to));
+      const { data, error } = await q;
+      if (error) throw new Error(`fetchCustomerRecurrence: ${error.message}`);
+      if (!data || data.length === 0) break;
+      rows.push(...(data as typeof rows));
+      if (data.length < PAGE_SIZE) break;
+      page++;
+    }
+    return rows;
+  })();
 
-  if (error) throw new Error(`fetchCustomerRecurrence: ${error.message}`);
-  return (data ?? []) as CustomerRecurrence[];
+  // Count orders per customer per source
+  const customerOrders = new Map<string, number>();
+  for (const r of allRows) {
+    const key = `${r.source}|${r.customer_id}`;
+    customerOrders.set(key, (customerOrders.get(key) ?? 0) + 1);
+  }
+
+  // Aggregate by source
+  const bySource = new Map<string, { first: number; repeat: number }>();
+  for (const [key, count] of customerOrders) {
+    const source = key.split('|')[0]!;
+    const existing = bySource.get(source) ?? { first: 0, repeat: 0 };
+    if (count === 1) existing.first++;
+    else existing.repeat++;
+    bySource.set(source, existing);
+  }
+
+  return Array.from(bySource.entries()).map(([source, { first, repeat }]) => ({
+    source,
+    first_time_buyers: first,
+    repeat_buyers: repeat,
+    total_customers: first + repeat,
+    repeat_rate: (first + repeat) > 0 ? Math.round((repeat / (first + repeat)) * 1000) / 10 : 0,
+  }));
 }
 
 // ============================================================

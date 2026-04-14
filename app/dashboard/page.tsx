@@ -42,7 +42,7 @@ export default async function VisaoGeralPage({
     fetchGeographyConsolidated(10, period.days, params.from, params.to),
     fetchTopCustomers(30, undefined, period.days, params.from, params.to),
     fetchRecentOrders(10, period.days, params.from, params.to),
-    fetchCustomerRecurrence(),
+    fetchCustomerRecurrence(period.days, params.from, params.to),
     fetchMonthlyComparison(36),
   ]);
 
