@@ -3,12 +3,29 @@ import { PeriodFilter } from '../components/period-filter';
 import { ThemeToggle } from '../components/theme-toggle';
 import { AutoRefresh } from '../components/auto-refresh';
 import { LogoutButton } from '../components/logout-button';
+import { SyncStatus } from '../components/sync-status';
+import { getSupabase } from '../lib/supabase-server';
 
-export default function DashboardLayout({
+export const dynamic = 'force-dynamic';
+
+async function getLastSyncTime(): Promise<string> {
+  const supabase = getSupabase();
+  // raw_meta_insights_campaign receives rows EVERY cron run (append-only),
+  // so its most recent ingested_at reflects the actual last sync time.
+  const { data } = await supabase
+    .from('raw_meta_insights_campaign')
+    .select('ingested_at')
+    .order('ingested_at', { ascending: false })
+    .limit(1);
+  return (data?.[0]?.ingested_at as string) ?? new Date().toISOString();
+}
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const lastSyncISO = await getLastSyncTime();
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -29,14 +46,17 @@ export default function DashboardLayout({
               <ThemeToggle />
               <LogoutButton />
             </div>
-            <p className="text-xs text-gray-400 hidden md:block">
-              {new Date().toLocaleDateString('pt-BR', {
-                weekday: 'long',
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </p>
+            <div className="hidden md:block text-right">
+              <p className="text-xs text-gray-400">
+                {new Date().toLocaleDateString('pt-BR', {
+                  weekday: 'long',
+                  day: '2-digit',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </p>
+              <SyncStatus lastSyncISO={lastSyncISO} />
+            </div>
           </div>
           {/* Period filter */}
           <div className="mb-3 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
