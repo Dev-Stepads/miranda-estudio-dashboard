@@ -396,6 +396,11 @@ export async function syncAbandonedCheckouts(ctx: SyncContext): Promise<SyncResu
             created_at: canonical.abandoned_at,
             total_amount: canonical.total_value,
             customer_id: customerId,
+            contact_name: canonical.contact_name,
+            contact_email: canonical.contact_email,
+            contact_phone: canonical.contact_phone,
+            contact_state: canonical.contact_state,
+            products: canonical.products,
           },
           { onConflict: 'source_checkout_id' },
         );

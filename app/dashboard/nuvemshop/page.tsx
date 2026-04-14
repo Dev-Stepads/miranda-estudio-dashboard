@@ -5,6 +5,7 @@ import {
   fetchTopProducts,
   fetchGeography,
   fetchAbandoned,
+  fetchAbandonedDetails,
   fetchTopCustomers,
   parsePeriod,
 } from '../../lib/queries';
@@ -22,12 +23,13 @@ export default async function NuvemshopPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
-  const [daily, prevDaily, topProducts, geography, abandoned, topCustomers] = await Promise.all([
+  const [daily, prevDaily, topProducts, geography, abandoned, abandonedDetails, topCustomers] = await Promise.all([
     fetchNuvemshopDaily(period.days, params.from, params.to),
     fetchNuvemshopDaily(period.days * 2),
     fetchTopProducts(20, period.days, params.from, params.to),
     fetchGeography(15, period.days, params.from, params.to),
     fetchAbandoned(period.days, params.from, params.to),
+    fetchAbandonedDetails(period.days, params.from, params.to, 20),
     fetchTopCustomers(10, 'nuvemshop', period.days, params.from, params.to),
   ]);
 
@@ -127,16 +129,26 @@ export default async function NuvemshopPage({
         />
       </div>
 
-      {/* Abandoned */}
+      {/* Abandoned — detalhes individuais */}
       <SimpleTable
         title="Carrinhos Abandonados"
-        subtitle="Por dia (últimos 30 dias)"
+        subtitle="Contato e produtos — para recuperação"
         columns={[
-          { key: 'day', label: 'Data', format: 'text' },
-          { key: 'abandoned_count', label: 'Qtd', align: 'right', format: 'number' },
-          { key: 'total_amount', label: 'Valor', align: 'right', format: 'currency' },
+          { key: 'date', label: 'Data' },
+          { key: 'contact_name', label: 'Nome' },
+          { key: 'contact_email', label: 'Email' },
+          { key: 'contact_phone', label: 'Telefone' },
+          { key: 'total_display', label: 'Valor', align: 'right', format: 'currency' },
+          { key: 'products_display', label: 'Produtos' },
         ]}
-        rows={abandoned.slice(0, 10) as unknown as Record<string, unknown>[]}
+        rows={abandonedDetails.map((c) => ({
+          date: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—',
+          contact_name: c.contact_name ?? '—',
+          contact_email: c.contact_email ?? '—',
+          contact_phone: c.contact_phone ?? '—',
+          total_display: c.total_amount,
+          products_display: (c.products ?? []).map((p) => `${p.name} (${p.quantity}x)`).join(', ') || '—',
+        })) as unknown as Record<string, unknown>[]}
       />
 
       {/* Top Products + Top Customers */}

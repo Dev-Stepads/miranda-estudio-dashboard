@@ -751,3 +751,36 @@ export async function fetchAbandoned(days: number = 30, from?: string, to?: stri
   if (error) throw new Error(`fetchAbandoned: ${error.message}`);
   return (data ?? []) as AbandonedData[];
 }
+
+export interface AbandonedCheckoutDetail {
+  checkout_id: number;
+  source_checkout_id: string;
+  created_at: string;
+  total_amount: number;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_state: string | null;
+  products: Array<{ name: string; quantity: number; price: number }> | null;
+}
+
+/** Individual abandoned checkouts with contact details, filtered by period */
+export async function fetchAbandonedDetails(days: number = 30, from?: string, to?: string, limit: number = 20): Promise<AbandonedCheckoutDetail[]> {
+  const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+
+  let query = supabase
+    .from('abandoned_checkouts')
+    .select('checkout_id, source_checkout_id, created_at, total_amount, contact_name, contact_email, contact_phone, contact_state, products')
+    .order('created_at', { ascending: false })
+    .gte('created_at', sinceStr)
+    .limit(limit);
+
+  if (to) {
+    query = query.lte('created_at', to);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`fetchAbandonedDetails: ${error.message}`);
+  return (data ?? []) as AbandonedCheckoutDetail[];
+}

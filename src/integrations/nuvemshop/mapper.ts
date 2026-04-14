@@ -174,6 +174,20 @@ export function mapCheckoutToCanonicalAbandoned(
   raw: RawNuvemshopCheckout,
 ): CanonicalAbandonedCheckout {
   const customerId = raw.customer?.id;
+
+  // Extract products list
+  const products = (raw.products ?? []).map((p) => ({
+    name: extractLocalized(p.name) ?? String(p.product_id ?? '?'),
+    quantity: p.quantity ?? 1,
+    price: safeParseMoney(p.price),
+    variant_id: p.variant_id ?? null,
+  }));
+
+  // Extract state from customer address if available
+  const custState = raw.customer?.default_address?.province
+    ? normalizeState(raw.customer.default_address.province)
+    : null;
+
   return {
     source: 'nuvemshop',
     source_id: String(raw.id),
@@ -181,7 +195,12 @@ export function mapCheckoutToCanonicalAbandoned(
       customerId !== undefined && customerId !== null ? String(customerId) : null,
     total_value: safeParseMoney(raw.total),
     abandoned_at: raw.updated_at,
-    items_count: raw.products?.length ?? 0,
+    items_count: products.length,
+    contact_name: (raw as Record<string, unknown>).contact_name as string ?? null,
+    contact_email: raw.contact_email || null,
+    contact_phone: (raw as Record<string, unknown>).contact_phone as string ?? null,
+    contact_state: custState,
+    products,
   };
 }
 

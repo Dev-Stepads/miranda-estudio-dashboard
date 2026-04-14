@@ -115,6 +115,13 @@ export interface CanonicalProduct {
  * Shopping cart abandoned before payment. Nuvemshop only (Conta Azul
  * has no equivalent). Mapped 1:1 to `abandoned_checkouts`.
  */
+export interface AbandonedProduct {
+  name: string;
+  quantity: number;
+  price: number;
+  variant_id?: number | null;
+}
+
 export interface CanonicalAbandonedCheckout {
   source: IntegrationSource;
   source_id: string;
@@ -122,4 +129,9 @@ export interface CanonicalAbandonedCheckout {
   total_value: number;
   abandoned_at: string;
   items_count: number;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_state: string | null;
+  products: AbandonedProduct[];
 }

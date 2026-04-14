@@ -80,9 +80,9 @@ export function AvgTicketChart({ data }: AvgTicketChartProps) {
                 <Line
                   type="monotone"
                   dataKey="avg_ticket_nuvemshop"
-                  stroke="#0ea5e9"
+                  stroke="#6366F1"
                   strokeWidth={2}
-                  dot={{ r: 2, fill: '#0ea5e9' }}
+                  dot={{ r: 2, fill: '#6366F1' }}
                   activeDot={{ r: 5 }}
                   connectNulls
                 />
