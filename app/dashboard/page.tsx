@@ -38,10 +38,10 @@ export default async function VisaoGeralPage({
   const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence, monthly] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
-    fetchTopProducts(15),
-    fetchGeographyConsolidated(10),
-    fetchTopCustomers(10),
-    fetchRecentOrders(10),
+    fetchTopProducts(15, period.days, params.from, params.to),
+    fetchGeographyConsolidated(10, period.days, params.from, params.to),
+    fetchTopCustomers(10, undefined, period.days, params.from, params.to),
+    fetchRecentOrders(10, period.days, params.from, params.to),
     fetchCustomerRecurrence(),
     fetchMonthlyComparison(36),
   ]);

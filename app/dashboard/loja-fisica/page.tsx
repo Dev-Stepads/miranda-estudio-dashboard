@@ -18,9 +18,9 @@ export default async function LojaFisicaPage({
   const [dailyRevenue, prevDailyRevenue, topProducts, topCustomers, geography] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
-    fetchTopProducts(20),
-    fetchTopCustomers(10, 'conta_azul'),
-    fetchGeographyCA(10),
+    fetchTopProducts(20, period.days, params.from, params.to),
+    fetchTopCustomers(10, 'conta_azul', period.days, params.from, params.to),
+    fetchGeographyCA(10, period.days, params.from, params.to),
   ]);
 
   // Filter Conta Azul only

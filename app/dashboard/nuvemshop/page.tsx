@@ -25,10 +25,10 @@ export default async function NuvemshopPage({
   const [daily, prevDaily, topProducts, geography, abandoned, topCustomers] = await Promise.all([
     fetchNuvemshopDaily(period.days, params.from, params.to),
     fetchNuvemshopDaily(period.days * 2),
-    fetchTopProducts(20),
-    fetchGeography(15),
-    fetchAbandoned(),
-    fetchTopCustomers(10, 'nuvemshop'),
+    fetchTopProducts(20, period.days, params.from, params.to),
+    fetchGeography(15, period.days, params.from, params.to),
+    fetchAbandoned(period.days, params.from, params.to),
+    fetchTopCustomers(10, 'nuvemshop', period.days, params.from, params.to),
   ]);
 
   // KPIs

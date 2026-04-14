@@ -5,6 +5,8 @@
 
 import { getSupabase } from './supabase-server';
 
+const PAGE_SIZE = 1000;
+
 export interface DailyRevenue {
   day: string;
   source: string;
@@ -87,65 +89,108 @@ export function parsePeriod(params: { days?: string; from?: string; to?: string 
 /** Visão Geral: revenue by day and source */
 export async function fetchDailyRevenue(days: number = 30, from?: string, to?: string): Promise<DailyRevenue[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  // PostgREST default limit = 1000. With 2 sources x 730 days (1-year
-  // comparison period), this view can return 1460 rows → silently truncated.
-  let query = supabase
-    .from('v_visao_geral_daily')
-    .select('day, source, orders_count, gross_revenue')
-    .order('day', { ascending: true })
-    .limit(10000);
-
-  if (from && to) {
-    query = query.gte('day', from).lte('day', to);
-  } else {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    query = query.gte('day', since.toISOString().split('T')[0]!);
+  const all: DailyRevenue[] = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('v_visao_geral_daily')
+      .select('day, source, orders_count, gross_revenue')
+      .order('day', { ascending: true })
+      .gte('day', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('day', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchDailyRevenue: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...(data as DailyRevenue[]));
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchDailyRevenue: ${error.message}`);
-  return (data ?? []) as DailyRevenue[];
+  return all;
 }
 
-/** Top products consolidated across sources */
-export async function fetchTopProducts(limit: number = 20): Promise<TopProduct[]> {
+/** Top products consolidated across sources, filtered by period */
+export async function fetchTopProducts(limit: number = 20, days: number = 30, from?: string, to?: string): Promise<TopProduct[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const untilStr = to;
 
-  const { data, error } = await supabase
-    .from('v_visao_geral_top_produtos')
-    .select('product_name, sku, quantity_total, revenue_total, quantity_loja_fisica, quantity_nuvemshop, revenue_loja_fisica, revenue_nuvemshop')
-    .not('product_name', 'is', null)
-    .order('revenue_total', { ascending: false })
-    .limit(limit);
+  // Paginate past PostgREST 1000-row default limit
+  const allItems: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('sale_items')
+      .select('product_name, sku, quantity, total_price, sales!inner(source, sale_date, status)')
+      .eq('sales.status', 'paid')
+      .not('product_name', 'is', null)
+      .gte('sales.sale_date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (untilStr) q = q.lte('sales.sale_date', untilStr);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchTopProducts: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allItems.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
 
-  if (error) throw new Error(`fetchTopProducts: ${error.message}`);
-  return (data ?? []) as TopProduct[];
+  // Aggregate by product_name
+  const byProduct = new Map<string, TopProduct>();
+  for (const row of allItems as unknown as Array<{
+    product_name: string; sku: string | null; quantity: number; total_price: number;
+    sales: { source: string } | Array<{ source: string }>;
+  }>) {
+    const salesObj = Array.isArray(row.sales) ? row.sales[0] : row.sales;
+    const source = salesObj?.source ?? 'unknown';
+    const key = row.product_name;
+    const existing = byProduct.get(key) ?? {
+      product_name: key, sku: row.sku, quantity_total: 0, revenue_total: 0,
+      quantity_loja_fisica: 0, quantity_nuvemshop: 0, revenue_loja_fisica: 0, revenue_nuvemshop: 0,
+    };
+    existing.quantity_total += row.quantity;
+    existing.revenue_total += row.total_price;
+    if (source === 'conta_azul') {
+      existing.quantity_loja_fisica += row.quantity;
+      existing.revenue_loja_fisica += row.total_price;
+    } else {
+      existing.quantity_nuvemshop += row.quantity;
+      existing.revenue_nuvemshop += row.total_price;
+    }
+    if (row.sku) existing.sku = row.sku;
+    byProduct.set(key, existing);
+  }
+
+  return Array.from(byProduct.values())
+    .sort((a, b) => b.revenue_total - a.revenue_total)
+    .slice(0, limit);
 }
 
 /** Nuvemshop daily for the Nuvemshop tab */
 export async function fetchNuvemshopDaily(days: number = 30, from?: string, to?: string): Promise<NuvemshopDaily[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  // v_nuvemshop_daily has 1820+ rows (2020–2026). PostgREST truncates at 1000.
-  let query = supabase
-    .from('v_nuvemshop_daily')
-    .select('*')
-    .order('day', { ascending: true })
-    .limit(10000);
-
-  if (from && to) {
-    query = query.gte('day', from).lte('day', to);
-  } else {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    query = query.gte('day', since.toISOString().split('T')[0]!);
+  const all: NuvemshopDaily[] = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('v_nuvemshop_daily')
+      .select('*')
+      .order('day', { ascending: true })
+      .gte('day', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('day', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchNuvemshopDaily: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...(data as NuvemshopDaily[]));
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchNuvemshopDaily: ${error.message}`);
-  return (data ?? []) as NuvemshopDaily[];
+  return all;
 }
 
 export interface TopCustomer {
@@ -158,53 +203,134 @@ export interface TopCustomer {
   avg_ticket: number;
 }
 
-/** Top customers by revenue. Optional source filter. */
-export async function fetchTopCustomers(limit: number = 15, source?: string): Promise<TopCustomer[]> {
+/** Top customers by revenue, filtered by period. Optional source filter. */
+export async function fetchTopCustomers(limit: number = 15, source?: string, days: number = 30, from?: string, to?: string): Promise<TopCustomer[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  let query = supabase
-    .from('v_top_customers')
-    .select('*')
-    .order('total_revenue', { ascending: false })
-    .limit(limit);
-
-  if (source !== undefined) {
-    query = query.eq('source', source);
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('sales')
+      .select('customer_id, source, gross_revenue, customers!inner(name, state)')
+      .eq('status', 'paid')
+      .not('customer_id', 'is', null)
+      .gte('sale_date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (source !== undefined) q = q.eq('source', source);
+    if (to) q = q.lte('sale_date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
 
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
-  return (data ?? []) as TopCustomer[];
+  const byCustomer = new Map<number, TopCustomer>();
+  for (const row of allRows as unknown as Array<{
+    customer_id: number; source: string; gross_revenue: number;
+    customers: { name: string; state: string | null } | Array<{ name: string; state: string | null }>;
+  }>) {
+    const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    if (!cust) continue;
+    const existing = byCustomer.get(row.customer_id) ?? {
+      customer_id: row.customer_id, name: cust.name,
+      state: cust.state, source: row.source,
+      orders_count: 0, total_revenue: 0, avg_ticket: 0,
+    };
+    existing.orders_count += 1;
+    existing.total_revenue += row.gross_revenue;
+    byCustomer.set(row.customer_id, existing);
+  }
+
+  return Array.from(byCustomer.values())
+    .map(c => ({ ...c, avg_ticket: c.orders_count > 0 ? c.total_revenue / c.orders_count : 0 }))
+    .sort((a, b) => b.total_revenue - a.total_revenue)
+    .slice(0, limit);
 }
 
-/** Geography (Nuvemshop) */
-export async function fetchGeography(limit: number = 15): Promise<GeoData[]> {
+/** Geography (Nuvemshop), filtered by period */
+export async function fetchGeography(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoData[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  const { data, error } = await supabase
-    .from('v_nuvemshop_geografia')
-    .select('state, city, orders_count, revenue')
-    .not('state', 'is', null)
-    .order('revenue', { ascending: false })
-    .limit(limit);
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('sales')
+      .select('gross_revenue, customers!inner(state, city)')
+      .eq('status', 'paid')
+      .eq('source', 'nuvemshop')
+      .not('customers.state', 'is', null)
+      .gte('sale_date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('sale_date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchGeography: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
 
-  if (error) throw new Error(`fetchGeography: ${error.message}`);
-  return (data ?? []) as GeoData[];
+  const byState = new Map<string, GeoData>();
+  for (const row of allRows as unknown as Array<{ gross_revenue: number; customers: { state: string; city: string } | Array<{ state: string; city: string }> }>) {
+    const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    const state = c?.state;
+    if (!state) continue;
+    const existing = byState.get(state) ?? { state, city: '', orders_count: 0, revenue: 0 };
+    existing.orders_count += 1;
+    existing.revenue += row.gross_revenue;
+    byState.set(state, existing);
+  }
+
+  return Array.from(byState.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, limit);
 }
 
-/** Geography (Conta Azul — Loja Física) */
-export async function fetchGeographyCA(limit: number = 15): Promise<GeoData[]> {
+/** Geography (Conta Azul — Loja Física), filtered by period */
+export async function fetchGeographyCA(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoData[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  const { data, error } = await supabase
-    .from('v_loja_fisica_geografia')
-    .select('state, city, orders_count, revenue')
-    .not('state', 'is', null)
-    .order('revenue', { ascending: false })
-    .limit(limit);
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('sales')
+      .select('gross_revenue, customers!inner(state, city)')
+      .eq('status', 'paid')
+      .eq('source', 'conta_azul')
+      .not('customers.state', 'is', null)
+      .gte('sale_date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('sale_date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
 
-  if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
-  return (data ?? []) as GeoData[];
+  const byState = new Map<string, GeoData>();
+  for (const row of allRows as unknown as Array<{ gross_revenue: number; customers: { state: string; city: string } | Array<{ state: string; city: string }> }>) {
+    const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    const state = c?.state;
+    if (!state) continue;
+    const existing = byState.get(state) ?? { state, city: '', orders_count: 0, revenue: 0 };
+    existing.orders_count += 1;
+    existing.revenue += row.gross_revenue;
+    byState.set(state, existing);
+  }
+
+  return Array.from(byState.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, limit);
 }
 
 export interface GeoConsolidated {
@@ -215,18 +341,48 @@ export interface GeoConsolidated {
   revenue_conta_azul: number;
 }
 
-/** Geography consolidated (both sources) */
-export async function fetchGeographyConsolidated(limit: number = 15): Promise<GeoConsolidated[]> {
+/** Geography consolidated (both sources), filtered by period */
+export async function fetchGeographyConsolidated(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoConsolidated[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  const { data, error } = await supabase
-    .from('v_geografia_consolidada')
-    .select('*')
-    .order('revenue', { ascending: false })
-    .limit(limit);
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('sales')
+      .select('source, gross_revenue, customers!inner(state)')
+      .eq('status', 'paid')
+      .not('customers.state', 'is', null)
+      .gte('sale_date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('sale_date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchGeographyConsolidated: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
 
-  if (error) throw new Error(`fetchGeographyConsolidated: ${error.message}`);
-  return (data ?? []) as GeoConsolidated[];
+  const byState = new Map<string, GeoConsolidated>();
+  for (const row of allRows as unknown as Array<{ source: string; gross_revenue: number; customers: { state: string } | Array<{ state: string }> }>) {
+    const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    const state = c?.state;
+    if (!state) continue;
+    const existing = byState.get(state) ?? {
+      state, orders_count: 0, revenue: 0, revenue_nuvemshop: 0, revenue_conta_azul: 0,
+    };
+    existing.orders_count += 1;
+    existing.revenue += row.gross_revenue;
+    if (row.source === 'nuvemshop') existing.revenue_nuvemshop += row.gross_revenue;
+    if (row.source === 'conta_azul') existing.revenue_conta_azul += row.gross_revenue;
+    byState.set(state, existing);
+  }
+
+  return Array.from(byState.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, limit);
 }
 
 export interface MonthlyData {
@@ -305,15 +461,25 @@ export interface RecentOrder {
   customer_name: string | null;
 }
 
-/** Recent orders (last N) across all sources */
-export async function fetchRecentOrders(limit: number = 10): Promise<RecentOrder[]> {
+/** Recent orders within the period */
+export async function fetchRecentOrders(limit: number = 10, days: number = 30, from?: string, to?: string): Promise<RecentOrder[]> {
   const supabase = getSupabase();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('sales')
     .select('sale_id, source, sale_date, gross_revenue, status, payment_method, customers(name)')
     .order('sale_date', { ascending: false })
     .limit(limit);
+
+  if (from && to) {
+    query = query.gte('sale_date', from).lte('sale_date', to);
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    query = query.gte('sale_date', since.toISOString().split('T')[0]!);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`fetchRecentOrders: ${error.message}`);
 
@@ -394,24 +560,26 @@ export async function fetchMetaDaily(
   to?: string,
 ): Promise<MetaDailyRow[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  let query = supabase
-    .from('v_meta_account_daily')
-    .select('*')
-    .order('date', { ascending: true })
-    .limit(10000);
-
-  if (from && to) {
-    query = query.gte('date', from).lte('date', to);
-  } else {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    query = query.gte('date', since.toISOString().split('T')[0]!);
+  const all: MetaDailyRow[] = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('v_meta_account_daily')
+      .select('*')
+      .order('date', { ascending: true })
+      .gte('date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchMetaDaily: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...(data as MetaDailyRow[]));
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchMetaDaily: ${error.message}`);
-  return (data ?? []) as MetaDailyRow[];
+  return all;
 }
 
 /**
@@ -427,26 +595,27 @@ export async function fetchMetaCampaignRanking(
 ): Promise<MetaRankingRow[]> {
   const supabase = getSupabase();
 
-  // PostgREST default limit = 1000 rows. With 9+ campaigns x 365 days
-  // a 1-year filter hits 3000+ rows → silently truncated. Explicit limit.
-  let query = supabase
-    .from('v_meta_campanha_daily')
-    .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value')
-    .limit(10000);
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  if (from && to) {
-    query = query.gte('date', from).lte('date', to);
-  } else {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    query = query.gte('date', since.toISOString().split('T')[0]!);
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('v_meta_campanha_daily')
+      .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value')
+      .gte('date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchMetaCampaignRanking: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
 
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchMetaCampaignRanking: ${error.message}`);
-
   const byCampaign = new Map<string, MetaRankingRow>();
-  for (const row of (data ?? []) as Array<{
+  for (const row of allRows as Array<{
     campaign_id: string;
     campaign_name: string | null;
     spend: number;
@@ -494,28 +663,28 @@ export async function fetchMetaAdRanking(
 ): Promise<MetaAdRankingRow[]> {
   const supabase = getSupabase();
 
-  // v_meta_ranking_criativos soma todo o histórico — pra respeitar
-  // período, consultamos a tabela base e agregamos aqui.
-  // PostgREST default limit = 1000. 15+ ads x 365 days = 5000+ rows.
-  let query = supabase
-    .from('meta_ads_insights')
-    .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, date')
-    .eq('level', 'ad')
-    .limit(10000);
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  if (from && to) {
-    query = query.gte('date', from).lte('date', to);
-  } else {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    query = query.gte('date', since.toISOString().split('T')[0]!);
+  const allRows: Array<Record<string, unknown>> = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('meta_ads_insights')
+      .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, date')
+      .eq('level', 'ad')
+      .gte('date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchMetaAdRanking: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
 
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchMetaAdRanking: ${error.message}`);
-
   const byAd = new Map<string, MetaAdRankingRow>();
-  for (const row of (data ?? []) as Array<{
+  for (const row of allRows as Array<{
     ad_id: string | null;
     ad_name: string | null;
     adset_id: string | null;
@@ -563,16 +732,22 @@ export async function fetchMetaAdRanking(
   return result;
 }
 
-/** Abandoned checkouts (Nuvemshop) */
-export async function fetchAbandoned(): Promise<AbandonedData[]> {
+/** Abandoned checkouts (Nuvemshop), filtered by period */
+export async function fetchAbandoned(days: number = 30, from?: string, to?: string): Promise<AbandonedData[]> {
   const supabase = getSupabase();
+  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('v_nuvemshop_abandonados')
     .select('*')
     .order('day', { ascending: false })
-    .limit(30);
+    .gte('day', sinceStr);
 
+  if (to) {
+    query = query.lte('day', to);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(`fetchAbandoned: ${error.message}`);
   return (data ?? []) as AbandonedData[];
 }
