@@ -7,6 +7,17 @@ import { getSupabase } from './supabase-server';
 
 const PAGE_SIZE = 1000;
 
+/**
+ * Convert a YYYY-MM-DD date string to a timestamptz at midnight São Paulo
+ * (UTC-3). Used when filtering sale_date (timestamptz) to match the same
+ * day boundaries as the views, which use `at time zone 'America/Sao_Paulo'`.
+ * Without this, sales between 00:00-03:00 UTC fall on different days in
+ * the view vs the direct query, causing revenue diffs on long periods.
+ */
+function toSPTimestamp(dateStr: string): string {
+  return `${dateStr}T03:00:00Z`;
+}
+
 export interface DailyRevenue {
   day: string;
   source: string;
@@ -126,9 +137,9 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
       .select('product_name, sku, quantity, total_price, sales!inner(source, sale_date, status)')
       .eq('sales.status', 'paid')
       .not('product_name', 'is', null)
-      .gte('sales.sale_date', sinceStr)
+      .gte('sales.sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (untilStr) q = q.lte('sales.sale_date', untilStr);
+    if (untilStr) q = q.lte('sales.sale_date', toSPTimestamp(untilStr));
     const { data, error } = await q;
     if (error) throw new Error(`fetchTopProducts: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -216,10 +227,10 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
       .select('customer_id, source, gross_revenue, customers!inner(name, state)')
       .eq('status', 'paid')
       .not('customer_id', 'is', null)
-      .gte('sale_date', sinceStr)
+      .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (source !== undefined) q = q.eq('source', source);
-    if (to) q = q.lte('sale_date', to);
+    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
     const { data, error } = await q;
     if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -265,9 +276,9 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
       .eq('status', 'paid')
       .eq('source', 'nuvemshop')
       .not('customers.state', 'is', null)
-      .gte('sale_date', sinceStr)
+      .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('sale_date', to);
+    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeography: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -306,9 +317,9 @@ export async function fetchGeographyCA(limit: number = 15, days: number = 30, fr
       .eq('status', 'paid')
       .eq('source', 'conta_azul')
       .not('customers.state', 'is', null)
-      .gte('sale_date', sinceStr)
+      .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('sale_date', to);
+    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -354,9 +365,9 @@ export async function fetchGeographyConsolidated(limit: number = 15, days: numbe
       .select('source, gross_revenue, customers!inner(state)')
       .eq('status', 'paid')
       .not('customers.state', 'is', null)
-      .gte('sale_date', sinceStr)
+      .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('sale_date', to);
+    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeographyConsolidated: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -472,11 +483,11 @@ export async function fetchRecentOrders(limit: number = 10, days: number = 30, f
     .limit(limit);
 
   if (from && to) {
-    query = query.gte('sale_date', from).lte('sale_date', to);
+    query = query.gte('sale_date', toSPTimestamp(from)).lte('sale_date', toSPTimestamp(to));
   } else {
     const since = new Date();
     since.setDate(since.getDate() - days);
-    query = query.gte('sale_date', since.toISOString().split('T')[0]!);
+    query = query.gte('sale_date', toSPTimestamp(since.toISOString().split('T')[0]!));
   }
 
   const { data, error } = await query;
