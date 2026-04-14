@@ -33,7 +33,7 @@ export default async function MetaAdsPage({
   // ---- KPIs atual ----
   const totalSpend = daily.reduce((s, r) => s + r.spend, 0);
   const totalImpressions = daily.reduce((s, r) => s + r.impressions, 0);
-  const totalReach = daily.reduce((s, r) => s + r.reach, 0);
+  const cpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0;
   const totalClicks = daily.reduce((s, r) => s + r.clicks, 0);
   const totalPurchases = daily.reduce((s, r) => s + r.purchases, 0);
   const totalPurchaseValue = daily.reduce((s, r) => s + r.purchase_value, 0);
@@ -107,9 +107,9 @@ export default async function MetaAdsPage({
           subtitle="clique de link"
         />
         <KpiCard
-          title="Alcance"
-          value={formatNumber(totalReach)}
-          subtitle={`${formatNumber(totalImpressions)} impressões`}
+          title="CPM"
+          value={formatBRL(cpm)}
+          subtitle="custo por mil impressões"
         />
       </section>
 
