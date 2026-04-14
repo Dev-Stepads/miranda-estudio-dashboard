@@ -44,7 +44,7 @@ export function BrazilMap({ data }: BrazilMapProps) {
 
   const dataMap = new Map(data.map(d => [d.state, d]));
   const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
-  const ranked = [...data].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+  const ranked = [...data].sort((a, b) => b.revenue - a.revenue).slice(0, 15);
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -53,7 +53,7 @@ export function BrazilMap({ data }: BrazilMapProps) {
       </h3>
 
       {/* Map */}
-      <div className="relative h-56 sm:h-80">
+      <div className="relative h-56 sm:h-72">
         <ComposableMap
           projection="geoMercator"
           projectionConfig={{ scale: 550, center: [-54, -15] }}
@@ -103,7 +103,7 @@ export function BrazilMap({ data }: BrazilMapProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-2 mt-3 mb-6 text-xs text-gray-500 dark:text-gray-400 justify-center">
+      <div className="flex items-center gap-3 mt-3 mb-4 text-sm text-gray-500 dark:text-gray-400 justify-center">
         <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#ddd6fe' }} />
         <span>Baixo</span>
         <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#a78bfa' }} />
@@ -113,27 +113,27 @@ export function BrazilMap({ data }: BrazilMapProps) {
       </div>
 
       {/* Ranking table */}
-      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ranking por Faturamento</p>
+      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Ranking por Faturamento</p>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 dark:border-gray-700">
-              <th className="py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Estado</th>
-              <th className="py-1.5 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
-              <th className="py-1.5 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
+            <tr className="border-b border-gray-200 dark:border-gray-700">
+              <th className="py-2 text-left font-medium text-gray-500 dark:text-gray-400">Estado</th>
+              <th className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
+              <th className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
             </tr>
           </thead>
           <tbody>
             {ranked.map((s) => (
               <tr key={s.state} className="border-b border-gray-50 dark:border-gray-700/50">
-                <td className="py-1.5">
-                  <span className="inline-block w-2.5 h-2.5 rounded-sm mr-1.5 align-middle" style={{ background: getColor(s.revenue, maxRevenue) }} />
+                <td className="py-2.5">
+                  <span className="inline-block w-3 h-3 rounded-sm mr-2 align-middle" style={{ background: getColor(s.revenue, maxRevenue) }} />
                   <span className="font-medium text-gray-800 dark:text-gray-200">{s.state}</span>
                 </td>
-                <td className="py-1.5 text-right text-gray-600 dark:text-gray-300 font-mono">
+                <td className="py-2.5 text-right text-gray-600 dark:text-gray-300 font-mono">
                   {s.orders_count.toLocaleString('pt-BR')}
                 </td>
-                <td className="py-1.5 text-right font-semibold text-gray-900 dark:text-gray-100">
+                <td className="py-2.5 text-right font-semibold text-gray-900 dark:text-gray-100">
                   {formatBRL(s.revenue)}
                 </td>
               </tr>

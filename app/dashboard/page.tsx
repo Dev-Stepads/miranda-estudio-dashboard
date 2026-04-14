@@ -40,7 +40,7 @@ export default async function VisaoGeralPage({
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(15, period.days, params.from, params.to),
     fetchGeographyConsolidated(10, period.days, params.from, params.to),
-    fetchTopCustomers(10, undefined, period.days, params.from, params.to),
+    fetchTopCustomers(30, undefined, period.days, params.from, params.to),
     fetchRecentOrders(10, period.days, params.from, params.to),
     fetchCustomerRecurrence(),
     fetchMonthlyComparison(36),
@@ -197,37 +197,53 @@ export default async function VisaoGeralPage({
       <MonthlyComparison data={monthly} />
 
       {/* Recent Orders + Top Customers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-        <SimpleTable
-          title="Pedidos Recentes"
-          subtitle="Últimos 10 pedidos (todas as fontes)"
+      {/* Top Clientes */}
+      <SimpleTable
+          title="Top Clientes — Pessoas"
+          subtitle="Ranking por faturamento (pessoa física)"
           columns={[
-            { key: 'sale_date_fmt', label: 'Data' },
-            { key: 'customer_name', label: 'Cliente' },
-            { key: 'source_label', label: 'Canal' },
-            { key: 'gross_revenue', label: 'Valor', align: 'right', format: 'currency' },
+            { key: 'name', label: 'Cliente' },
+            { key: 'email', label: 'Email' },
+            { key: 'phone', label: 'Telefone' },
+            { key: 'state', label: 'UF' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+            { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
           ]}
-          rows={recentOrders.map(o => ({
-            ...o,
-            sale_date_fmt: new Date(o.sale_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-            source_label: o.source === 'nuvemshop' ? 'E-commerce' : 'Loja',
-            customer_name: o.customer_name ?? '—',
-          })) as unknown as Record<string, unknown>[]}
+          rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+        />
+        <SimpleTable
+          title="Top Clientes — Empresas"
+          subtitle="Ranking por faturamento (pessoa jurídica)"
+          columns={[
+            { key: 'name', label: 'Empresa' },
+            { key: 'email', label: 'Email' },
+            { key: 'phone', label: 'Telefone' },
+            { key: 'state', label: 'UF' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+            { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
+          ]}
+          rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
         />
 
+      {/* Pedidos Recentes abaixo */}
       <SimpleTable
-        title="Top Clientes"
-        subtitle="Ranking por faturamento total (todas as fontes)"
+        title="Pedidos Recentes"
+        subtitle="Últimos 10 pedidos (todas as fontes)"
         columns={[
-          { key: 'name', label: 'Cliente' },
-          { key: 'state', label: 'UF' },
-          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-          { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
+          { key: 'sale_date_fmt', label: 'Data' },
+          { key: 'customer_name', label: 'Cliente' },
+          { key: 'source_label', label: 'Canal' },
+          { key: 'gross_revenue', label: 'Valor', align: 'right', format: 'currency' },
         ]}
-        rows={topCustomers as unknown as Record<string, unknown>[]}
+        rows={recentOrders.map(o => ({
+          ...o,
+          sale_date_fmt: new Date(o.sale_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          source_label: o.source === 'nuvemshop' ? 'E-commerce' : 'Loja',
+          customer_name: o.customer_name ?? '—',
+        })) as unknown as Record<string, unknown>[]}
       />
-      </div>
     </div>
   );
 }

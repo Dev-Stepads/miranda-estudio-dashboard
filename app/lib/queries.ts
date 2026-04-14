@@ -212,6 +212,28 @@ export interface TopCustomer {
   orders_count: number;
   total_revenue: number;
   avg_ticket: number;
+  customer_type: 'pessoa' | 'empresa';
+  email: string | null;
+  phone: string | null;
+}
+
+const BUSINESS_SUFFIXES = /\b(LTDA|S\.?A\.?|EIRELI|MEI|EPP|COMERCIO|SERVICOS|EMPREENDIMENTOS|PRODUCOES|INDUSTRIA|DISTRIBUIDORA|HOTELEIRA|MATERIAIS|INSTITUTO)\b/i;
+
+/**
+ * Classify a customer as pessoa or empresa.
+ * - Conta Azul: source_customer_id is CPF (<=11 digits) or CNPJ (>=12 digits)
+ * - Nuvemshop: no CPF/CNPJ stored, so use name heuristics
+ */
+function classifyCustomer(name: string, source: string, sourceCustomerId?: string): 'pessoa' | 'empresa' {
+  // Conta Azul: use CPF/CNPJ length
+  if (source === 'conta_azul' && sourceCustomerId) {
+    const digits = sourceCustomerId.replace(/\D/g, '');
+    if (digits.length >= 12) return 'empresa';
+    return 'pessoa';
+  }
+  // Name heuristics: business names typically have legal suffixes
+  if (BUSINESS_SUFFIXES.test(name)) return 'empresa';
+  return 'pessoa';
 }
 
 /** Top customers by revenue, filtered by period. Optional source filter. */
@@ -224,7 +246,7 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
   while (true) {
     let q = supabase
       .from('sales')
-      .select('customer_id, source, gross_revenue, customers!inner(name, state)')
+      .select('customer_id, source, gross_revenue, customers!inner(name, state, source_customer_id, email, phone)')
       .eq('status', 'paid')
       .not('customer_id', 'is', null)
       .gte('sale_date', toSPTimestamp(sinceStr))
@@ -242,7 +264,7 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
   const byCustomer = new Map<number, TopCustomer>();
   for (const row of allRows as unknown as Array<{
     customer_id: number; source: string; gross_revenue: number;
-    customers: { name: string; state: string | null } | Array<{ name: string; state: string | null }>;
+    customers: { name: string; state: string | null; source_customer_id: string; email: string | null; phone: string | null } | Array<{ name: string; state: string | null; source_customer_id: string; email: string | null; phone: string | null }>;
   }>) {
     const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     if (!cust) continue;
@@ -250,6 +272,8 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
       customer_id: row.customer_id, name: cust.name,
       state: cust.state, source: row.source,
       orders_count: 0, total_revenue: 0, avg_ticket: 0,
+      customer_type: classifyCustomer(cust.name, row.source, cust.source_customer_id),
+      email: cust.email, phone: cust.phone,
     };
     existing.orders_count += 1;
     existing.total_revenue += row.gross_revenue;

@@ -178,10 +178,10 @@ export async function syncCustomers(ctx: SyncContext): Promise<SyncResult> {
         gender: genderToDb(canonical.gender),
         age: canonical.age,
         age_range: canonical.age_range,
-        // normalizeState in the mapper already converts province names
-        // to 2-letter UF codes and nulls international/unknown values.
         state: canonical.state,
         city: canonical.city,
+        email: canonical.email,
+        phone: canonical.phone,
       };
     });
 

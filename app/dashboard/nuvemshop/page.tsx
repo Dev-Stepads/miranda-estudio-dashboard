@@ -30,7 +30,7 @@ export default async function NuvemshopPage({
     fetchGeography(15, period.days, params.from, params.to),
     fetchAbandoned(period.days, params.from, params.to),
     fetchAbandonedDetails(period.days, params.from, params.to, 20),
-    fetchTopCustomers(10, 'nuvemshop', period.days, params.from, params.to),
+    fetchTopCustomers(30, 'nuvemshop', period.days, params.from, params.to),
   ]);
 
   // KPIs
@@ -151,30 +151,47 @@ export default async function NuvemshopPage({
         })) as unknown as Record<string, unknown>[]}
       />
 
-      {/* Top Products + Top Customers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-        <SimpleTable
-          title="Top Produtos"
-          subtitle="Ranking por faturamento (e-commerce)"
-          columns={[
-            { key: 'product_name', label: 'Produto' },
-            { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
-            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-          ]}
-          rows={nsProducts.slice(0, 15) as unknown as Record<string, unknown>[]}
-        />
-        <SimpleTable
-          title="Top Clientes"
-          subtitle="Ranking por faturamento (e-commerce)"
-          columns={[
-            { key: 'name', label: 'Cliente' },
-            { key: 'state', label: 'UF' },
-            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-          ]}
-          rows={topCustomers as unknown as Record<string, unknown>[]}
-        />
-      </div>
+      {/* Top Produtos */}
+      <SimpleTable
+        title="Top Produtos"
+        subtitle="Ranking por faturamento (e-commerce)"
+        columns={[
+          { key: 'product_name', label: 'Produto' },
+          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
+          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+        ]}
+        rows={nsProducts.slice(0, 15) as unknown as Record<string, unknown>[]}
+      />
+
+      {/* Top Clientes — Pessoas */}
+      <SimpleTable
+        title="Top Clientes — Pessoas"
+        subtitle="Ranking por faturamento (pessoa física)"
+        columns={[
+          { key: 'name', label: 'Cliente' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Telefone' },
+          { key: 'state', label: 'UF' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+        ]}
+        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+      />
+
+      {/* Top Clientes — Empresas */}
+      <SimpleTable
+        title="Top Clientes — Empresas"
+        subtitle="Ranking por faturamento (pessoa jurídica)"
+        columns={[
+          { key: 'name', label: 'Empresa' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Telefone' },
+          { key: 'state', label: 'UF' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+        ]}
+        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+      />
     </div>
   );
 }

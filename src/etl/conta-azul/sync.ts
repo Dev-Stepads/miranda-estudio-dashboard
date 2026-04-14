@@ -204,6 +204,8 @@ export async function syncContaAzul(
               age_range: 'unknown',
               state: nfe.customer.uf,
               city: nfe.customer.cidade,
+              email: nfe.customer.email,
+              phone: nfe.customer.telefone,
             },
             { onConflict: 'source,source_customer_id' },
           );

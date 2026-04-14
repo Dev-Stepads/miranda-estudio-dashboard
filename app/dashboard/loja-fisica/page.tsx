@@ -19,7 +19,7 @@ export default async function LojaFisicaPage({
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(20, period.days, params.from, params.to),
-    fetchTopCustomers(10, 'conta_azul', period.days, params.from, params.to),
+    fetchTopCustomers(30, 'conta_azul', period.days, params.from, params.to),
     fetchGeographyCA(10, period.days, params.from, params.to),
   ]);
 
@@ -84,24 +84,22 @@ export default async function LojaFisicaPage({
         />
       )}
 
-      {/* Geography */}
-      <BrazilMap
-        data={(() => {
-          const byState = new Map<string, { revenue: number; orders_count: number }>();
-          for (const g of geography) {
-            const existing = byState.get(g.state) ?? { revenue: 0, orders_count: 0 };
-            existing.revenue += g.revenue;
-            existing.orders_count += g.orders_count;
-            byState.set(g.state, existing);
-          }
-          return Array.from(byState.entries())
-            .map(([state, vals]) => ({ state, ...vals }))
-            .sort((a, b) => b.revenue - a.revenue);
-        })()}
-      />
-
-      {/* Top Products + Top Customers */}
+      {/* Geography + Top Produtos lado a lado */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+        <BrazilMap
+          data={(() => {
+            const byState = new Map<string, { revenue: number; orders_count: number }>();
+            for (const g of geography) {
+              const existing = byState.get(g.state) ?? { revenue: 0, orders_count: 0 };
+              existing.revenue += g.revenue;
+              existing.orders_count += g.orders_count;
+              byState.set(g.state, existing);
+            }
+            return Array.from(byState.entries())
+              .map(([state, vals]) => ({ state, ...vals }))
+              .sort((a, b) => b.revenue - a.revenue);
+          })()}
+        />
         <SimpleTable
           title="Top Produtos"
           subtitle="Ranking por faturamento (NF-e)"
@@ -113,18 +111,37 @@ export default async function LojaFisicaPage({
           ]}
           rows={caProducts as unknown as Record<string, unknown>[]}
         />
-        <SimpleTable
-          title="Top Clientes"
-          subtitle="Ranking por faturamento (Loja Física)"
-          columns={[
-            { key: 'name', label: 'Cliente' },
-            { key: 'state', label: 'UF' },
-            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-          ]}
-          rows={topCustomers as unknown as Record<string, unknown>[]}
-        />
       </div>
+
+      {/* Top Clientes — Pessoas */}
+      <SimpleTable
+        title="Top Clientes — Pessoas"
+        subtitle="Ranking por faturamento (pessoa física)"
+        columns={[
+          { key: 'name', label: 'Cliente' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Telefone' },
+          { key: 'state', label: 'UF' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+        ]}
+        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+      />
+
+      {/* Top Clientes — Empresas */}
+      <SimpleTable
+        title="Top Clientes — Empresas"
+        subtitle="Ranking por faturamento (pessoa jurídica)"
+        columns={[
+          { key: 'name', label: 'Empresa' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Telefone' },
+          { key: 'state', label: 'UF' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+        ]}
+        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+      />
     </div>
   );
 }
