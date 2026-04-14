@@ -55,7 +55,7 @@ export default async function LojaFisicaPage({
   return (
     <div className="space-y-4 sm:space-y-8">
       {/* KPI Cards */}
-      <section className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4">
         <KpiCard
           title="Faturamento Loja Física"
           value={formatBRL(totalRevenue)}
@@ -68,15 +68,10 @@ export default async function LojaFisicaPage({
           subtitle={`Ticket médio ${formatBRL(avgTicket)}`}
           change={percentChange(totalOrders, prevOrders)}
         />
-        <KpiCard
-          title="NF-e Emitidas"
-          value={formatNumber(totalOrders)}
-          subtitle={period.label}
-        />
       </section>
 
       {/* Revenue Chart */}
-      {chartData.length > 0 && <RevenueChart data={chartData} />}
+      {chartData.length > 0 && <RevenueChart data={chartData} sources={['conta_azul']} />}
 
       {/* Avg Ticket */}
       {chartData.length > 0 && (
@@ -85,6 +80,7 @@ export default async function LojaFisicaPage({
             day: d.day,
             avg_ticket: d.orders_count > 0 ? d.gross_revenue / d.orders_count : 0,
           }))}
+          color="#F59E0B"
         />
       )}
 

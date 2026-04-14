@@ -107,10 +107,10 @@ export default async function NuvemshopPage({
       </section>
 
       {/* Revenue Chart */}
-      <RevenueChart data={chartData} />
+      <RevenueChart data={chartData} sources={['nuvemshop']} />
 
       {/* Avg Ticket Chart */}
-      <AvgTicketChart data={daily.map(d => ({ day: d.day, avg_ticket: d.avg_ticket }))} />
+      <AvgTicketChart data={daily.map(d => ({ day: d.day, avg_ticket: d.avg_ticket }))} color="#6366F1" />
 
       {/* Geography by state + by city */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">

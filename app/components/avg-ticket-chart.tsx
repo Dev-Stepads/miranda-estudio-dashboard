@@ -18,6 +18,8 @@ interface AvgTicketChartProps {
     avg_ticket_nuvemshop?: number;
     avg_ticket_conta_azul?: number;
   }>;
+  /** Override color for the single-line mode. Default: #10b981 (green). */
+  color?: string;
 }
 
 function formatDay(day: string) {
@@ -30,7 +32,7 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-export function AvgTicketChart({ data }: AvgTicketChartProps) {
+export function AvgTicketChart({ data, color = '#10b981' }: AvgTicketChartProps) {
   const hasSplit = data.some(d => d.avg_ticket_nuvemshop !== undefined || d.avg_ticket_conta_azul !== undefined);
 
   return (
@@ -100,9 +102,9 @@ export function AvgTicketChart({ data }: AvgTicketChartProps) {
               <Line
                 type="monotone"
                 dataKey="avg_ticket"
-                stroke="#10b981"
+                stroke={color}
                 strokeWidth={2}
-                dot={{ r: 3, fill: '#10b981' }}
+                dot={{ r: 3, fill: color }}
                 activeDot={{ r: 5 }}
               />
             )}

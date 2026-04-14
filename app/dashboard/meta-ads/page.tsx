@@ -77,7 +77,7 @@ export default async function MetaAdsPage({
           change={percentChange(totalPurchases, prevPurchases)}
         />
         <KpiCard
-          title="ROAS"
+          title="ROAS (retorno sobre investimento)"
           value={`${roas.toFixed(2)}x`}
           subtitle={roas > 1 ? 'retorno positivo' : 'retorno abaixo do investido'}
           change={percentChange(roas, prevRoas)}
@@ -99,7 +99,7 @@ export default async function MetaAdsPage({
         <KpiCard
           title="Cliques"
           value={formatNumber(totalClicks)}
-          subtitle={`CTR ${ctr.toFixed(2)}%`}
+          subtitle={`CTR (taxa de clique) ${ctr.toFixed(2)}%`}
         />
         <KpiCard
           title="CPC (custo por clique)"
@@ -107,9 +107,9 @@ export default async function MetaAdsPage({
           subtitle="clique de link"
         />
         <KpiCard
-          title="CPM"
+          title="CPM (custo por mil impressões)"
           value={formatBRL(cpm)}
-          subtitle="custo por mil impressões"
+          subtitle={period.label}
         />
       </section>
 

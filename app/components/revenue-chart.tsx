@@ -19,6 +19,8 @@ interface ChartData {
 
 interface RevenueChartProps {
   data: ChartData[];
+  /** Which sources to show. Default: both. */
+  sources?: Array<'nuvemshop' | 'conta_azul'>;
 }
 
 function formatCurrency(value: number) {
@@ -32,7 +34,20 @@ function formatDay(day: string) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
-export function RevenueChart({ data }: RevenueChartProps) {
+const SOURCE_LABELS: Record<string, string> = {
+  nuvemshop: 'E-commerce (Nuvemshop)',
+  conta_azul: 'Loja Física (Conta Azul)',
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  nuvemshop: '#6366f1',
+  conta_azul: '#f59e0b',
+};
+
+export function RevenueChart({ data, sources }: RevenueChartProps) {
+  const activeSources = sources ?? ['nuvemshop', 'conta_azul'];
+  const showLegend = activeSources.length > 1;
+
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
@@ -64,13 +79,17 @@ export function RevenueChart({ data }: RevenueChartProps) {
                 return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
               }}
             />
-            <Legend
-              formatter={(value: string) =>
-                value === 'nuvemshop' ? 'E-commerce (Nuvemshop)' : 'Loja Física (Conta Azul)'
-              }
-            />
-            <Bar dataKey="nuvemshop" fill="#6366f1" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="conta_azul" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            {showLegend && (
+              <Legend
+                formatter={(value: string) => SOURCE_LABELS[value] ?? value}
+              />
+            )}
+            {activeSources.includes('nuvemshop') && (
+              <Bar dataKey="nuvemshop" fill={SOURCE_COLORS.nuvemshop} radius={[4, 4, 0, 0]} />
+            )}
+            {activeSources.includes('conta_azul') && (
+              <Bar dataKey="conta_azul" fill={SOURCE_COLORS.conta_azul} radius={[4, 4, 0, 0]} />
+            )}
           </BarChart>
         </ResponsiveContainer>
       </div>
