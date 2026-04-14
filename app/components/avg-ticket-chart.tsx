@@ -57,6 +57,9 @@ export function AvgTicketChart({ data, color = '#10b981' }: AvgTicketChartProps)
               width={60}
             />
             <Tooltip
+              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+              labelStyle={{ color: '#e5e7eb', fontWeight: 600 }}
+              itemStyle={{ color: '#d1d5db' }}
               formatter={(value, name) => [
                 formatCurrency(Number(value)),
                 String(name) === 'avg_ticket_nuvemshop' ? 'E-commerce'

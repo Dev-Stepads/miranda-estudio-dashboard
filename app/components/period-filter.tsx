@@ -20,7 +20,6 @@ function PeriodButtons() {
   const currentTo = searchParams.get('to');
   const isCustom = currentFrom !== null && currentTo !== null;
 
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState(currentFrom ?? '');
   const [toDate, setToDate] = useState(currentTo ?? formatDate(new Date()));
 
@@ -28,7 +27,6 @@ function PeriodButtons() {
     const params = new URLSearchParams();
     params.set('days', days);
     router.push(`${pathname}?${params.toString()}`);
-    setShowDatePicker(false);
   }
 
   function applyCustomRange() {
@@ -37,14 +35,12 @@ function PeriodButtons() {
     params.set('from', fromDate);
     params.set('to', toDate);
     router.push(`${pathname}?${params.toString()}`);
-    setShowDatePicker(false);
   }
 
   function clearCustom() {
     const params = new URLSearchParams();
     params.set('days', '30');
     router.push(`${pathname}?${params.toString()}`);
-    setShowDatePicker(false);
   }
 
   return (
@@ -64,8 +60,8 @@ function PeriodButtons() {
           </button>
         ))}
 
-        {/* Custom button / active label */}
-        {isCustom ? (
+        {/* Custom active label */}
+        {isCustom && (
           <span className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-900 shadow-sm">
             {currentFrom} → {currentTo}
             <button
@@ -76,46 +72,34 @@ function PeriodButtons() {
               ×
             </button>
           </span>
-        ) : (
-          <button
-            onClick={() => setShowDatePicker(!showDatePicker)}
-            className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
-          >
-            Custom
-          </button>
         )}
       </div>
 
-      {/* Date picker dropdown */}
-      {showDatePicker && (
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-2 shadow-sm">
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="text-xs border border-gray-200 rounded px-2 py-1"
-          />
-          <span className="text-xs text-gray-400">→</span>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="text-xs border border-gray-200 rounded px-2 py-1"
-          />
-          <button
-            onClick={applyCustomRange}
-            className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 cursor-pointer"
-          >
-            Aplicar
-          </button>
-          <button
-            onClick={() => setShowDatePicker(false)}
-            className="px-2 py-1 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {/* Date picker — always visible */}
+      <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 shadow-sm">
+        <span className="text-gray-500 dark:text-gray-400 text-sm" title="Selecione um intervalo personalizado">
+          &#128197;
+        </span>
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-2 py-1"
+        />
+        <span className="text-xs text-gray-400">→</span>
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-2 py-1"
+        />
+        <button
+          onClick={applyCustomRange}
+          className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 cursor-pointer"
+        >
+          Aplicar
+        </button>
+      </div>
     </div>
   );
 }

@@ -59,6 +59,9 @@ export function SpendChart({ data }: SpendChartProps) {
               width={70}
             />
             <Tooltip
+              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+              labelStyle={{ color: '#e5e7eb', fontWeight: 600 }}
+              itemStyle={{ color: '#d1d5db' }}
               formatter={(value, name) => [
                 new Intl.NumberFormat('pt-BR', {
                   style: 'currency',

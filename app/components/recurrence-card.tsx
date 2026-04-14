@@ -50,7 +50,7 @@ export function RecurrenceCard({ sources, totalFirstTime, totalRepeat, totalRepe
                 <Cell fill="#94a3b8" />
                 <Cell fill="#10b981" />
               </Pie>
-              <Tooltip formatter={(value) => [`${Number(value).toLocaleString('pt-BR')} clientes`]} />
+              <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }} labelStyle={{ color: '#e5e7eb' }} itemStyle={{ color: '#d1d5db' }} formatter={(value) => [`${Number(value).toLocaleString('pt-BR')} clientes`]} />
             </PieChart>
           </ResponsiveContainer>
         </div>
