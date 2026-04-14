@@ -886,3 +886,96 @@ DECISÕES REGISTRADAS
             subsequentes sao pulados.
   Impacto:  Cron reporta falha mais rapidamente e nao executa
             trabalho desnecessario.
+
+[2026-04-14b] [PRODUTO] Ranking de criativos com thumbnail + leads/CPL
+  Contexto: Miranda pediu (com imagem de referencia do Ads Manager)
+            que o ranking de criativos mostrasse thumbnail da imagem
+            do anuncio + colunas Leads e CPL alem das existentes de
+            Compras/Receita/ROAS.
+  Decisao:  Implementado em 3 camadas:
+            - DB: migration 20260414160000 cria tabela
+              meta_ads_creatives (ad_id PK, thumbnail_url, image_url)
+              + colunas leads/leads_value em meta_ads_insights.
+            - ETL: novo metodo listAdCreatives no client (hit em
+              /act_<id>/ads?fields=id,name,creative{thumbnail_url,
+              image_url}) + syncCreatives rodando no fim de toda
+              syncMetaAds. Mapper extrai leads via
+              LEAD_ACTION_PRIORITY (mesma logica de
+              pickFirstActionByPriority pra evitar overcount).
+            - Frontend: componente novo CreativeRankingTable usa
+              <img> puro (nao next/image) porque os dominios CDN
+              do Meta sao variaveis (scontent-*.xx.fbcdn.net).
+              Thumb 40x40 arredondada.
+            - Workflow: input full_meta_sync no workflow_dispatch
+              pra backfill manual de 90 dias.
+  Impacto:  Aba Meta Ads com referencia visual pro usuario final.
+            Pipeline de thumbnail + leads pronto caso Pixel da
+            Miranda comece a emitir eventos de Lead.
+
+[2026-04-14b] [PRODUTO] Remover colunas Leads/CPL do frontend
+  Contexto: Apos rodar full sync de 90 dias (via workflow_dispatch
+            com full_meta_sync=true), auditoria no banco mostrou
+            leads=0 em 100% das linhas de meta_ads_insights. A query
+            "leads > 0" retornou vazio em toda a janela de 90 dias
+            em todos os 3 niveis (campaign/adset/ad). O Pixel da
+            Miranda nao configura eventos de Lead — so rastreia
+            Purchase. A imagem de referencia que a Miranda enviou
+            era de uma conta diferente (provavelmente um cliente
+            de captacao de leads).
+  Decisao:  Remover colunas Leads e CPL do componente
+            CreativeRankingTable (inclusive a interface
+            CreativeRankingRow). MANTER mapper, migration e sync
+            pipeline intactos — se a Miranda um dia configurar
+            evento Lead no Events Manager (ex: formulario de
+            contato), basta re-adicionar os <th>/<td> no componente.
+  Impacto:  Aba Meta Ads fica visualmente limpa (7 colunas em vez
+            de 9). Zero trabalho perdido — o backend continua
+            preparado.
+
+[2026-04-14c] [DADOS] 🚨 CRITICO: ETL Conta Azul puxa so NF-e, perde PDV
+  Contexto: Miranda apresentou o fechamento oficial de marco 2026
+            (reuniao de apresentacao do dashboard):
+              - Faturamento Total:  R$ 116.544,00
+              - Loja Fisica (CA):   R$ 82.944,79
+              - Site (NS):          R$ 33.599,21
+            Auditoria no Supabase via REST API mostrou:
+              - Nuvemshop marco:    R$ 33.599,21 (29 dias, 92 pedidos)
+                → MATCH EXATO NOS CENTAVOS
+              - Conta Azul marco:   R$ 20.187,58 (4 dias, 38 NF-e)
+                → FALTANDO R$ 62.757 (75% dos dados)
+            Cobertura CA esparsa em TODOS os meses:
+              nov/25: 9 dias, dez/25: 14, jan/26: 14, fev/26: 7,
+              mar/26: 4, abr/26: 5 — vs NS: 26-30 dias/mes.
+            Perfil das 38 NF-e de marco: 100% pago por transferencia
+            bancaria, clientes identificados com nome completo, de
+            varios estados (SP/RJ/MG/SC/CE/PR). Isso eh perfil de
+            venda B2B, envio remoto ou pedidos NS duplicados como
+            NF-e — nao eh PDV de balcao.
+            Causa raiz: src/etl/conta-azul/sync.ts:130 chama apenas
+            /v1/notas-fiscais com filtro status=EMITIDA. Vendas PDV
+            saem em NFC-e (cupom fiscal) ou como "venda" interna no
+            Conta Azul sem documento fiscal — 100% invisiveis pro
+            ETL. MAPEAMENTO_CONTA_AZUL.txt:436 ja alertava em
+            2026-04-10 que "grande parte das vendas da loja fisica
+            nao tem cliente vinculado", mas o ETL foi implementado
+            em cima de /v1/notas-fiscais porque era o unico endpoint
+            que respondia 200 na epoca (api-v1 com /v1/vendas,
+            /v1/sales, /v1/pedidos deram 404).
+  Decisao:  Abrir T49 no backlog com criticidade MAXIMA. Proximo
+            passo: identificar o endpoint correto na api-v2 via
+            (a) testar com credenciais reais, (b) humano abrir
+            developers.contaazul.com (WAF bloqueia Claude), ou
+            (c) perguntar a Miranda qual relatorio ela usa. Uma
+            vez identificado, estender sync.ts pra chamar o novo
+            endpoint em PARALELO a /v1/notas-fiscais (com dedup
+            por source_sale_id ou tupla data+valor+cliente pra
+            evitar double-counting quando a venda tambem virou
+            NF-e). Rodar sync full historico e validar com Miranda.
+            Comunicar aos stakeholders (feito nesta sessao) que os
+            numeros historicos da Loja Fisica e Visao Geral estavam
+            subestimados.
+  Impacto:  Aba Loja Fisica e Visao Geral estavam mostrando ~25% do
+            faturamento real em periodos historicos. Nuvemshop e
+            Meta Ads nao sao afetadas. Decisao CLAUDE.md regra 3.1
+            (Visao Geral = CA + NS) continua valida — so a fonte CA
+            estava incompleta.

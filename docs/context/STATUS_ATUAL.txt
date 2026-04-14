@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-14b (ranking criativos com thumbnail + leads/CPL — pedido Miranda)
+Ultima atualizacao: 2026-04-14c (🚨 T49 descoberto: ETL CA puxa so NF-e, perde 75% das vendas)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -207,6 +207,16 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
+- 🚨 T49 ETL CONTA AZUL INCOMPLETO (bloqueio CRITICO, descoberto
+  2026-04-14c apos reuniao com Miranda): src/etl/conta-azul/sync.ts
+  puxa apenas /v1/notas-fiscais, que captura so ~25% das vendas reais
+  da loja fisica. Fechamento marco 2026 da Miranda: R$ 82.944,79.
+  Dashboard mostrava R$ 20.187,58 (38 NF-e em 4 dias). Perfil das NF-e
+  eh B2B / envio remoto — PDV de balcao sai em NFC-e ou venda interna
+  e ficou invisivel. Nuvemshop bate nos centavos, CA nao. Aguardando
+  Miranda responder qual relatorio ela usa (Vendas / NF / CR) +
+  descoberta do endpoint correto na api-v2.contaazul.com.
+  Ver HANDOFF secao 0 + DECISOES 2026-04-14c + T49 no backlog.
 - META ADS: RESOLVIDO. Todos os 6 passos operacionais executados
   (2026-04-13b). Dados reais fluindo. 2 bugfixes aplicados (purchases
   5x overcount + seed data ficticia). Falta apenas git push (passo 6).
@@ -221,18 +231,18 @@ BLOQUEIOS ATIVOS
 --------------------------------------------------------
 PROXIMO MARCO
 --------------------------------------------------------
-3 frentes abertas, por prioridade:
+Frentes abertas, por prioridade:
 
-1. Deploy Vercel + QA (RECOMENDACAO FORTE):
-   * Push do frontend e validar deploy
-   * Cruzar faturamento com relatorios reais da Miranda (T36-T42)
-   * Ajustar conforme feedback
+1. 🚨 T49 Fix ETL Conta Azul — mais critico, impacta veracidade
+   de toda a aba Loja Fisica e Visao Geral em periodos historicos.
+   Passos em HANDOFF secao 0. Aguardando input da Miranda.
 
 2. Webhooks LGPD (T44) — critico antes de producao:
    * 3 API routes Next.js
    * Validacao HMAC + logica de DELETE/export
 
-3. Meta Ads (T23-T26) — AGUARDANDO HUMANOS
-
-4. Cofre de senhas (T46) — resolver antes da proxima pessoa do
+3. Cofre de senhas (T46) — resolver antes da proxima pessoa do
    revezamento
+
+4. Rotacao de secrets (T47) — META + SUPABASE service_role passaram
+   pelo chat

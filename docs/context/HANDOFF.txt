@@ -3,12 +3,89 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-14 (tarde)
-RESPONSAVEL: sessao 2026-04-14b — ranking criativos com thumbnail + leads
+DATA: 2026-04-14 (noite)
+RESPONSAVEL: sessao 2026-04-14c — descoberta T49 (ETL CA incompleto)
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-14b) — THUMBNAILS + LEADS NO RANKING DE CRIATIVOS
+0. SESSAO ATUAL (2026-04-14c) — 🚨 CRITICO: ETL CONTA AZUL PUXA SO NF-e
+--------------------------------------------------------
+Apos reuniao de apresentacao do dashboard, a Miranda mandou o
+fechamento oficial de marco 2026:
+  - Faturamento Total:   R$ 116.544,00
+  - Loja Fisica (CA):    R$ 82.944,79
+  - Site (Nuvemshop):    R$ 33.599,21
+  - Morada (parceira):   R$ 7.728,00 bruto / R$ 3.543,51 liq pra MRND
+
+Comparacao com o que o dashboard mostrava:
+  - Nuvemshop: R$ 33.599,21  [✅ MATCH EXATO nos centavos]
+  - Conta Azul: R$ 20.187,58 [❌ FALTANDO R$ 62.757 — 75% dos dados]
+
+DIAGNOSTICO (com evidencia):
+  1. Cobertura esparsa em TODO mes: CA cobre 4-14 dias/mes vs
+     NS cobre 28-30 dias/mes (query em v_visao_geral_daily nov/25
+     ate abr/26). Loja fisica aberta nao vende so 4 dias no mes.
+  2. Perfil das 38 NF-e de marco: 100% pago por transferencia
+     bancaria, clientes de SP/RJ/MG/SC/CE/PR com nome completo.
+     Isso eh perfil de venda B2B, envio remoto ou pedidos NS
+     duplicados como NF-e — NAO eh venda PDV de balcao.
+  3. Codigo confirma: src/etl/conta-azul/sync.ts:130 chama apenas
+     /v1/notas-fiscais e filtra status=EMITIDA. Vendas PDV saem
+     em NFC-e ou ficam como "venda" interna sem documento fiscal
+     — 100% invisiveis pro ETL atual.
+  4. docs/producao/MAPEAMENTO_CONTA_AZUL.txt:436 ja alertava em
+     2026-04-10: "Grande parte das vendas da loja fisica NAO tem
+     cliente vinculado". O ETL original foi implementado em cima
+     de /v1/notas-fiscais porque era o unico endpoint encontrado
+     funcionando na epoca — testes de /v1/vendas, /v1/sales,
+     /v1/pedidos na API v1 deram 404. Ninguem voltou pra tentar
+     de novo na api-v2.
+
+COMUNICACAO COM A MIRANDA (feita nesta sessao):
+  Matheus enviou mensagem explicando que NS esta 100% correto, o
+  problema eh so no CA, que o endpoint original pega so NF-e, que
+  vendas PDV saem em NFC-e e por isso ficaram invisiveis, e
+  perguntou qual relatorio ela usa no CA pra fechar o mes
+  (Vendas / Notas Fiscais / Contas a Receber). AGUARDANDO RESPOSTA.
+
+PROXIMO PASSO EXATO QUANDO RETOMAR:
+  1. Aguardar resposta da Miranda sobre qual relatorio ela usa
+  2. Opcao A (preferida): Matheus cola credenciais Conta Azul
+     no .env.local (ou Claude pede) e roda script de smoke test
+     dos candidatos de endpoint:
+       /v1/venda-direta
+       /v1/nfces  ou  /v1/nfc-e
+       /v1/cupom-fiscal
+       /v1/pdv-vendas
+       /v1/recebimentos
+       /v1/vendas (revalidar — pode ter mudado na api-v2)
+       /v1/sales  (idem)
+     Logar os status codes e shapes pra identificar o correto.
+     Checar tambem se existe endpoint de "relatorio" financeiro
+     que agregue vendas consolidadas.
+  3. Opcao B: humano abre developers.contaazul.com (WAF bloqueia
+     o Claude), lista endpoints relacionados a vendas/NFC-e e
+     cola a lista aqui.
+  4. Uma vez identificado, estender src/etl/conta-azul/sync.ts
+     pra chamar o novo endpoint em paralelo a /v1/notas-fiscais.
+     CUIDADO: double-counting. Cruzar por (source_sale_id) ou
+     (date, gross_revenue, customer_name) pra evitar que a mesma
+     venda entre duas vezes.
+  5. Migration eventual se precisar adicionar campos novos a
+     canonical `sales` (ex: document_type enum NFe/NFCe/venda).
+  6. Rodar sync full historico desde 2025-11.
+  7. Validar com Miranda: R$ 82.944,79 em marco.
+
+ARQUIVOS CHAVE PRA RETOMAR:
+  - src/etl/conta-azul/sync.ts (sync.ts:130 = chamada ao endpoint)
+  - src/integrations/conta-azul/client.ts (listPessoas etc)
+  - docs/producao/MAPEAMENTO_CONTA_AZUL.txt (secao 3, endpoints)
+  - docs/context/DECISOES.txt (entrada 2026-04-14c)
+
+BACKLOG: ver T49 (ETAPA 9) em docs/producao/BACKLOG_MIRANDA.txt.
+
+--------------------------------------------------------
+0b. SESSAO ANTERIOR (2026-04-14b) — THUMBNAILS + LEADS NO RANKING DE CRIATIVOS
 --------------------------------------------------------
 Feedback da Miranda (via Matheus) com imagem de referencia: queriam
 o ranking de criativos como no Ads Manager — thumbnail do anuncio
@@ -133,7 +210,7 @@ FOLLOWUP 2026-04-14b (depois do workflow_dispatch rodar):
   monitoramento real do sync.
 
 --------------------------------------------------------
-0a. SESSAO ANTERIOR (2026-04-13b) — META ADS ATIVADO + 2 BUGFIXES CRITICOS
+0c. SESSAO (2026-04-13b) — META ADS ATIVADO + 2 BUGFIXES CRITICOS
 --------------------------------------------------------
 Sessao de ativacao: executou os 6 passos operacionais (secao 0 do
 handoff anterior) + revisou dados e descobriu 2 bugs criticos:

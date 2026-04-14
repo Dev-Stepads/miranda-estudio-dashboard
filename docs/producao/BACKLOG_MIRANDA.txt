@@ -247,3 +247,45 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
          Conta Azul refresh_token persistido via etl_config table
          no Supabase (resolve rotacao em CI/cron).
          Migration: supabase/migrations/20260412150000_etl_config_table.sql
+
+[ ] T49 🚨 CRITICO — ETL Conta Azul puxa so NF-e, perde 75% das vendas
+         Descoberto em 2026-04-14c apos reuniao com a Miranda.
+         Fechamento de marco 2026 da Miranda: R$ 82.944,79 loja fisica.
+         Dashboard mostrava: R$ 20.187,58 em 4 dias de 38 NF-e.
+         Nuvemshop bateu exato (R$ 33.599,21 nos dois lados), CA nao.
+
+         CAUSA: src/etl/conta-azul/sync.ts puxa apenas
+         /v1/notas-fiscais com filtro status=EMITIDA/CORRIGIDA. O perfil
+         das NF-e que entram mostra 100% pago por transferencia bancaria,
+         clientes de varios estados (SP/RJ/MG/SC/CE/PR) com nome completo
+         — sao vendas B2B, envios pra fora de Salvador ou pedidos NS
+         duplicados como NF-e. Vendas PDV de balcao (NFC-e/cupom fiscal
+         ou venda interna sem documento) estao 100% invisiveis pro ETL.
+         Padrao em TODOS os meses: CA cobre so 4-14 dias por mes vs
+         28-30 dias da NS. Ver docs/context/DECISOES.txt 2026-04-14c.
+
+         O QUE FAZER:
+           1. Identificar o endpoint correto via 1 das 3 vias:
+              (a) credenciais CA no .env.local e testar endpoints
+                  (/v1/venda-direta, /v1/nfces, /v1/cupom-fiscal,
+                  /v1/pdv-vendas, /v1/recebimentos, etc)
+              (b) abrir portal developers.contaazul.com (WAF bloqueia
+                  WebFetch do Claude — humano precisa fazer)
+              (c) perguntar pra Miranda qual relatorio (Vendas / Notas
+                  Fiscais / Contas a Receber) ela usa pra fechar o mes
+           2. Estender src/etl/conta-azul/sync.ts pra incluir o novo
+              endpoint, mantendo /v1/notas-fiscais como fonte secundaria
+              ou removendo pra evitar double-counting
+           3. Cruzar CA novo vs Nuvemshop pra detectar double-counting
+              (pedidos NS que tambem sao lancados como venda no CA)
+           4. Rodar sync full de todo o historico (desde 2025-11 quando
+              comecou a coleta) pra repopular loja fisica
+           5. Validar com Miranda: R$ 82.944,79 em marco 2026
+           6. Comunicar ao stakeholder que dashboards historicos da
+              Loja Fisica e Visao Geral estavam subestimados
+
+         IMPACTO EM PROD:
+           - aba Loja Fisica: dados fragmentarios (~25% do real)
+           - aba Visao Geral: total subestimado (NS ok, CA faltando)
+           - aba Nuvemshop: NAO afetada (bate nos centavos)
+           - aba Meta Ads: NAO afetada
