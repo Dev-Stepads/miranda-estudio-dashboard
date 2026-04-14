@@ -61,19 +61,21 @@ Etapa 7 — Dashboard: CONCLUIDA (exceto Meta Ads) (2026-04-12)
          [x] Top clientes em todas as 3 abas
          [x] % participacao nos top produtos
          [x] Top cidades na aba Nuvemshop
-Etapa 8 — QA: CONCLUIDA (2026-04-12)
-         [x] T36 Validacao Conta Azul — APROVADO
-         [x] T37 Validacao Nuvemshop — APROVADO (cross-check API OK)
-         [x] T39 Validacao consolidacao — APROVADO
-         [x] Customer linkage fix — 7058/7058 orders com customer_id (100%)
-         [x] Raw table dedup — unique index + upsert ignoreDuplicates
-         [x] Revisao completa final: banco, views, Vercel, Actions, testes
+Etapa 8 — QA: CONCLUIDA (2026-04-14)
+         [x] T36-T41 Validacao completa — 49/49 checks OK
+         [x] Spot check 10 pedidos individuais NS — 10/10 valor exato
+         [x] Meta Ads cruzado com API — MATCH em 5 periodos
+         [x] Revenue View=Sales em todos os periodos (7d/30d/90d/1ano)
+         [x] Paginacao real — zero truncamento em qualquer periodo
+         [x] Timezone SP — zero diff em 1 ano (antes R$749 diff)
+         [x] Seed data limpa (20 sales + 32 items + 5 abandoned + 35 meta)
+         [x] 134 tests passando, build limpo
 Etapa 9 — Divida tecnica: PARCIAL
          [~] T44 LGPD webhooks — stubs respondendo 200 (falta implementacao real)
          [x] T45 NF-e detail — RESOLVIDO
          [ ] T46 cofre de senhas — pendente
          [ ] T47 rotacao secrets — pendente
-         [x] T48 scheduler — RESOLVIDO (GitHub Actions cron 30 min, ambas fontes)
+         [x] T48 scheduler — RESOLVIDO (cron 30 min, 3 fontes, fail-fast)
 
 --------------------------------------------------------
 INFRAESTRUTURA

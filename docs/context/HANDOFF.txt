@@ -392,79 +392,57 @@ SESSAO MONSTRO 2026-04-12 — ETL real + Frontend completo
   * supabase/migrations/20260412150000_etl_config_table.sql
 
 --------------------------------------------------------
-2. O que esta funcionando
+2. O que esta funcionando (atualizado 2026-04-14)
 --------------------------------------------------------
-- ETL Nuvemshop: full sync + incremental, rodando via GitHub Actions cron
-  a cada 30 min. 5928 orders, 4913 customers, 43 checkouts reais no banco.
-- ETL Conta Azul: full sync + incremental, rodando via GitHub Actions cron
-  a cada 30 min. 545 NF-e, 1196 sale_items reais no banco.
-  Refresh_token persistido via etl_config table (resolve CI/cron).
-- Frontend Next.js 16: 4 abas (Visao Geral, Nuvemshop, Loja Fisica,
-  Meta Ads placeholder) com period filter e KPI comparison funcionando
-  em localhost:3000.
-- Supabase: 6493 sales, 11293 sale_items, 5441 customers, 48 abandoned
-  checkouts — tudo real da Miranda.
-- Views do dashboard corrigidas: agrupam por product_name (nao product_id).
-- GitHub Actions: cron a cada 30 min sincronizando ambas as fontes.
-- 109+ unit tests passando (base Caminho B).
-- Conta Azul + Nuvemshop auth totalmente operacionais.
+- ETL Nuvemshop: full sync + incremental, cron 30 min.
+  5932 orders, 4922 customers, 45 checkouts com dados de contato.
+- ETL Conta Azul: full sync + incremental, cron 30 min.
+  1107 NF-e, 2328 sale_items, 1028 customers com email/telefone.
+- ETL Meta Ads: incremental 7 dias, cron 30 min.
+  508 insights (campaign/adset/ad), 90 dias de historico.
+  Validado contra API: 49/49 checks OK.
+- Frontend Next.js 16: 4 abas completas + login + dark mode.
+  Deploy Vercel live: https://miranda-estudio-dashboard.vercel.app
+- TODOS os componentes respeitam filtro de periodo (7d-1ano+custom).
+- Paginacao real (.range()) em todas as queries (sem truncamento).
+- Timezone SP em todas as queries de sale_date.
+- Seed data limpa do banco (sales, items, abandoned, meta_ads).
+- Top Clientes separados em Pessoas vs Empresas com email/telefone.
+- Carrinhos abandonados com nome, email, telefone e produtos.
+- Ticket medio por dia com linhas separadas por fonte.
+- Indicador de ultima sincronizacao + contagem regressiva.
+- Logo Miranda no dashboard, login e favicon.
+- 134 unit tests passando, build limpo.
+- GitHub Actions: cron 30 min, fail-fast entre steps.
 
 --------------------------------------------------------
 3. O que ainda nao esta pronto
 --------------------------------------------------------
-- Meta Ads (EM ANDAMENTO — ver secao 0 deste handoff):
-  * BM ID, Ad Account ID e permissao no BM JA foram fornecidos
-    pela Miranda (Lucca Cardoso) em 2026-04-13
-  * dev@stepads.com.br foi rejeitada pelo Facebook — workaround
-    com conta FB alternativa em andamento
-  * Travado no passo de 2FA obrigatorio na Central de Contas
-  * Codigo ainda nao foi tocado — frente continua 100% manual
-
 - Webhooks LGPD Nuvemshop (T44):
-  * 3 URLs placeholder cadastradas mas rotas NAO existem no Vercel
-  * Critico antes de producao real com dados de clientes fluindo
-
-- Deploy Vercel do frontend:
-  * Frontend funciona localmente, falta validar deploy no Vercel
-  * Env vars de Supabase ja estao configuradas no Vercel
-
-- QA/Validacao (T36-T42):
-  * Nenhuma validacao formal feita ainda
-  * Faturamento precisa ser cruzado com dados reais da Miranda
+  * Stubs respondendo 200, falta implementacao real
+  * Critico antes de producao real com dados de clientes
 
 - Cofre de senhas Stepads (T46):
-  * .env.local no disco do Matheus e a fonte da verdade interina
+  * .env.local no disco e a fonte da verdade interina
   * Bloqueia revezamento seguro
 
 - Secrets que passaram pelo chat (T47):
+  * META_APP_SECRET + META_SYSTEM_USER_TOKEN
   * Devem ser rotacionados antes de producao real
-
-- Regras de consolidacao de produtos (T29):
-  * SKU nao e usado pela Miranda na Nuvemshop
-  * Consolidacao por nome e o fallback atual
 
 - Gates pendentes com representante Miranda:
   * Checkout Nuvemshop pede genero? (Gate N#1)
   * Custom field de birthday? (Gate N#2)
-  * partially_paid no faturamento? (recomendacao = sim)
-  * Attribution window do Meta Ads
 
 --------------------------------------------------------
 4. Bloqueios encontrados
 --------------------------------------------------------
-- META ADS (parcialmente destravado em 2026-04-13):
-  * Miranda JA forneceu BM ID (130431116357346), Ad Account ID
-    (5204712552960295) e permissao Controle Total no BM.
-  * dev@stepads.com.br foi REJEITADA pelo Facebook no cadastro
-    de conta FB. Decisao: usar conta FB alternativa para aceitar
-    o convite (ver DECISOES 2026-04-13).
-  * Bloqueio atual: 2FA obrigatorio na Central de Contas da conta
-    FB alternativa. Proximo passo em secao 0.
-- COFRE DE SENHAS: proximo do revezamento nao consegue credenciais
-  sem pedir ao Matheus (T46).
-- LGPD: webhooks placeholder vao retornar 404 se Nuvemshop pingar.
-  Nao e urgente enquanto nao houver dados fluindo em producao, mas
-  precisa ser resolvido antes do go-live.
+- META ADS: RESOLVIDO. Tudo funcionando em producao.
+- COFRE DE SENHAS (T46): proximo do revezamento nao consegue
+  credenciais sem pedir ao Matheus.
+- LGPD (T44): webhooks stubs respondendo 200.
+- SECRETS (T47): META_APP_SECRET + META_SYSTEM_USER_TOKEN
+  passaram pelo chat. Rotacionar antes de producao real.
 
 --------------------------------------------------------
 5. Proximo passo exato para quem assumir
@@ -474,33 +452,34 @@ ANTES DE COMECAR:
   - cp .env.example .env.local (preencher com credenciais do cofre
     ou pedir ao Matheus)
   - npm install
-  - npm test (validar 109+ tests)
+  - npm test (validar 134 tests)
   - npm run dev (frontend em localhost:3000)
 
-PROXIMO PASSO IMEDIATO — META ADS ATIVAR EM PRODUCAO
+O DASHBOARD JA ESTA EM PRODUCAO. O que falta:
 
-  Todo o codigo, migration, frontend e cron ja foram feitos nesta
-  sessao. O que falta eh operacional (nao-codigo) e precisa ser
-  feito na maquina usual do Matheus (esta maquina nao tem o
-  .env.local). Ver secao 0 para o passo-a-passo.
+  1. LGPD webhooks (T44) — critico pre-producao real
+     Implementar as 3 rotas: customers-redact, store-redact,
+     customers-data-request. Stubs existem em app/api/webhooks/.
 
-  Resumo dos 6 passos operacionais (detalhados na secao 0):
-    1. Popular .env.local com as META_* vars
-    2. Aplicar migration 20260413120000 no Supabase remoto
-    3. Adicionar secrets (META_SYSTEM_USER_TOKEN +
-       META_AD_ACCOUNT_ID) no GitHub
-    4. Rodar `npm run sync:meta-ads:full` pra hidratar 90d
-    5. Validar aba Meta Ads no frontend local
-    6. git push pro cron pegar
+  2. Cofre de senhas (T46) — bloqueia revezamento seguro
+     Criar item no 1Password/Bitwarden com conteudo do .env.local.
 
-  FRENTES EM STANDBY:
-    - LGPD webhooks (T44): critico pre-producao real
-    - Cofre de senhas (T46): bloqueia revezamento seguro
-    - Rotacao de secrets (T47): inclui agora META_APP_SECRET +
-      META_SYSTEM_USER_TOKEN que passaram pelo chat nesta sessao
+  3. Rotacao de secrets (T47) — META_APP_SECRET e
+     META_SYSTEM_USER_TOKEN passaram pelo chat.
 
-  PENDENCIAS MIRANDA (ver PENDENCIAS_MIRANDA.txt):
-    7 itens pendentes de acao da Miranda + 1 item interno (I1 filter)
+SCRIPTS UTEIS:
+  npm run dev                    — frontend local
+  npm run sync:nuvemshop         — sync incremental NS
+  npm run sync:nuvemshop:full    — sync completo NS
+  npm run sync:contaazul         — sync incremental CA
+  npm run sync:contaazul:full    — sync completo CA
+  npm run sync:meta-ads          — sync incremental Meta
+  npm run sync:meta-ads:full     — sync completo Meta (90d)
+  npx tsx --env-file=.env.local src/scripts/validate-all.ts
+                                 — validacao cruzada completa
+
+MIGRATIONS PENDENTES NO SUPABASE:
+  Nenhuma. Todas ja foram aplicadas.
 
   GATES COM REPRESENTANTE (nao bloqueiam trabalho tecnico):
     - Genero no checkout Nuvemshop (Gate N#1)
