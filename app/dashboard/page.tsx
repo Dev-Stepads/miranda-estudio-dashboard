@@ -134,13 +134,20 @@ export default async function VisaoGeralPage({
         <ChannelDonut nuvemshop={nuvemshopRevenue} contaAzul={contaAzulRevenue} />
       </div>
 
-      {/* Avg Ticket Chart */}
+      {/* Avg Ticket Chart — split por fonte */}
       <AvgTicketChart
-        data={chartData.map(d => ({
-          day: d.day,
-          avg_ticket: (d.nuvemshop + d.conta_azul) /
-            (currentRevenue.filter(r => r.day === d.day).reduce((s, r) => s + r.orders_count, 0) || 1),
-        }))}
+        data={chartData.map(d => {
+          const dayRows = currentRevenue.filter(r => r.day === d.day);
+          const nsOrders = dayRows.filter(r => r.source === 'nuvemshop').reduce((s, r) => s + r.orders_count, 0);
+          const caOrders = dayRows.filter(r => r.source === 'conta_azul').reduce((s, r) => s + r.orders_count, 0);
+          const totalOrders = nsOrders + caOrders;
+          return {
+            day: d.day,
+            avg_ticket: totalOrders > 0 ? (d.nuvemshop + d.conta_azul) / totalOrders : 0,
+            avg_ticket_nuvemshop: nsOrders > 0 ? d.nuvemshop / nsOrders : undefined,
+            avg_ticket_conta_azul: caOrders > 0 ? d.conta_azul / caOrders : undefined,
+          };
+        })}
       />
 
       {/* Recurrence */}

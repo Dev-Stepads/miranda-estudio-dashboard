@@ -1,0 +1,241 @@
+========================================================
+GUIA OPERACIONAL — Dashboard Miranda Studio
+========================================================
+Documento para a equipe Miranda + Stepads
+Ultima atualizacao: 2026-04-13
+
+Este documento lista TUDO que precisa ser sabido para
+manter o dashboard rodando sem surpresas. Leia uma vez
+e guarde para consulta.
+
+========================================================
+1. O QUE O DASHBOARD FAZ
+========================================================
+
+O dashboard consolida 3 fontes de dados em tempo real:
+
+  - Nuvemshop (e-commerce): pedidos, clientes, produtos,
+    carrinhos abandonados, geografia
+  - Conta Azul (loja fisica): NF-e, clientes, produtos,
+    geografia por estado
+  - Meta Ads (trafego pago): investimento, ROAS, campanhas,
+    criativos, alcance
+
+A sincronizacao acontece automaticamente a cada 30 minutos
+via GitHub Actions. Ninguem precisa fazer nada manual no
+dia a dia.
+
+Acesso: https://miranda-estudio-dashboard.vercel.app
+Login: mirandaestudio
+Senha: DashMiranda@14
+
+========================================================
+2. O QUE FUNCIONA AUTOMATICAMENTE
+========================================================
+
+| O que                    | Frequencia   | Observacao                  |
+|--------------------------|--------------|-----------------------------|
+| Sync Nuvemshop           | 30 min       | Pedidos, clientes, checkouts|
+| Sync Conta Azul          | 30 min       | NF-e, itens, clientes       |
+| Sync Meta Ads            | 30 min       | Insights 7 dias (upsert)    |
+| Deploy no Vercel         | A cada push  | Automatico                  |
+| Limpeza de dados brutos  | A cada sync  | Retencao de 90 dias         |
+| Refresh token Conta Azul | A cada sync  | Rotacionado automaticamente |
+
+========================================================
+3. RISCOS CONHECIDOS E COMO EVITAR
+========================================================
+
+RISCO 1 — GitHub desativa cron apos 60 dias de inatividade
+--------------------------------------------------------------
+O que acontece:
+  Se ninguem fizer push no repositorio ou acessar o GitHub
+  por 60 dias, o GitHub DESLIGA o cron automaticamente.
+  O sync para, o banco para de receber dados, e apos 14
+  dias o token do Conta Azul expira.
+
+Como evitar:
+  Acessar o repositorio no GitHub pelo menos 1x a cada
+  2 meses. Pode ser so abrir a pagina:
+  https://github.com/Dev-Stepads/miranda-estudio-dashboard
+
+Se ja aconteceu:
+  1. Ir em GitHub > Actions > selecionar o workflow
+  2. Clicar "Enable workflow"
+  3. Se o Conta Azul parou de funcionar, refazer o OAuth
+     (pedir ao Matheus/Stepads)
+
+RISCO 2 — Supabase pausa apos 7 dias sem acesso (plano free)
+--------------------------------------------------------------
+O que acontece:
+  O Supabase no plano gratuito pausa o banco se ninguem
+  acessar por 7 dias. Com o cron rodando, isso NAO acontece
+  porque o sync escreve no banco a cada 30 min.
+
+  Porem, se o cron for desativado (ver Risco 1), o banco
+  pode pausar.
+
+Como evitar:
+  Manter o cron ativo (ver Risco 1). Ou migrar para o
+  plano Pro do Supabase (US$25/mes) que nao pausa.
+
+Se ja aconteceu:
+  1. Abrir https://supabase.com e logar com dev@stepads.com.br
+  2. Selecionar o projeto miranda-dashboard
+  3. Clicar "Restore project"
+  4. Aguardar ~2 min e verificar o dashboard
+
+RISCO 3 — Conta Facebook "Angelo Meirelles" perdida
+--------------------------------------------------------------
+O que acontece:
+  A app Marketing "Miranda Dashboard ETL" no Facebook
+  esta vinculada a esta conta. Se a conta for bloqueada,
+  hackeada ou excluida:
+  - O token do Meta Ads CONTINUA funcionando (nao expira)
+  - Mas perde-se a capacidade de ADMINISTRAR a app
+    (rotacionar token, alterar permissoes)
+
+Como evitar:
+  - Manter 2FA ativo na conta
+  - Nao compartilhar a senha
+  - Adicionar um segundo admin na app quando possivel
+    (developers.facebook.com > Miranda Dashboard ETL >
+    Settings > Roles)
+
+Se ja aconteceu:
+  Criar nova app Marketing, novo System User e novo token.
+  Atualizar as variaveis META_SYSTEM_USER_TOKEN e
+  META_AD_ACCOUNT_ID no GitHub Secrets e no .env.local.
+
+RISCO 4 — Token do Conta Azul expira (14 dias sem refresh)
+--------------------------------------------------------------
+O que acontece:
+  O refresh_token do Conta Azul e single-use e expira em
+  14 dias. O ETL rotaciona automaticamente a cada 30 min.
+  Se o cron parar por 14+ dias, o token expira e o Conta
+  Azul para de sincronizar.
+
+Como evitar:
+  Manter o cron ativo (ver Risco 1).
+
+Se ja aconteceu:
+  1. A Miranda precisa re-autorizar a app no Conta Azul
+  2. O Matheus/Stepads faz o fluxo OAuth e obtem novo token
+  3. Inserir o novo token no Supabase (tabela etl_config)
+
+========================================================
+4. O QUE CADA ABA DO DASHBOARD MOSTRA
+========================================================
+
+VISAO GERAL
+  - Faturamento total = Nuvemshop + Conta Azul (loja fisica)
+  - Meta Ads NAO entra no faturamento (e atribuicao de
+    midia, nao venda real)
+  - KPIs, grafico diario, ranking produtos, mapa Brasil,
+    top clientes, pedidos recentes
+  - Comparativo mensal com % de variacao
+
+NUVEMSHOP
+  - Faturamento e-commerce, ranking produtos, top estados,
+    top clientes, carrinhos abandonados
+
+LOJA FISICA
+  - Faturamento loja, ranking produtos, top estados,
+    top clientes
+
+META ADS
+  - Investimento, ROAS, CPA, CPC, CTR, alcance
+  - Ranking de campanhas e criativos
+  - Grafico investimento vs valor atribuido
+  - Nota: os numeros de "compras atribuidas" sao do Pixel
+    do Meta, NAO da Nuvemshop. Podem divergir.
+
+========================================================
+5. FILTRO DE PERIODO
+========================================================
+
+Todas as abas respondem ao filtro de periodo no topo:
+  7d | 15d | 30d | 90d | 1 ano | Custom
+
+Ao trocar o periodo, TODOS os dados da aba atualizam:
+KPIs, graficos, rankings, mapas, clientes, pedidos.
+
+O comparativo mensal e a recorrencia de clientes mostram
+dados historicos completos (nao filtram por periodo).
+
+========================================================
+6. NUMEROS DE REFERENCIA (validados em 2026-04-13)
+========================================================
+
+Nuvemshop:
+  - 5.384 pedidos pagos
+  - R$ 1.737.627,90 faturamento total
+  - 4.921 clientes
+  - 45 carrinhos abandonados
+
+Conta Azul:
+  - 1.107 NF-e (todas pagas)
+  - R$ 720.632,26 faturamento total
+  - 1.028 clientes
+
+Meta Ads (ultimos 90 dias):
+  - R$ 9.019,18 investido
+  - 163 compras atribuidas
+  - R$ 56.919,67 valor atribuido
+  - ROAS 6,31x
+
+Faturamento consolidado (Visao Geral):
+  - R$ 2.458.260,16
+
+Esses numeros foram cruzados contra as APIs reais da
+Nuvemshop e Meta Ads e conferem (spot-check de pedidos
+individuais: 8/8 OK, valor exato).
+
+========================================================
+7. CONTATOS E ACESSOS
+========================================================
+
+Dashboard: https://miranda-estudio-dashboard.vercel.app
+GitHub: https://github.com/Dev-Stepads/miranda-estudio-dashboard
+Supabase: https://pntlbaffrelxymiodelj.supabase.co
+Vercel: https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
+
+Conta Supabase/Vercel: dev@stepads.com.br
+Conta Facebook (app Marketing): Angelo Meirelles
+Business Manager Miranda: 130431116357346
+Ad Account Miranda: act_5204712552960295
+
+Suporte tecnico: Stepads (Matheus)
+
+========================================================
+8. PERGUNTAS FREQUENTES
+========================================================
+
+P: Os dados sao em tempo real?
+R: Nao. Atualizam a cada 30 minutos. O Meta Ads pode
+   ter delay adicional de 15 min (o Meta recalcula metricas).
+
+P: Por que o ROAS do dashboard e diferente do Ads Manager?
+R: O dashboard usa atribuicao 7d_click + 1d_view (padrao
+   do Meta). Se a conta usar configuracao diferente no Ads
+   Manager, os numeros podem divergir ligeiramente.
+
+P: Por que "compras atribuidas" do Meta nao batem com
+   vendas da Nuvemshop?
+R: Sao fontes diferentes. O Meta conta conversoes via
+   Pixel (atribuicao de midia). A Nuvemshop conta pedidos
+   reais. Um cliente pode clicar no anuncio e comprar 3
+   dias depois — o Meta atribui, a Nuvemshop registra.
+
+P: Posso confiar no faturamento total do dashboard?
+R: Sim. Foi validado contra as APIs em 2026-04-13
+   (pedido a pedido). A Visao Geral soma apenas vendas
+   PAGAS da Nuvemshop + NF-e EMITIDAS do Conta Azul.
+   Pedidos pendentes, cancelados e reembolsados NAO
+   entram no faturamento.
+
+P: O que acontece se a Miranda mudar de plataforma
+   de e-commerce?
+R: O dashboard para de receber dados novos da Nuvemshop.
+   Historico permanece. Stepads precisaria integrar a
+   nova plataforma.

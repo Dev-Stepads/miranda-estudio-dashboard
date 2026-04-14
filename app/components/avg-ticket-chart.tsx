@@ -8,10 +8,16 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts';
 
 interface AvgTicketChartProps {
-  data: Array<{ day: string; avg_ticket: number }>;
+  data: Array<{
+    day: string;
+    avg_ticket: number;
+    avg_ticket_nuvemshop?: number;
+    avg_ticket_conta_azul?: number;
+  }>;
 }
 
 function formatDay(day: string) {
@@ -19,7 +25,14 @@ function formatDay(day: string) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
+function formatCurrency(value: number) {
+  if (!Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
 export function AvgTicketChart({ data }: AvgTicketChartProps) {
+  const hasSplit = data.some(d => d.avg_ticket_nuvemshop !== undefined || d.avg_ticket_conta_azul !== undefined);
+
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
@@ -42,23 +55,57 @@ export function AvgTicketChart({ data }: AvgTicketChartProps) {
               width={60}
             />
             <Tooltip
-              formatter={(value) => [
-                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value)),
-                'Ticket Médio',
+              formatter={(value, name) => [
+                formatCurrency(Number(value)),
+                String(name) === 'avg_ticket_nuvemshop' ? 'E-commerce'
+                  : String(name) === 'avg_ticket_conta_azul' ? 'Loja Física'
+                  : 'Ticket Médio',
               ]}
               labelFormatter={(label) => {
                 const d = new Date(String(label) + 'T12:00:00');
                 return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
               }}
             />
-            <Line
-              type="monotone"
-              dataKey="avg_ticket"
-              stroke="#10b981"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#10b981' }}
-              activeDot={{ r: 5 }}
-            />
+            {hasSplit && (
+              <Legend
+                formatter={(value: string) =>
+                  value === 'avg_ticket_nuvemshop' ? 'E-commerce (Nuvemshop)'
+                    : value === 'avg_ticket_conta_azul' ? 'Loja Física (Conta Azul)'
+                    : 'Ticket Médio'
+                }
+              />
+            )}
+            {hasSplit ? (
+              <>
+                <Line
+                  type="monotone"
+                  dataKey="avg_ticket_nuvemshop"
+                  stroke="#0ea5e9"
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: '#0ea5e9' }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="avg_ticket_conta_azul"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: '#f59e0b' }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                />
+              </>
+            ) : (
+              <Line
+                type="monotone"
+                dataKey="avg_ticket"
+                stroke="#10b981"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#10b981' }}
+                activeDot={{ r: 5 }}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
