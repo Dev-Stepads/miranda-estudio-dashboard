@@ -85,6 +85,47 @@ export const MetaInsightsListSchema = z.object({
 });
 
 // ------------------------------------------------------------
+// Ad + creative (for thumbnail ranking)
+// ------------------------------------------------------------
+
+/**
+ * Creative object nested inside /act_<id>/ads response. Apenas os
+ * campos que a gente usa — passthrough preserva o resto.
+ */
+export const MetaCreativeSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().nullable().optional(),
+    thumbnail_url: z.string().nullable().optional(),
+    image_url: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export const MetaAdWithCreativeSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().nullable().optional(),
+    creative: MetaCreativeSchema.nullable().optional(),
+  })
+  .passthrough();
+
+export const MetaAdListSchema = z.object({
+  data: z.array(MetaAdWithCreativeSchema),
+  paging: z
+    .object({
+      cursors: z
+        .object({
+          before: z.string().optional(),
+          after: z.string().optional(),
+        })
+        .optional(),
+      next: z.string().optional(),
+      previous: z.string().optional(),
+    })
+    .optional(),
+});
+
+// ------------------------------------------------------------
 // Ad account metadata
 // ------------------------------------------------------------
 

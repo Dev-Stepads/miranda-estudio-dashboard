@@ -8,6 +8,7 @@ import {
 } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber } from '../../components/kpi-cards';
 import { SimpleTable } from '../../components/simple-table';
+import { CreativeRankingTable } from '../../components/creative-ranking-table';
 import { SpendChart } from '../../components/spend-chart';
 
 export default async function MetaAdsPage({
@@ -134,24 +135,24 @@ export default async function MetaAdsPage({
         }) as unknown as Record<string, unknown>[]}
       />
 
-      {/* Ranking de criativos */}
-      <SimpleTable
+      {/* Ranking de criativos — com thumbnail, leads e CPL */}
+      <CreativeRankingTable
         title="Ranking de Criativos"
         subtitle="Anúncios (nível ad) — ordenado por investimento"
-        columns={[
-          { key: 'ad_name', label: 'Anúncio' },
-          { key: 'campaign_name', label: 'Campanha' },
-          { key: 'total_spend', label: 'Investimento', align: 'right', format: 'currency' },
-          { key: 'total_clicks', label: 'Cliques', align: 'right', format: 'number' },
-          { key: 'total_purchases', label: 'Compras', align: 'right', format: 'number' },
-          { key: 'roas_str', label: 'ROAS', align: 'right' },
-        ]}
         rows={adRanking.map((a) => ({
-          ...a,
-          ad_name: a.ad_name ?? '(sem nome)',
-          campaign_name: a.campaign_name ?? '(sem nome)',
-          roas_str: `${a.roas.toFixed(2)}x`,
-        })) as unknown as Record<string, unknown>[]}
+          ad_id: a.ad_id,
+          ad_name: a.ad_name,
+          campaign_name: a.campaign_name,
+          thumbnail_url: a.thumbnail_url,
+          total_spend: a.total_spend,
+          total_impressions: a.total_impressions,
+          total_clicks: a.total_clicks,
+          total_leads: a.total_leads,
+          total_purchases: a.total_purchases,
+          total_purchase_value: a.total_purchase_value,
+          cpl: a.cpl,
+          roas: a.roas,
+        }))}
       />
     </div>
   );

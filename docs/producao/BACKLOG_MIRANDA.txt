@@ -179,6 +179,19 @@ ETAPA 7 — DASHBOARD
          ROAS, CPA, CPC, CTR, purchases), grafico de serie temporal
          spend vs purchase_value, ranking de campanhas e ranking
          de criativos. Ver detalhes em T26.
+[x] T34b Ranking de criativos com thumbnail + leads/CPL — 2026-04-14
+         Pedido da Miranda (referencia visual do Ads Manager).
+         - Migration 20260414160000: tabela meta_ads_creatives
+           (ad_id, thumbnail_url, image_url) + colunas leads/leads_value
+           em meta_ads_insights + view v_meta_account_daily recriada.
+         - Mapper extrai leads[] das actions (LEAD_ACTION_PRIORITY).
+         - ETL novo: listAdCreatives no client + syncCreatives no
+           sync.ts, upsert em meta_ads_creatives.
+         - Frontend: CreativeRankingTable novo componente com
+           thumbnail 40px, colunas Criativo/Invest/Impressões/Cliques/
+           Leads/Compras/Receita/CPL/ROAS.
+         - Workflow: input full_meta_sync no workflow_dispatch pra
+           backfill manual de 90 dias dos leads.
 [x] T35 Criar filtros globais — 2026-04-12
          Period filter 7d/15d/30d/90d/1ano via URL search params.
          Funciona em todas as abas. KPI comparison busca 2x periodo

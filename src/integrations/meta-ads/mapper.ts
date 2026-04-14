@@ -40,6 +40,18 @@ const PURCHASE_ACTION_PRIORITY = [
   'web_in_store_purchase',
 ];
 
+/**
+ * Lead action priority. Same rationale as PURCHASE_ACTION_PRIORITY —
+ * Meta emite o mesmo evento sob varios aliases; a gente pega o
+ * primeiro match pra nao inflar contagem.
+ */
+const LEAD_ACTION_PRIORITY = [
+  'lead',
+  'onsite_conversion.lead_grouped',
+  'offsite_conversion.fb_pixel_lead',
+  'onsite_web_lead',
+];
+
 export function mapInsightToCanonical(
   raw: MetaInsightsRow,
   level: 'campaign' | 'adset' | 'ad',
@@ -53,6 +65,8 @@ export function mapInsightToCanonical(
 
   const purchases = pickFirstActionByPriority(raw.actions ?? [], PURCHASE_ACTION_PRIORITY);
   const purchaseValue = pickFirstActionByPriority(raw.action_values ?? [], PURCHASE_ACTION_PRIORITY);
+  const leads = pickFirstActionByPriority(raw.actions ?? [], LEAD_ACTION_PRIORITY);
+  const leadsValue = pickFirstActionByPriority(raw.action_values ?? [], LEAD_ACTION_PRIORITY);
 
   return {
     date: raw.date_start,
@@ -69,6 +83,8 @@ export function mapInsightToCanonical(
     clicks: Math.round(parseNumeric(raw.clicks)),
     purchases: Math.round(purchases),
     purchase_value: purchaseValue,
+    leads: Math.round(leads),
+    leads_value: leadsValue,
   };
 }
 

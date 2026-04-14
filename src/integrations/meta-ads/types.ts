@@ -11,12 +11,16 @@ import type {
   MetaInsightsRowSchema,
   MetaInsightsListSchema,
   MetaAdAccountSchema,
+  MetaAdWithCreativeSchema,
+  MetaAdListSchema,
 } from './schemas.ts';
 
 export type MetaAction = z.infer<typeof MetaActionSchema>;
 export type MetaInsightsRow = z.infer<typeof MetaInsightsRowSchema>;
 export type MetaInsightsList = z.infer<typeof MetaInsightsListSchema>;
 export type MetaAdAccount = z.infer<typeof MetaAdAccountSchema>;
+export type MetaAdWithCreative = z.infer<typeof MetaAdWithCreativeSchema>;
+export type MetaAdList = z.infer<typeof MetaAdListSchema>;
 
 export type MetaLevel = 'account' | 'campaign' | 'adset' | 'ad';
 
@@ -39,4 +43,17 @@ export interface CanonicalMetaInsight {
   clicks: number;
   purchases: number;
   purchase_value: number;
+  leads: number;
+  leads_value: number;
+}
+
+/**
+ * Canonical creative row (1 per ad_id). Populated by a separate
+ * ETL step that calls /act_<id>/ads?fields=id,creative{thumbnail_url,image_url}.
+ */
+export interface CanonicalMetaCreative {
+  ad_id: string;
+  thumbnail_url: string | null;
+  image_url: string | null;
+  creative_name: string | null;
 }

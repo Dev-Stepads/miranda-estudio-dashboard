@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-14 (sessao completa: Meta Ads ativado, auditoria, features, validacao final 49/49 OK)
+Ultima atualizacao: 2026-04-14b (ranking criativos com thumbnail + leads/CPL — pedido Miranda)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -49,6 +49,11 @@ Etapa 7 — Dashboard: CONCLUIDA (exceto Meta Ads) (2026-04-12)
          [x] T34 aba Meta Ads — COMPLETA (2026-04-13/14)
              8 KPIs, grafico spend vs value, rankings campanhas/criativos
              CPM no lugar de Reach (reach diario nao eh somavel)
+         [x] T34b ranking de criativos com thumbnail + leads/CPL (2026-04-14b)
+             Migration meta_ads_creatives + colunas leads/leads_value
+             + CreativeRankingTable componente novo. Referencia visual
+             Ads Manager enviada pela Miranda. Backfill 90d pendente
+             via workflow_dispatch com full_meta_sync=true.
          [x] T35 filtros — period filter 7d/15d/30d/90d/1ano + date picker
              custom (from/to) + filtro persiste entre abas (2026-04-12)
          [x] Mobile responsive (2026-04-12)

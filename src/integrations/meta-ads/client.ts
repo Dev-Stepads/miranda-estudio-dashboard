@@ -25,8 +25,14 @@ import { ValidationError } from '../../lib/errors.ts';
 import {
   MetaInsightsListSchema,
   MetaAdAccountSchema,
+  MetaAdListSchema,
 } from './schemas.ts';
-import type { MetaInsightsRow, MetaAdAccount, MetaLevel } from './types.ts';
+import type {
+  MetaInsightsRow,
+  MetaAdAccount,
+  MetaLevel,
+  MetaAdWithCreative,
+} from './types.ts';
 import { parseRateLimitHeaders, type RateLimitUsage } from './rate-limit.ts';
 
 const SOURCE = 'meta-ads' as const;
@@ -162,6 +168,59 @@ export class MetaAdsClient {
         `  [${options.level}] page ${pageNum}: ${parsed.data.length} rows ` +
           `(total ${items.length}, usage call=${decision.usage.callCount}% ` +
           `cpu=${decision.usage.totalCpuTime}% time=${decision.usage.totalTime}%)`,
+      );
+
+      if (decision.shouldBackoff) {
+        log(`  ⏸ rate limit near cap, sleeping ${decision.sleepMs}ms...`);
+        await sleep(decision.sleepMs);
+      }
+
+      nextUrl = parsed.paging?.next ?? null;
+    }
+
+    return { items, usage: lastUsage };
+  }
+
+  /**
+   * Lista ads da conta com thumbnail/image do creative. Usado pra
+   * popular `meta_ads_creatives` (lookup de thumbnail no ranking).
+   *
+   * Endpoint: /act_<id>/ads?fields=id,name,creative{thumbnail_url,image_url}
+   * Retorna ~100 ads por pagina. Rate limit parser reaproveitado.
+   */
+  async listAdCreatives(
+    log: (msg: string) => void = () => {},
+  ): Promise<MetaListResult<MetaAdWithCreative>> {
+    const url = new URL(`${this.baseUrl}/${this.adAccountId}/ads`);
+    url.searchParams.set('access_token', this.accessToken);
+    url.searchParams.set(
+      'fields',
+      'id,name,creative{id,name,thumbnail_url,image_url}',
+    );
+    url.searchParams.set('limit', '100');
+
+    const items: MetaAdWithCreative[] = [];
+    let nextUrl: string | null = url.toString();
+    let pageNum = 0;
+    let lastUsage: RateLimitUsage = {
+      callCount: 0,
+      totalCpuTime: 0,
+      totalTime: 0,
+      estimatedRegainSeconds: 0,
+    };
+
+    while (nextUrl !== null) {
+      pageNum++;
+      const { body, headers } = await this.fetchJson(nextUrl);
+      const parsed = parseWithSchema(MetaAdListSchema, body);
+      items.push(...parsed.data);
+
+      const decision = parseRateLimitHeaders(headers);
+      lastUsage = decision.usage;
+
+      log(
+        `  [creatives] page ${pageNum}: ${parsed.data.length} ads ` +
+          `(total ${items.length}, usage call=${decision.usage.callCount}%)`,
       );
 
       if (decision.shouldBackoff) {

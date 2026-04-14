@@ -617,7 +617,9 @@ export interface MetaRankingRow {
   total_clicks: number;
   total_purchases: number;
   total_purchase_value: number;
+  total_leads: number;
   roas: number;
+  cpl: number;
 }
 
 export interface MetaAdsetRankingRow extends MetaRankingRow {
@@ -628,6 +630,8 @@ export interface MetaAdsetRankingRow extends MetaRankingRow {
 export interface MetaAdRankingRow extends MetaAdsetRankingRow {
   ad_id: string;
   ad_name: string | null;
+  thumbnail_url: string | null;
+  image_url: string | null;
 }
 
 /** Meta Ads daily series (account-level totals). */
@@ -678,8 +682,9 @@ export async function fetchMetaCampaignRanking(
   let page = 0;
   while (true) {
     let q = supabase
-      .from('v_meta_campanha_daily')
-      .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value')
+      .from('meta_ads_insights')
+      .select('date, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, leads')
+      .eq('level', 'campaign')
       .gte('date', sinceStr)
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (to) q = q.lte('date', to);
@@ -700,6 +705,7 @@ export async function fetchMetaCampaignRanking(
     clicks: number;
     purchases: number;
     purchase_value: number;
+    leads: number | null;
   }>) {
     const key = row.campaign_id;
     const existing = byCampaign.get(key) ?? {
@@ -710,13 +716,16 @@ export async function fetchMetaCampaignRanking(
       total_clicks: 0,
       total_purchases: 0,
       total_purchase_value: 0,
+      total_leads: 0,
       roas: 0,
+      cpl: 0,
     };
     existing.total_spend += row.spend ?? 0;
     existing.total_impressions += row.impressions ?? 0;
     existing.total_clicks += row.clicks ?? 0;
     existing.total_purchases += row.purchases ?? 0;
     existing.total_purchase_value += row.purchase_value ?? 0;
+    existing.total_leads += row.leads ?? 0;
     byCampaign.set(key, existing);
   }
 
@@ -724,6 +733,7 @@ export async function fetchMetaCampaignRanking(
     .map((c) => ({
       ...c,
       roas: c.total_spend > 0 ? c.total_purchase_value / c.total_spend : 0,
+      cpl: c.total_leads > 0 ? c.total_spend / c.total_leads : 0,
     }))
     .sort((a, b) => b.total_spend - a.total_spend)
     .slice(0, limit);
@@ -747,7 +757,7 @@ export async function fetchMetaAdRanking(
   while (true) {
     let q = supabase
       .from('meta_ads_insights')
-      .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, date')
+      .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, leads, date')
       .eq('level', 'ad')
       .gte('date', sinceStr)
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -773,6 +783,7 @@ export async function fetchMetaAdRanking(
     clicks: number;
     purchases: number;
     purchase_value: number;
+    leads: number | null;
   }>) {
     if (row.ad_id === null) continue;
     const key = row.ad_id;
@@ -788,25 +799,61 @@ export async function fetchMetaAdRanking(
       total_clicks: 0,
       total_purchases: 0,
       total_purchase_value: 0,
+      total_leads: 0,
       roas: 0,
+      cpl: 0,
+      thumbnail_url: null,
+      image_url: null,
     };
     existing.total_spend += row.spend ?? 0;
     existing.total_impressions += row.impressions ?? 0;
     existing.total_clicks += row.clicks ?? 0;
     existing.total_purchases += row.purchases ?? 0;
     existing.total_purchase_value += row.purchase_value ?? 0;
+    existing.total_leads += row.leads ?? 0;
     byAd.set(key, existing);
   }
 
-  const result = Array.from(byAd.values())
+  const aggregated = Array.from(byAd.values())
     .map((a) => ({
       ...a,
       roas: a.total_spend > 0 ? a.total_purchase_value / a.total_spend : 0,
+      cpl: a.total_leads > 0 ? a.total_spend / a.total_leads : 0,
     }))
     .sort((a, b) => b.total_spend - a.total_spend)
     .slice(0, limit);
 
-  return result;
+  // Second pass: buscar thumbnails da tabela meta_ads_creatives pros
+  // ad_ids que entraram no top N. Mesmo se a tabela nao existir ainda
+  // (migration pendente), o frontend degrada graciosamente pra null.
+  const topAdIds = aggregated.map((a) => a.ad_id);
+  if (topAdIds.length > 0) {
+    const { data: creatives, error: creativesErr } = await supabase
+      .from('meta_ads_creatives')
+      .select('ad_id, thumbnail_url, image_url')
+      .in('ad_id', topAdIds);
+
+    if (creativesErr) {
+      // Log-and-continue: se a tabela nao existe ou o query falha, a
+      // aba continua funcionando sem thumbnails.
+      console.warn('[fetchMetaAdRanking] creatives lookup failed:', creativesErr.message);
+    } else if (creatives) {
+      const byId = new Map(
+        (creatives as Array<{ ad_id: string; thumbnail_url: string | null; image_url: string | null }>).map(
+          (c) => [c.ad_id, c],
+        ),
+      );
+      for (const row of aggregated) {
+        const hit = byId.get(row.ad_id);
+        if (hit) {
+          row.thumbnail_url = hit.thumbnail_url;
+          row.image_url = hit.image_url;
+        }
+      }
+    }
+  }
+
+  return aggregated;
 }
 
 /** Abandoned checkouts (Nuvemshop), filtered by period */

@@ -5,8 +5,16 @@ on:
   schedule:
     - cron: '*/30 * * * *'
 
-  # Permite rodar manualmente pelo painel do GitHub
+  # Permite rodar manualmente pelo painel do GitHub.
+  # full_meta_sync=true força o Meta Ads a rodar --full (90 dias) em
+  # vez do incremental de 7 dias — usado pra backfill depois de mudar
+  # o mapper (ex: adicao de leads 2026-04-14).
   workflow_dispatch:
+    inputs:
+      full_meta_sync:
+        description: 'Meta Ads — rodar full sync (90 dias)?'
+        type: boolean
+        default: false
 
 jobs:
   sync:
@@ -51,7 +59,7 @@ jobs:
         run: npx tsx src/etl/conta-azul/run.ts
 
       - name: Sync Meta Ads (incremental — upsert defensivo dos ultimos 7 dias)
-        if: success()
+        if: ${{ success() && inputs.full_meta_sync != true }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -59,3 +67,13 @@ jobs:
           META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
           META_API_VERSION: 'v25.0'
         run: npx tsx src/etl/meta-ads/run.ts
+
+      - name: Sync Meta Ads (FULL — 90 dias, manual via workflow_dispatch)
+        if: ${{ success() && inputs.full_meta_sync == true }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          META_SYSTEM_USER_TOKEN: ${{ secrets.META_SYSTEM_USER_TOKEN }}
+          META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+          META_API_VERSION: 'v25.0'
+        run: npx tsx src/etl/meta-ads/run.ts --full

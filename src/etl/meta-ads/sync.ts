@@ -176,6 +176,8 @@ async function syncLevel(
       clicks: row.clicks,
       purchases: row.purchases,
       purchase_value: row.purchase_value,
+      leads: row.leads,
+      leads_value: row.leads_value,
     }));
 
     // Supabase upsert onConflict with expression index: we must name the
@@ -268,7 +270,60 @@ export async function syncMetaAds(
   // With cron every 30 min, raw tables grow ~11k rows/day without cleanup.
   await cleanupRawTables(ctx);
 
+  // Sync de criativos (thumbnails) — tabela meta_ads_creatives.
+  // Idempotente, 1 linha por ad_id. Atualiza todo run porque a fetch eh
+  // barata (~3 paginas de 100 ads). Nao bloqueia o retorno se falhar.
+  try {
+    await syncCreatives(ctx);
+  } catch (err) {
+    ctx.log(
+      `  ⚠ creative sync failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   return results;
+}
+
+// ------------------------------------------------------------
+// Creative sync — popula meta_ads_creatives com thumbnail/image
+// ------------------------------------------------------------
+
+async function syncCreatives(ctx: MetaSyncContext): Promise<void> {
+  ctx.log('🎨 Meta Ads creatives — fetching thumbnails...');
+  const start = Date.now();
+
+  const { items } = await ctx.meta.listAdCreatives((msg) => ctx.log(msg));
+
+  if (items.length === 0) {
+    ctx.log('  (no ads returned)');
+    return;
+  }
+
+  const rows = items.map((ad) => ({
+    ad_id: ad.id,
+    thumbnail_url: ad.creative?.thumbnail_url ?? null,
+    image_url: ad.creative?.image_url ?? null,
+    creative_name: ad.creative?.name ?? null,
+    last_synced_at: new Date().toISOString(),
+  }));
+
+  const BATCH_SIZE = 500;
+  let upserted = 0;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await ctx.supabase
+      .from('meta_ads_creatives')
+      .upsert(batch, { onConflict: 'ad_id' });
+    if (error) {
+      ctx.log(`  ❌ creatives upsert: ${error.message}`);
+      continue;
+    }
+    upserted += batch.length;
+  }
+
+  ctx.log(
+    `✅ creatives done — ${upserted}/${rows.length} upserted, ${Date.now() - start}ms`,
+  );
 }
 
 // ------------------------------------------------------------

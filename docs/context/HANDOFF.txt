@@ -3,12 +3,106 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-14
-RESPONSAVEL: sessao 2026-04-13/14 — Meta Ads + auditoria completa + features
+DATA: 2026-04-14 (tarde)
+RESPONSAVEL: sessao 2026-04-14b — ranking criativos com thumbnail + leads
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-13b) — META ADS ATIVADO + 2 BUGFIXES CRITICOS
+0. SESSAO ATUAL (2026-04-14b) — THUMBNAILS + LEADS NO RANKING DE CRIATIVOS
+--------------------------------------------------------
+Feedback da Miranda (via Matheus) com imagem de referencia: queriam
+o ranking de criativos como no Ads Manager — thumbnail do anuncio
+na primeira coluna + colunas Leads e CPL alem das existentes de
+Compras/Receita/ROAS.
+
+Implementacao:
+
+  BANCO DE DADOS
+    Migration 20260414160000_meta_ads_creatives_and_leads.sql:
+      - Tabela meta_ads_creatives (ad_id PK, thumbnail_url, image_url,
+        creative_name, last_synced_at). Separada da meta_ads_insights
+        pra nao repetir thumbnail em cada linha diaria. RLS habilitada.
+      - Colunas meta_ads_insights.leads (int) e leads_value (numeric),
+        default 0 — nao quebra upserts antigos.
+      - View v_meta_account_daily recriada (DROP + CREATE porque
+        Postgres nao aceita CREATE OR REPLACE quando muda ordem de
+        colunas). Inclui sum(leads), sum(leads_value), cpl calculado.
+    Migration aplicada no Supabase remoto em 2026-04-14 via SQL Editor.
+    Primeiro attempt falhou com ERROR 42P16 exatamente por causa do
+    CREATE OR REPLACE — fix foi DROP VIEW IF EXISTS antes.
+
+  INTEGRATION (src/integrations/meta-ads/)
+    - schemas.ts: MetaCreativeSchema, MetaAdWithCreativeSchema,
+      MetaAdListSchema (zod passthrough).
+    - types.ts: CanonicalMetaInsight ganha leads/leads_value;
+      CanonicalMetaCreative nova.
+    - mapper.ts: LEAD_ACTION_PRIORITY (lead,
+      onsite_conversion.lead_grouped, offsite_conversion.fb_pixel_lead,
+      onsite_web_lead) — mesma logica de pickFirstActionByPriority
+      pra evitar overcount (mesmo bug que tivemos com purchases 5x).
+    - client.ts: novo listAdCreatives() — fetch
+      /act_<id>/ads?fields=id,name,creative{id,name,thumbnail_url,
+      image_url} com paginacao cursor e rate limit compartilhado.
+
+  ETL (src/etl/meta-ads/sync.ts)
+    - Upsert em meta_ads_insights agora inclui leads/leads_value.
+    - Nova funcao syncCreatives() chamada no fim de syncMetaAds()
+      apos cleanup das raw tables. Upsert em meta_ads_creatives com
+      onConflict=ad_id. Try/catch externo — falha de creative nao
+      propaga (cosmetico, nao bloqueia insights).
+
+  FRONTEND (app/)
+    - lib/queries.ts: MetaAdRankingRow ganha thumbnail_url, image_url,
+      total_leads, cpl. fetchMetaAdRanking faz second pass em
+      meta_ads_creatives (select in.ad_id do top N) e degrade
+      graciosamente se tabela vazia/query falhar. fetchMetaCampaignRanking
+      agrega leads (mudou source pra meta_ads_insights level=campaign
+      direto ja que v_meta_campanha_daily nao foi atualizada — se
+      virar bottleneck, criar view agregada).
+    - components/creative-ranking-table.tsx: componente novo.
+      Thumbnail 40px arredondada com <img> puro (nao next/image, pra
+      evitar configurar remotePatterns pros dominios CDN variaveis
+      do Meta — scontent-*.xx.fbcdn.net). Fallback cinza com '—'
+      quando thumbnail_url null. Colunas: Criativo (thumb + nome +
+      campanha), Invest, Impressoes, Cliques, Leads, Compras, Receita,
+      CPL, ROAS. '—' quando valor = 0 em qualquer metrica condicional.
+    - dashboard/meta-ads/page.tsx: substitui SimpleTable de criativos
+      pelo CreativeRankingTable.
+
+  INFRA (.github/workflows/sync-nuvemshop.yml)
+    - workflow_dispatch ganha input full_meta_sync (boolean).
+    - 2 steps Meta Ads agora: incremental (default) e FULL (condicional
+      no input). Backfill de 90 dias de leads apos esta mudanca eh
+      disparo manual com full_meta_sync=true.
+
+TRADEOFFS E DECISOES:
+  - Thumbnails em tabela separada (vs coluna em meta_ads_insights):
+    thumbnail nao muda por dia, normalizar economiza storage e evita
+    drift entre linhas do mesmo ad_id.
+  - <img> simples em vez de next/image: Meta usa dominios CDN
+    variaveis (scontent-gru1-1.xx.fbcdn.net, scontent-gig4-1..., etc.)
+    — remotePatterns pra cobrir todos eh fragil e os thumbs sao 40x40,
+    otimizacao nao paga o custo.
+  - Leads extraidos com pickFirstActionByPriority: Meta emite lead,
+    onsite_conversion.lead_grouped, offsite_conversion.fb_pixel_lead
+    e onsite_web_lead com valores identicos — somar daria 3-4x
+    overcount. Pega o primeiro match por prioridade.
+  - full_meta_sync eh input manual (nao automatico pos-migration):
+    cron default continua incremental de 7 dias. Backfill de 90d so
+    acontece quando alguem clica. Motivo: syncs full sao 5-10min +
+    usam mais quota, nao quer rodar toda hora.
+
+PROXIMO PASSO APOS PUSH (decisao 2026-04-14b):
+  1. git push origin main (feito pelo Claude nesta sessao)
+  2. Vercel auto-deploya frontend (~2-4 min)
+  3. Matheus vai em Actions > "Sync ETL (Nuvemshop + Conta Azul +
+     Meta Ads)" > Run workflow, marca full_meta_sync=true, Run
+  4. Workflow roda ~5-10 min (nuvemshop + conta azul + meta full)
+  5. Dashboard em producao mostra thumbnails e leads com 90d
+     de historico
+
+--------------------------------------------------------
+0a. SESSAO ANTERIOR (2026-04-13b) — META ADS ATIVADO + 2 BUGFIXES CRITICOS
 --------------------------------------------------------
 Sessao de ativacao: executou os 6 passos operacionais (secao 0 do
 handoff anterior) + revisou dados e descobriu 2 bugs criticos:
