@@ -129,13 +129,17 @@ Links:
 INTEGRACOES — progresso por fonte
 --------------------------------------------------------
 
-[CONTA AZUL] — ETL COMPLETO E RODANDO
+[CONTA AZUL] — ETL REESCRITO (API de Vendas) — AGUARDA VALIDACAO MIRANDA
   [x] Mapeamento tecnico (T4) — 2026-04-10
   [x] Autenticacao OAuth (T7) — auth.ts + TokenManager + refresh persistence
       via etl_config table no Supabase (2026-04-12)
-  [x] Coleta de vendas (T8) — NF-e XML parser (fast-xml-parser) + list +
-      detail + full sync 545 NF-e (2026-04-12)
-  [x] Coleta de itens (T9) — 1196 sale_items extraidos do XML (2026-04-12)
+  [x] T49 ETL reescrito: /v1/notas-fiscais → /v1/venda/busca (2026-04-14d)
+      496 vendas + 900 itens (vs 110 NF-e + 167 itens anteriores)
+      20 dias cobertura/mes (vs 4 dias antes). 0 errors.
+      Filtro NS: exclui vendas com origem "Nuvem Shop".
+      PENDENTE: validar com Miranda data de referencia (venda vs recebivel).
+  [x] Coleta de vendas (T8) — via /v1/venda/busca + /v1/venda/{id} (2026-04-14d)
+  [x] Coleta de itens (T9) — via /v1/venda/{id}/itens (2026-04-14d)
   [x] Transformacao faturamento (T10) — mapper completo (2026-04-12)
   [x] Transformacao produtos (T11) — via product_name (2026-04-12)
   [x] Transformacao demografia (T12) — normalizeState() 93.5% (2026-04-12)

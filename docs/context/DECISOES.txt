@@ -979,3 +979,26 @@ DECISÕES REGISTRADAS
             Meta Ads nao sao afetadas. Decisao CLAUDE.md regra 3.1
             (Visao Geral = CA + NS) continua valida — so a fonte CA
             estava incompleta.
+
+[2026-04-14d] [INTEGRACAO] ETL Conta Azul reescrito: NF-e → API de Vendas
+  Contexto: T49 identificou que /v1/notas-fiscais capturava apenas ~25%
+            das vendas da loja fisica. Investigacao da API v2 descobriu
+            /v1/venda/busca que retorna TODAS as vendas (PDV, balcao,
+            link de pagamento), com detalhe via /v1/venda/{id} e itens
+            via /v1/venda/{id}/itens. Probes confirmaram: 100% das
+            vendas sem origem tem vendedor="LOJA FISICA", com itens e
+            dados de pagamento acessiveis.
+  Decisao:  Substituir integralmente o ETL de NF-e pelo ETL de Vendas.
+            - sync.ts reescrito para /v1/venda/busca
+            - Filtro: exclui vendas com origem contendo "nuvem" (NS)
+            - 110 registros NF-e antigos deletados (flag --migrate)
+            - Full sync 180d: 496 vendas, 900 itens, 0 errors
+            - Mapa Brasil removido da aba Loja Fisica (API de vendas
+              e /v1/pessoas nao retornam endereco do cliente)
+            PENDENTE: Miranda precisa confirmar se fecha o mes por
+            data da venda ou data do recebivel. Mensagem enviada.
+  Impacto:  Cobertura subiu de 4 para 20 dias/mes. Dados de produtos,
+            clientes e pagamentos agora disponiveis para loja fisica.
+            Geografia perdida (NF-e trazia UF do destinatario, API de
+            vendas nao). NF-e parser (nfe-parser.ts) fica como dead
+            code mas preservado para historico.

@@ -248,7 +248,16 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
          no Supabase (resolve rotacao em CI/cron).
          Migration: supabase/migrations/20260412150000_etl_config_table.sql
 
-[ ] T49 🚨 CRITICO — ETL Conta Azul puxa so NF-e, perde 75% das vendas
+[~] T49 🚨 CRITICO — ETL Conta Azul puxa so NF-e, perde 75% das vendas
+         PARCIALMENTE RESOLVIDO (2026-04-14):
+         ETL reescrito de /v1/notas-fiscais para /v1/venda/busca.
+         Resultado: 496 vendas + 900 itens (vs 110 NF-e anteriores).
+         Cobertura: 20 dias/mes (vs 4 dias antes).
+         PENDENTE: validar com Miranda qual relatorio usam para fechar
+         o mes (data da venda vs data do recebivel). Mensagem enviada.
+         Commit: 5b24e21
+         ---
+         CONTEXTO ORIGINAL:
          Descoberto em 2026-04-14c apos reuniao com a Miranda.
          Fechamento de marco 2026 da Miranda: R$ 82.944,79 loja fisica.
          Dashboard mostrava: R$ 20.187,58 em 4 dias de 38 NF-e.

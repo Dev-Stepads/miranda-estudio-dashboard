@@ -4,11 +4,47 @@ HANDOFF — Dashboard Miranda Studio
 
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-14 (noite)
-RESPONSAVEL: sessao 2026-04-14c — descoberta T49 (ETL CA incompleto)
+RESPONSAVEL: sessao 2026-04-14d — ETL CA reescrito para API de Vendas
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-14c) — 🚨 CRITICO: ETL CONTA AZUL PUXA SO NF-e
+0. SESSAO ATUAL (2026-04-14d) — ETL CONTA AZUL REESCRITO (T49 parcial)
+--------------------------------------------------------
+ETL Conta Azul substituido de /v1/notas-fiscais para /v1/venda/busca.
+
+  ANTES: 110 NF-e, 167 itens, 4 dias de cobertura/mes
+  DEPOIS: 496 vendas, 900 itens, 20 dias de cobertura/mes
+
+  O que foi feito:
+    [x] Investigacao completa da API CA v2 (7 endpoints testados)
+    [x] Descoberto /v1/venda/busca + /v1/venda/{id} + /v1/venda/{id}/itens
+    [x] Confirmado: todas as vendas sem origem sao vendedor="LOJA FISICA"
+    [x] sync.ts reescrito (NF-e → Vendas API)
+    [x] Schemas Zod para novos endpoints (nullable corrigido)
+    [x] Filtro Nuvemshop: exclui vendas com origem contendo "nuvem"
+    [x] run.ts: flag --migrate para limpar NF-e antigos
+    [x] 110 registros NF-e antigos deletados do banco
+    [x] Full sync 180 dias: 502 vendas processadas, 0 errors
+    [x] Labels "NF-e" removidos do frontend
+    [x] Mapa Brasil removido da aba Loja Fisica (API nao traz endereco)
+    [x] Classificacao PF/PJ corrigida (UUIDs nao confundem com CNPJ)
+    [x] Build limpo, 134 testes passando
+    [x] Commit 5b24e21 + push
+
+  PENDENTE — aguarda resposta da Miranda:
+    [ ] Qual relatorio usam no CA para fechar faturamento mensal?
+    [ ] "Morada" aparece como qual nome no Conta Azul?
+    [ ] R$ 82.944,79 inclui a parte da Morada (R$ 3.543,51)?
+
+  PROBLEMA DE DATAS: /v1/venda/busca filtra por data da venda, mas
+  Miranda provavelmente fecha por data de recebimento/vencimento.
+  Marco no nosso dashboard: R$ 14.305 (48 vendas com data_venda em mar).
+  Marco nos recebiveis: ~R$ 80-83K (282 recebiveis com vencimento em mar).
+  Os dados estao corretos, so estao atribuidos a meses diferentes.
+  Mensagem preparada em docs/mensagem-miranda-validacao-dados.md.
+
+--------------------------------------------------------
+0b. SESSAO ANTERIOR (2026-04-14c) — descoberta T49
 --------------------------------------------------------
 Apos reuniao de apresentacao do dashboard, a Miranda mandou o
 fechamento oficial de marco 2026:
