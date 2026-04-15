@@ -19,7 +19,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from '../../lib/supabase.ts';
-import { syncContaAzul, cleanupOldNfeRecords } from './sync.ts';
+import { syncContaAzul, cleanupOldRecords } from './sync.ts';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -105,17 +105,25 @@ async function main(): Promise<void> {
   const isForceFull = process.argv.includes('--full');
   const daysArgIdx = process.argv.indexOf('--days');
   const customDays = daysArgIdx !== -1 ? Number(process.argv[daysArgIdx + 1]) : null;
+  const fromArgIdx = process.argv.indexOf('--from');
+  const toArgIdx = process.argv.indexOf('--to');
+  const customFrom = fromArgIdx !== -1 ? process.argv[fromArgIdx + 1] : null;
+  const customTo = toArgIdx !== -1 ? process.argv[toArgIdx + 1] : null;
 
   let dataInicial: string;
   let dataFinal: string;
   let mode: string;
 
   const now = new Date();
-  dataFinal = formatDate(now);
+  dataFinal = customTo ?? formatDate(now);
 
   const isMigrate = process.argv.includes('--migrate');
 
-  if (isForceFull || customDays !== null) {
+  if (customFrom) {
+    // Explicit date range
+    dataInicial = customFrom;
+    mode = `RANGE (${dataInicial} → ${dataFinal})`;
+  } else if (isForceFull || customDays !== null) {
     // Full sync mode
     const days = customDays ?? 30;
     const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -158,10 +166,10 @@ async function main(): Promise<void> {
   // Read refresh_token from Supabase (source of truth) with env fallback
   const refreshToken = await getRefreshToken(supabase);
 
-  // Clean up old NF-e records if migrating to venda-based sync
+  // Clean up old records before re-sync
   if (isMigrate) {
-    const cleanup = await cleanupOldNfeRecords(supabase, (msg) => console.log(msg));
-    console.log(`  Migration: removed ${cleanup.salesDeleted} NF-e sales + ${cleanup.itemsDeleted} items\n`);
+    const cleanup = await cleanupOldRecords(supabase, (msg) => console.log(msg));
+    console.log(`  Migration: removed ${cleanup.salesDeleted} sales + ${cleanup.itemsDeleted} items\n`);
   }
 
   const result = await syncContaAzul(
@@ -185,9 +193,10 @@ async function main(): Promise<void> {
   console.log('\n========================================');
   console.log('SYNC COMPLETE');
   console.log('========================================');
-  console.log(`  Vendas fetched:     ${result.vendasFetched}`);
+  console.log(`  Recebiveis fetched: ${result.recebiveisFetched}`);
+  console.log(`  Vendas found:       ${result.vendasFound}`);
   console.log(`  Vendas processed:   ${result.vendasProcessed}`);
-  console.log(`  Skipped (NS):       ${result.vendasSkippedNuvemshop}`);
+  console.log(`  Vendas not found:   ${result.vendasNotFound}`);
   console.log(`  Customers:          ${result.customersUpserted}`);
   console.log(`  Sales:              ${result.salesUpserted}`);
   console.log(`  Sale items:         ${result.saleItemsInserted}`);
