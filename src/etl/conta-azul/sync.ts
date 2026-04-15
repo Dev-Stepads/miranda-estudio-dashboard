@@ -1,21 +1,28 @@
 /**
- * Conta Azul → Supabase ETL sync.
+ * Conta Azul → Supabase ETL sync (via Sales API).
  *
  * Flow:
- * 1. Refresh access_token via ContaAzulTokenManager (rotates refresh_token)
- * 2. List NF-e from /v1/notas-fiscais with date range
- * 3. For each NF-e, fetch XML detail via /v1/notas-fiscais/{chave_acesso}
- * 4. Parse XML → extract customer, items, totals, payment
+ * 1. Refresh access_token via ContaAzulTokenManager
+ * 2. Paginate /v1/venda/busca for the date range
+ * 3. Skip vendas with origem="Nuvem Shop" (already handled by NS ETL)
+ * 4. For each venda, fetch detail (/v1/venda/{id}) and items (/v1/venda/{id}/itens)
  * 5. Upsert into canonical tables (customers, sales, sale_items)
- * 6. Insert raw XML into raw_contaazul_sales
+ * 6. Store raw payload in raw_contaazul_sales
+ *
+ * This replaces the old NF-e based sync that only captured ~25% of
+ * physical store sales. See DECISOES.txt 2026-04-14c (T49).
  *
  * Rate limit: Conta Azul has spike arrest of 10 req/s.
- * We throttle to ~5 req/s to stay safe.
+ * We throttle to ~4 req/s to stay safe (each venda = 2-3 calls).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ContaAzulTokenManager } from '../../integrations/conta-azul/auth.ts';
-import { parseNfeXml } from '../../integrations/conta-azul/nfe-parser.ts';
+import {
+  VendaBuscaResponseSchema,
+  RawContaAzulVendaDetalheSchema,
+  VendaItensResponseSchema,
+} from '../../integrations/conta-azul/schemas.ts';
 
 // ------------------------------------------------------------
 // Types
@@ -29,8 +36,9 @@ export interface ContaAzulSyncConfig {
 }
 
 export interface ContaAzulSyncResult {
-  nfeFetched: number;
-  nfeParsed: number;
+  vendasFetched: number;
+  vendasProcessed: number;
+  vendasSkippedNuvemshop: number;
   customersUpserted: number;
   salesUpserted: number;
   saleItemsInserted: number;
@@ -39,31 +47,41 @@ export interface ContaAzulSyncResult {
 }
 
 // ------------------------------------------------------------
-// Throttle helper (respect 10 req/s spike arrest)
+// Throttle helper
 // ------------------------------------------------------------
 
-const THROTTLE_MS = 200; // 5 req/s
+const THROTTLE_MS = 250; // ~4 req/s
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ------------------------------------------------------------
-// Payment code map for DB
+// Payment type map
 // ------------------------------------------------------------
 
 const PAYMENT_NAMES: Record<string, string> = {
-  '01': 'dinheiro', '02': 'cheque', '03': 'credito', '04': 'debito',
-  '05': 'credito_loja', '10': 'vale_alimentacao', '11': 'vale_refeicao',
-  '12': 'vale_presente', '13': 'vale_combustivel', '14': 'duplicata',
-  '15': 'boleto', '16': 'deposito', '17': 'pix',
-  '18': 'transferencia', '19': 'fidelidade', '90': 'sem_pagamento',
-  '99': 'outros',
+  PIX_PAGAMENTO_INSTANTANEO: 'pix',
+  LINK_PAGAMENTO: 'link_pagamento',
+  CARTAO_CREDITO: 'credito',
+  CARTAO_DEBITO: 'debito',
+  CARTEIRA_DIGITAL: 'carteira_digital',
+  DINHEIRO: 'dinheiro',
+  BOLETO: 'boleto',
+  TRANSFERENCIA: 'transferencia',
+  SEM_PAGAMENTO: 'sem_pagamento',
 };
 
-function mapPaymentForDb(code: string): string {
-  return PAYMENT_NAMES[code] ?? 'outros';
+function mapPaymentForDb(tipo: string | undefined | null): string {
+  if (!tipo) return 'outros';
+  return PAYMENT_NAMES[tipo] ?? 'outros';
 }
+
+// ------------------------------------------------------------
+// API base
+// ------------------------------------------------------------
+
+const BASE = 'https://api-v2.contaazul.com/v1';
 
 // ------------------------------------------------------------
 // Main sync
@@ -77,8 +95,9 @@ export async function syncContaAzul(
   log: (msg: string) => void,
 ): Promise<ContaAzulSyncResult> {
   const start = Date.now();
-  let nfeFetched = 0;
-  let nfeParsed = 0;
+  let vendasFetched = 0;
+  let vendasProcessed = 0;
+  let vendasSkippedNuvemshop = 0;
   let customersUpserted = 0;
   let salesUpserted = 0;
   let saleItemsInserted = 0;
@@ -99,113 +118,150 @@ export async function syncContaAzul(
   const accessToken = await tokenManager.getAccessToken();
   const headers = {
     Authorization: `Bearer ${accessToken}`,
-    'User-Agent': 'Miranda Dashboard (dev@stepads.com.br)',
+    'User-Agent': 'Miranda Dashboard ETL (dev@stepads.com.br)',
   };
 
-  // 2. List NF-e (API has a 15-day max window, so we chunk the date range)
-  log(`\n🔄 Listing NF-e from ${dataInicial} to ${dataFinal}...`);
-  log(`  (API limit: 15 days per window — will chunk automatically)`);
+  // 2. Paginate /v1/venda/busca
+  log(`\n🔄 Listing vendas from ${dataInicial} to ${dataFinal}...`);
 
-  const allChaves: string[] = [];
-  const MAX_WINDOW_DAYS = 14; // stay under 15
-
-  // Break date range into 14-day windows
-  let windowStart = new Date(dataInicial + 'T00:00:00');
-  const endDate = new Date(dataFinal + 'T00:00:00');
-
-  while (windowStart <= endDate) {
-    // Subtract 1 day from the raw offset so the window is inclusive on both ends.
-    // Without this, NF-e on chunk boundaries were skipped (24h gap).
-    const windowEnd = new Date(Math.min(
-      windowStart.getTime() + (MAX_WINDOW_DAYS - 1) * 24 * 60 * 60 * 1000,
-      endDate.getTime(),
-    ));
-
-    const wStart = windowStart.toISOString().split('T')[0]!;
-    const wEnd = windowEnd.toISOString().split('T')[0]!;
-
-    // Paginate within each window (page size seems fixed at 10)
-    let page = 1;
-    while (true) {
-      const url = `https://api-v2.contaazul.com/v1/notas-fiscais?data_inicial=${wStart}&data_final=${wEnd}&pagina=${page}`;
-      const resp = await fetch(url, { headers });
-
-      if (!resp.ok) {
-        const body = await resp.text();
-        log(`  ❌ Window ${wStart}→${wEnd} page ${page}: HTTP ${resp.status} — ${body.slice(0, 100)}`);
-        break;
-      }
-
-      const json = await resp.json() as { itens?: Array<{ chave_acesso: string; status: string }> };
-      const itens = json.itens ?? [];
-
-      for (const item of itens) {
-        if (item.status === 'EMITIDA' || item.status === 'CORRIGIDA COM SUCESSO') {
-          allChaves.push(item.chave_acesso);
-        }
-      }
-
-      log(`  ${wStart}→${wEnd} p${page}: ${itens.length} NF-e (${allChaves.length} total)`);
-
-      if (itens.length === 0) break;
-      page++;
-      await sleep(THROTTLE_MS);
-    }
-
-    // Move to next window
-    windowStart = new Date(windowEnd.getTime() + 24 * 60 * 60 * 1000);
+  interface VendaListItem {
+    id: string;
+    data: string;
+    total: number;
+    numero: number;
+    origem?: string | null;
+    cliente?: { id: string; nome: string; email?: string | null } | null;
+    situacao?: { nome: string };
   }
 
-  log(`  Total NF-e to process: ${allChaves.length}\n`);
+  const allVendas: VendaListItem[] = [];
+  let page = 1;
+  const PAGE_SIZE = 200;
 
-  // 3. Fetch detail + parse + upsert for each NF-e
+  while (true) {
+    const url = `${BASE}/venda/busca?data_inicio=${dataInicial}&data_fim=${dataFinal}&situacoes=APPROVED&tamanho_pagina=${PAGE_SIZE}&pagina=${page}`;
+    const resp = await fetch(url, { headers });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      log(`  ❌ Page ${page}: HTTP ${resp.status} — ${body.slice(0, 200)}`);
+      break;
+    }
+
+    const json = await resp.json();
+    const parsed = VendaBuscaResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      log(`  ❌ Page ${page}: validation error — ${parsed.error.message.slice(0, 200)}`);
+      break;
+    }
+
+    const items = parsed.data.itens;
+    if (items.length === 0) break;
+
+    allVendas.push(...items);
+    log(`  Page ${page}: ${items.length} vendas (total: ${allVendas.length})`);
+
+    if (items.length < PAGE_SIZE) break;
+    page++;
+    await sleep(THROTTLE_MS);
+  }
+
+  // Filter: skip Nuvemshop vendas (case-insensitive to guard against API variations)
+  const lojaVendas = allVendas.filter(v => {
+    if (v.origem && v.origem.toLowerCase().includes('nuvem')) {
+      vendasSkippedNuvemshop++;
+      return false;
+    }
+    return true;
+  });
+
+  vendasFetched = allVendas.length;
+  log(`\n  Total from API: ${allVendas.length}`);
+  log(`  Skipped (Nuvem Shop): ${vendasSkippedNuvemshop}`);
+  log(`  To process (loja fisica): ${lojaVendas.length}\n`);
+
+  // 3. Process each venda: fetch detail + items + upsert
   const BATCH_LOG_INTERVAL = 10;
 
-  for (let i = 0; i < allChaves.length; i++) {
-    const chave = allChaves[i]!;
+  for (let i = 0; i < lojaVendas.length; i++) {
+    const venda = lojaVendas[i]!;
 
     try {
-      // Fetch XML
-      const xmlResp = await fetch(
-        `https://api-v2.contaazul.com/v1/notas-fiscais/${chave}`,
-        { headers },
-      );
-
-      if (!xmlResp.ok) {
-        log(`  ❌ NF-e ${chave.slice(0, 20)}...: HTTP ${xmlResp.status}`);
+      // Fetch detail
+      await sleep(THROTTLE_MS);
+      const detailResp = await fetch(`${BASE}/venda/${venda.id}`, { headers });
+      if (!detailResp.ok) {
+        log(`  ❌ Detail #${venda.numero}: HTTP ${detailResp.status}`);
         errors++;
-        await sleep(THROTTLE_MS);
         continue;
       }
 
-      const xml = await xmlResp.text();
-      nfeFetched++;
+      const detailJson = await detailResp.json();
+      const detailParsed = RawContaAzulVendaDetalheSchema.safeParse(detailJson);
+      if (!detailParsed.success) {
+        log(`  ❌ Detail #${venda.numero}: validation error — ${detailParsed.error.issues[0]?.message ?? 'unknown'} at ${detailParsed.error.issues[0]?.path?.join('.') ?? '?'}`);
+        errors++;
+        continue;
+      }
+      const detail = detailParsed.data;
 
-      // Save raw XML before parsing so failed parses are recoverable
+      // Fetch items
+      await sleep(THROTTLE_MS);
+      const itemsResp = await fetch(`${BASE}/venda/${venda.id}/itens`, { headers });
+      if (!itemsResp.ok) {
+        log(`  ❌ Items #${venda.numero}: HTTP ${itemsResp.status}`);
+        errors++;
+        continue;
+      }
+
+      const itemsJson = await itemsResp.json();
+      const itemsParsed = VendaItensResponseSchema.safeParse(itemsJson);
+      if (!itemsParsed.success) {
+        log(`  ❌ Items #${venda.numero}: validation error — ${itemsParsed.error.issues[0]?.message ?? 'unknown'} at ${itemsParsed.error.issues[0]?.path?.join('.') ?? '?'}`);
+        errors++;
+        continue;
+      }
+      const vendaItems = itemsParsed.data.itens;
+
+      // Extract data
+      // NOTE: Conta Azul naming is counterintuitive:
+      //   valor_bruto = sum of product unit prices (subtotal)
+      //   valor_liquido = final amount customer pays (subtotal - discount + frete)
+      // Our mapping: gross_revenue = what customer pays (valor_liquido),
+      //              net_revenue = product subtotal (valor_bruto)
+      const composicao = detail.venda?.composicao_valor;
+      const grossRevenue = composicao?.valor_liquido ?? venda.total;
+      const netRevenue = composicao?.valor_bruto ?? venda.total;
+      const paymentType = detail.venda?.condicao_pagamento?.tipo_pagamento;
+      const customerDoc = detail.cliente?.documento;
+      const customerName = detail.cliente?.nome ?? venda.cliente?.nome;
+      const vendedorName = detail.vendedor?.nome ?? 'unknown';
+
+      // Store raw payload
       await supabase.from('raw_contaazul_sales').upsert(
-        { source_id: chave, payload: { xml_length: xml.length, raw_xml_saved: true } },
+        {
+          source_id: venda.id,
+          payload: { venda_id: venda.id, numero: venda.numero, detail: detailJson, items: itemsJson },
+        },
         { onConflict: 'source_id' },
       );
 
-      // Parse XML
-      const nfe = parseNfeXml(xml, chave);
-      nfeParsed++;
-
-      // 4. Upsert customer
-      if (nfe.customer.cpfCnpj) {
+      // Upsert customer
+      const customerSourceId = customerDoc || detail.cliente?.uuid || venda.cliente?.id;
+      if (customerSourceId && customerName) {
         const { error: custErr } = await supabase
           .from('customers')
           .upsert(
             {
               source: 'conta_azul',
-              source_customer_id: nfe.customer.cpfCnpj,
-              name: nfe.customer.nome,
+              source_customer_id: customerSourceId,
+              name: customerName,
               gender: 'unknown',
               age_range: 'unknown',
-              state: nfe.customer.uf,
-              city: nfe.customer.cidade,
-              email: nfe.customer.email,
-              phone: nfe.customer.telefone,
+              state: null,
+              city: null,
+              email: venda.cliente?.email ?? null,
+              phone: null,
             },
             { onConflict: 'source,source_customer_id' },
           );
@@ -215,39 +271,38 @@ export async function syncContaAzul(
 
       // Resolve customer_id FK
       let customerId: number | null = null;
-      if (nfe.customer.cpfCnpj) {
+      if (customerSourceId) {
         const { data: custData } = await supabase
           .from('customers')
           .select('customer_id')
           .eq('source', 'conta_azul')
-          .eq('source_customer_id', nfe.customer.cpfCnpj)
+          .eq('source_customer_id', customerSourceId)
           .limit(1);
 
         customerId = custData?.[0]?.customer_id as number | null ?? null;
       }
 
-      // 5. Upsert sale
+      // Upsert sale (use venda UUID as source_sale_id)
       const { data: saleData, error: saleErr } = await supabase
         .from('sales')
         .upsert(
           {
             source: 'conta_azul',
-            source_sale_id: nfe.chaveAcesso,
-            sale_date: nfe.dataEmissao,
-            gross_revenue: nfe.totalNota,
-            net_revenue: nfe.totalProdutos,
+            source_sale_id: venda.id,
+            sale_date: venda.data,
+            gross_revenue: grossRevenue,
+            net_revenue: netRevenue,
             status: 'paid',
             customer_id: customerId,
-            payment_method: mapPaymentForDb(nfe.paymentCode),
+            payment_method: mapPaymentForDb(paymentType),
           },
           { onConflict: 'source,source_sale_id' },
         )
         .select('sale_id');
 
       if (saleErr !== null) {
-        log(`  ❌ Sale upsert NF ${nfe.numeroNota}: ${saleErr.message}`);
+        log(`  ❌ Sale upsert #${venda.numero}: ${saleErr.message}`);
         errors++;
-        await sleep(THROTTLE_MS);
         continue;
       }
 
@@ -255,18 +310,17 @@ export async function syncContaAzul(
       if (saleId !== undefined) {
         salesUpserted++;
 
-        // Delete old items + insert new. If insert fails, re-insert old items
-        // to avoid leaving the sale with 0 items.
-        if (nfe.items.length > 0) {
-          const items = nfe.items
+        // Delete old items + insert new (same pattern as NF-e sync)
+        if (vendaItems.length > 0) {
+          const items = vendaItems
             .filter(item => item.quantidade > 0)
             .map(item => ({
               sale_id: saleId,
               product_name: item.nome,
-              sku: item.sku || null,
+              sku: item.id_item || null,
               quantity: item.quantidade,
-              unit_price: item.precoUnitario,
-              total_price: item.precoTotal,
+              unit_price: item.valor,
+              total_price: item.valor * item.quantidade,
             }));
 
           // Snapshot old items before deleting
@@ -281,38 +335,79 @@ export async function syncContaAzul(
           if (itemErr === null) {
             saleItemsInserted += items.length;
           } else {
-            log(`  ❌ Items NF ${nfe.numeroNota}: ${itemErr.message}`);
-            // Rollback: re-insert old items so sale doesn't stay empty
+            log(`  ❌ Items #${venda.numero}: ${itemErr.message}`);
+            // Rollback: re-insert old items
             if (oldItems && oldItems.length > 0) {
-              const restore = oldItems.map(({ item_id, ...rest }) => rest);
+              const restore = oldItems.map(({ sale_item_id, ...rest }) => rest);
               await supabase.from('sale_items').insert(restore);
             }
           }
         }
       }
 
-      // 6. Update raw with parsed data (pre-parse stub was saved above)
-      await supabase.from('raw_contaazul_sales').upsert(
-        { source_id: nfe.chaveAcesso, payload: { xml_length: xml.length, numero_nota: nfe.numeroNota, parsed: nfe } },
-        { onConflict: 'source_id' },
-      );
+      vendasProcessed++;
 
       // Progress log
-      if ((i + 1) % BATCH_LOG_INTERVAL === 0 || i === allChaves.length - 1) {
-        log(`  📦 ${i + 1}/${allChaves.length} NF-e processed (${salesUpserted} sales, ${saleItemsInserted} items)`);
+      if ((i + 1) % BATCH_LOG_INTERVAL === 0 || i === lojaVendas.length - 1) {
+        log(`  📦 ${i + 1}/${lojaVendas.length} vendas processed (${salesUpserted} sales, ${saleItemsInserted} items) [vendedor: ${vendedorName}]`);
       }
 
-      await sleep(THROTTLE_MS);
-
     } catch (err) {
-      log(`  ❌ NF-e ${chave.slice(0, 20)}...: ${err instanceof Error ? err.message : String(err)}`);
+      log(`  ❌ Venda #${venda.numero}: ${err instanceof Error ? err.message : String(err)}`);
       errors++;
-      await sleep(THROTTLE_MS);
     }
   }
 
   const durationMs = Date.now() - start;
-  log(`\n✅ Conta Azul sync complete: ${salesUpserted} sales, ${saleItemsInserted} items, ${customersUpserted} customers, ${errors} errors, ${durationMs}ms`);
+  log(`\n✅ Conta Azul sync complete: ${salesUpserted} sales, ${saleItemsInserted} items, ${customersUpserted} customers, ${errors} errors, ${(durationMs / 1000).toFixed(1)}s`);
 
-  return { nfeFetched, nfeParsed, customersUpserted, salesUpserted, saleItemsInserted, errors, durationMs };
+  return { vendasFetched, vendasProcessed, vendasSkippedNuvemshop, customersUpserted, salesUpserted, saleItemsInserted, errors, durationMs };
+}
+
+/**
+ * Delete old NF-e based records before first venda sync.
+ * Old records used chave_acesso (44-char) as source_sale_id.
+ * New records use venda UUID. Both coexisting would cause double-counting.
+ */
+export async function cleanupOldNfeRecords(
+  supabase: SupabaseClient,
+  log: (msg: string) => void,
+): Promise<{ salesDeleted: number; itemsDeleted: number }> {
+  log('🧹 Cleaning up old NF-e based Conta Azul records...');
+
+  // Find old NF-e sales (source_sale_id is 44 chars = chave_acesso)
+  const { data: oldSales } = await supabase
+    .from('sales')
+    .select('sale_id, source_sale_id')
+    .eq('source', 'conta_azul')
+    .limit(10000);
+
+  const nfeSales = (oldSales ?? []).filter(
+    (s) => typeof s.source_sale_id === 'string' && (s.source_sale_id as string).length === 44,
+  );
+
+  if (nfeSales.length === 0) {
+    log('  No old NF-e records found.');
+    return { salesDeleted: 0, itemsDeleted: 0 };
+  }
+
+  const saleIds = nfeSales.map((s) => s.sale_id as number);
+
+  // Delete items first (FK constraint)
+  const { count: itemsCount } = await supabase
+    .from('sale_items')
+    .delete({ count: 'exact' })
+    .in('sale_id', saleIds);
+
+  // Delete sales
+  const { count: salesCount } = await supabase
+    .from('sales')
+    .delete({ count: 'exact' })
+    .in('sale_id', saleIds);
+
+  const itemsDeleted = itemsCount ?? 0;
+  const salesDeleted = salesCount ?? 0;
+
+  log(`  ✅ Deleted ${salesDeleted} old NF-e sales + ${itemsDeleted} items`);
+  return { salesDeleted, itemsDeleted };
 }

@@ -225,11 +225,15 @@ const BUSINESS_SUFFIXES = /\b(LTDA|S\.?A\.?|EIRELI|MEI|EPP|COMERCIO|SERVICOS|EMP
  * - Nuvemshop: no CPF/CNPJ stored, so use name heuristics
  */
 function classifyCustomer(name: string, source: string, sourceCustomerId?: string): 'pessoa' | 'empresa' {
-  // Conta Azul: use CPF/CNPJ length
+  // Conta Azul: use CPF/CNPJ length (only if it looks like a document, not a UUID)
   if (source === 'conta_azul' && sourceCustomerId) {
     const digits = sourceCustomerId.replace(/\D/g, '');
-    if (digits.length >= 12) return 'empresa';
-    return 'pessoa';
+    // CPF = 11 digits, CNPJ = 14 digits. UUIDs have 32 hex chars — skip those.
+    if (digits.length <= 14) {
+      if (digits.length >= 12) return 'empresa';
+      return 'pessoa';
+    }
+    // Fallback to name heuristics for UUID-based source_customer_ids
   }
   // Name heuristics: business names typically have legal suffixes
   if (BUSINESS_SUFFIXES.test(name)) return 'empresa';

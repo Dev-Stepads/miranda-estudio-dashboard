@@ -198,6 +198,124 @@ export const RawContaAzulNotaFiscalSchema = z
 export const NotasFiscaisListSchema = bareWrapperSchema(RawContaAzulNotaFiscalSchema);
 
 // ------------------------------------------------------------
+// Venda (sale — from /v1/venda/busca and /v1/venda/{id})
+// ------------------------------------------------------------
+
+/** Item in /v1/venda/busca list response. */
+export const RawContaAzulVendaListItemSchema = z
+  .object({
+    id: z.string(),
+    data: z.string(),
+    total: z.number(),
+    numero: z.number(),
+    origem: z.string().nullable().optional(),
+    cliente: z
+      .object({
+        id: z.string(),
+        nome: z.string(),
+        email: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    situacao: z
+      .object({ nome: z.string() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+/** Wrapper for /v1/venda/busca response. */
+export const VendaBuscaResponseSchema = z
+  .object({
+    totais: z.object({
+      total: z.number(),
+      aprovado: z.number(),
+      cancelado: z.number(),
+      esperando_aprovacao: z.number(),
+    }).passthrough(),
+    quantidades: z.object({
+      total: z.number(),
+    }).passthrough(),
+    total_itens: z.number(),
+    itens: z.array(RawContaAzulVendaListItemSchema),
+  })
+  .passthrough();
+
+/** Detail from /v1/venda/{id} response. */
+export const RawContaAzulVendaDetalheSchema = z
+  .object({
+    cliente: z
+      .object({
+        uuid: z.string().optional(),
+        nome: z.string(),
+        documento: z.string().nullable().optional(),
+        tipo_pessoa: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    vendedor: z
+      .object({
+        id: z.string(),
+        nome: z.string(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    venda: z
+      .object({
+        id: z.string(),
+        numero: z.number(),
+        composicao_valor: z
+          .object({
+            valor_bruto: z.number(),
+            desconto: z.number(),
+            frete: z.number(),
+            valor_liquido: z.number(),
+          })
+          .passthrough()
+          .optional(),
+        condicao_pagamento: z
+          .object({
+            tipo_pagamento: z.string().nullable(),
+          })
+          .passthrough()
+          .nullable()
+          .optional(),
+        situacao: z
+          .object({ nome: z.string() })
+          .passthrough()
+          .optional(),
+        origem: z.string().nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+/** Item from /v1/venda/{id}/itens response. */
+export const RawContaAzulVendaItemSchema = z
+  .object({
+    id: z.string(),
+    id_item: z.string().optional(),
+    nome: z.string(),
+    tipo: z.string().optional(),
+    quantidade: z.number(),
+    valor: z.number(),
+    custo: z.number().optional(),
+  })
+  .passthrough();
+
+/** Wrapper for /v1/venda/{id}/itens response. */
+export const VendaItensResponseSchema = z
+  .object({
+    itens: z.array(RawContaAzulVendaItemSchema),
+    itens_totais: z.number().optional(),
+  })
+  .passthrough();
+
+// ------------------------------------------------------------
 // OAuth token response (/oauth2/token grant_type=refresh_token | authorization_code)
 // ------------------------------------------------------------
 

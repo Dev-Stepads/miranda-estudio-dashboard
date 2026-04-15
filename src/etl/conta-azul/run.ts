@@ -19,7 +19,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from '../../lib/supabase.ts';
-import { syncContaAzul } from './sync.ts';
+import { syncContaAzul, cleanupOldNfeRecords } from './sync.ts';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -113,6 +113,8 @@ async function main(): Promise<void> {
   const now = new Date();
   dataFinal = formatDate(now);
 
+  const isMigrate = process.argv.includes('--migrate');
+
   if (isForceFull || customDays !== null) {
     // Full sync mode
     const days = customDays ?? 30;
@@ -148,10 +150,19 @@ async function main(): Promise<void> {
   if (!isForceFull && customDays === null) {
     console.log('(use --full ou --days N para forçar sync completo)');
   }
+  if (isMigrate) {
+    console.log('⚠ --migrate: will clean up old NF-e records before sync');
+  }
   console.log('========================================\n');
 
   // Read refresh_token from Supabase (source of truth) with env fallback
   const refreshToken = await getRefreshToken(supabase);
+
+  // Clean up old NF-e records if migrating to venda-based sync
+  if (isMigrate) {
+    const cleanup = await cleanupOldNfeRecords(supabase, (msg) => console.log(msg));
+    console.log(`  Migration: removed ${cleanup.salesDeleted} NF-e sales + ${cleanup.itemsDeleted} items\n`);
+  }
 
   const result = await syncContaAzul(
     supabase,
@@ -174,13 +185,14 @@ async function main(): Promise<void> {
   console.log('\n========================================');
   console.log('SYNC COMPLETE');
   console.log('========================================');
-  console.log(`  NF-e fetched:    ${result.nfeFetched}`);
-  console.log(`  NF-e parsed:     ${result.nfeParsed}`);
-  console.log(`  Customers:       ${result.customersUpserted}`);
-  console.log(`  Sales:           ${result.salesUpserted}`);
-  console.log(`  Sale items:      ${result.saleItemsInserted}`);
-  console.log(`  Errors:          ${result.errors}`);
-  console.log(`  Duration:        ${(result.durationMs / 1000).toFixed(1)}s`);
+  console.log(`  Vendas fetched:     ${result.vendasFetched}`);
+  console.log(`  Vendas processed:   ${result.vendasProcessed}`);
+  console.log(`  Skipped (NS):       ${result.vendasSkippedNuvemshop}`);
+  console.log(`  Customers:          ${result.customersUpserted}`);
+  console.log(`  Sales:              ${result.salesUpserted}`);
+  console.log(`  Sale items:         ${result.saleItemsInserted}`);
+  console.log(`  Errors:             ${result.errors}`);
+  console.log(`  Duration:           ${(result.durationMs / 1000).toFixed(1)}s`);
 
   if (result.errors > 0) {
     console.error(`\n⚠ ${result.errors} errors occurred.`);

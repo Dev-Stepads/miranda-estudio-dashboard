@@ -1,10 +1,9 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchTopCustomers, fetchGeographyCA, parsePeriod } from '../../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchTopCustomers, parsePeriod } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { AvgTicketChart } from '../../components/avg-ticket-chart';
-import { BrazilMap } from '../../components/brazil-map';
 import { SimpleTable } from '../../components/simple-table';
 
 export default async function LojaFisicaPage({
@@ -15,12 +14,11 @@ export default async function LojaFisicaPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
-  const [dailyRevenue, prevDailyRevenue, topProducts, topCustomers, geography] = await Promise.all([
+  const [dailyRevenue, prevDailyRevenue, topProducts, topCustomers] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days * 2),
     fetchTopProducts(20, period.days, params.from, params.to),
     fetchTopCustomers(30, 'conta_azul', period.days, params.from, params.to),
-    fetchGeographyCA(10, period.days, params.from, params.to),
   ]);
 
   // Filter Conta Azul only
@@ -63,7 +61,7 @@ export default async function LojaFisicaPage({
           change={percentChange(totalRevenue, prevRevenue)}
         />
         <KpiCard
-          title="Pedidos (NF-e)"
+          title="Pedidos"
           value={formatNumber(totalOrders)}
           subtitle={`Ticket médio ${formatBRL(avgTicket)}`}
           change={percentChange(totalOrders, prevOrders)}
@@ -84,34 +82,18 @@ export default async function LojaFisicaPage({
         />
       )}
 
-      {/* Geography + Top Produtos lado a lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-        <BrazilMap
-          data={(() => {
-            const byState = new Map<string, { revenue: number; orders_count: number }>();
-            for (const g of geography) {
-              const existing = byState.get(g.state) ?? { revenue: 0, orders_count: 0 };
-              existing.revenue += g.revenue;
-              existing.orders_count += g.orders_count;
-              byState.set(g.state, existing);
-            }
-            return Array.from(byState.entries())
-              .map(([state, vals]) => ({ state, ...vals }))
-              .sort((a, b) => b.revenue - a.revenue);
-          })()}
-        />
-        <SimpleTable
-          title="Top Produtos"
-          subtitle="Ranking por faturamento (NF-e)"
-          columns={[
-            { key: 'product_name', label: 'Produto' },
-            { key: 'sku', label: 'SKU' },
-            { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
-            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-          ]}
-          rows={caProducts as unknown as Record<string, unknown>[]}
-        />
-      </div>
+      {/* Top Produtos */}
+      <SimpleTable
+        title="Top Produtos"
+        subtitle="Ranking por faturamento"
+        columns={[
+          { key: 'product_name', label: 'Produto' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
+          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+        ]}
+        rows={caProducts as unknown as Record<string, unknown>[]}
+      />
 
       {/* Top Clientes — Pessoas */}
       <SimpleTable
@@ -121,7 +103,7 @@ export default async function LojaFisicaPage({
           { key: 'name', label: 'Cliente' },
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
-          { key: 'state', label: 'UF' },
+
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
@@ -136,7 +118,7 @@ export default async function LojaFisicaPage({
           { key: 'name', label: 'Empresa' },
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
-          { key: 'state', label: 'UF' },
+
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
