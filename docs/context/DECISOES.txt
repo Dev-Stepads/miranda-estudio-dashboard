@@ -1128,3 +1128,50 @@ DECISÕES REGISTRADAS
   Impacto:  Dashboard vai ter comparativo de 3+ anos. Miranda podera ver
             tendencias ano-a-ano. Tempo de sync eh pontual — depois, o
             sync incremental (cron 30min) so puxa dados novos.
+
+
+[2026-04-16b] [DADOS] Sync historico CA concluido (3 anos completos)
+  Contexto: A entrada 2026-04-16 deixou o sync historico iniciado mas
+            parado em 550/9379 vendas. Esta sessao (outra maquina)
+            retomou e completou os 6 chunks em sequencia.
+  Decisao:  Executado conforme plano: set -e + && chained, logando em
+            /tmp/miranda-sync/log.txt, com Monitor capturando SYNC
+            COMPLETE e errors via stream. Cada chunk validado imediato
+            (API totais.aprovado bate com Sales upserted no chunk).
+            Validacao final via src/scripts/validate-historic-ca.ts
+            (novo, reusavel): diff R$ 0,00 por chunk, total R$
+            3.678.248,49 batendo exato com o reportado pela API.
+  Impacto:  Dashboard > Comparativo Mensal agora cobre 2023-2026 (41
+            meses). Total CA no banco: 2023 R$ 1.057.032,74, 2024 R$
+            1.324.087,85, 2025 R$ 1.664.426,18 (inclui Nov+Dez
+            pre-existentes), 2026 R$ 716.902,30 (parcial ate Abr).
+            Tempo real foi ~3h 20min (60% acima da estimativa de 2h
+            do handoff) — nao travou em nenhum chunk, so eh API mais
+            lenta do que esperado. Sequential execution funcionou
+            perfeitamente — zero conflito de refresh_token.
+
+[2026-04-16b] [DADOS] Bug coluna sale_items.quantity INT (T52 aberto)
+  Contexto: Durante o sync historico, 4 items (de ~18k) falharam com
+            "invalid input syntax for type integer" — a API CA retorna
+            quantidades fracionarias como "2.04", "2.7", "3.2", "7.02"
+            (provavelmente kg/L de materiais de papelaria/artesanato).
+            A coluna sale_items.quantity esta declarada INT desde a
+            migration inicial 20260411120000.
+            O audit 2026-04-13b (item C3) ja havia removido o
+            Math.round(quantidade) no mapper pra preservar precisao,
+            mas o schema do DB nao foi ajustado. Discrepancia ficou
+            latente ate o sync historico expor em escala.
+  Decisao:  Registrar como T52 no backlog. Nao fixar agora porque:
+            (a) Sales sao gravadas normalmente — faturamento nao
+                afetado.
+            (b) Items perdidos = 0.02% (4 em 18k) — ranking de
+                produtos continua valido.
+            (c) Fix requer migration + resync dos meses 2023-H2 e
+                2025-H1 (~70 min de sync adicional).
+            Proposta quando for feito:
+              ALTER TABLE sale_items ALTER COLUMN quantity TYPE
+                numeric(12,3);
+            Mais resync dos 2 chunks afetados. Views que fazem
+            sum(si.quantity)::int continuam valendo (o cast final
+            arredonda na agregacao).
+  Impacto:  Divida tecnica documentada. Prioridade baixa.

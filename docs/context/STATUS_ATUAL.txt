@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-16 (T50 fix % KPI + T51 parcial: fix % Comparativo Mensal feito, sync historico CA interrompido p/ handoff — ver HANDOFF.txt secao 0)
+Ultima atualizacao: 2026-04-16b (T51 COMPLETO — sync historico CA 2023-2025 finalizado, 9379 vendas / R$ 3.678.248,49 no banco, diff R$ 0,00 vs API; T52 novo aberto: coluna quantity precisa virar NUMERIC)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -87,14 +87,18 @@ Etapa 9 — Divida tecnica: PARCIAL
              getPreviousPeriod() novo helper + 3 pages atualizadas +
              percentChange null quando previous=0. Validado vs API CA:
              dados historicos batem cent a cent, nao ha inflacao no ETL.
-         [~] T51 sync historico CA + fix % Comparativo Mensal — EM ANDAMENTO (2026-04-16)
-             Parte A (% Comparativo Mensal): CONCLUIDA. Mes parcial agora
-             compara com primeiros N dias do mes anterior. Badge "parcial"
-             visual no componente.
-             Parte B (sync historico): PARCIAL. 550/9379 vendas (5.9%)
-             processadas, interrompido pra handoff de maquina. Processo
-             morto, nao ha tsx/node rodando. Outra maquina deve rodar
-             6 chunks de 6 meses em sequencia (ver HANDOFF secao 0).
+         [x] T51 sync historico CA + fix % Comparativo Mensal — CONCLUIDO (2026-04-16b)
+             Parte A (% Comparativo Mensal): CONCLUIDA na sessao 2026-04-16.
+             Parte B (sync historico): CONCLUIDA na sessao 2026-04-16b
+             (outra maquina). 6 chunks de 6 meses, 9379 sales / R$
+             3.678.248,49. Diff R$ 0,00 vs API em todos os chunks.
+             Dashboard Comparativo Mensal agora cobre 2023-2026 (41 meses).
+             Script src/scripts/validate-historic-ca.ts reusavel.
+         [ ] T52 Migrar sale_items.quantity INT → NUMERIC(12,3) — NOVO
+             Exposicao 2026-04-16b durante sync historico: 4 items
+             (de ~18k) com quantidade fracionaria (2.04, 2.7, 3.2, 7.02
+             kg/L) falharam insert porque coluna e INT. Sales OK, apenas
+             items pontuais perdidos (0.02%). Nao bloqueante.
 
 --------------------------------------------------------
 INFRAESTRUTURA
@@ -155,7 +159,9 @@ INTEGRACOES — progresso por fonte
   [x] Transformacao faturamento (T10) — mapper completo (2026-04-12)
   [x] Transformacao produtos (T11) — via product_name (2026-04-12)
   [x] Transformacao demografia (T12) — normalizeState() 93.5% (2026-04-12)
-  Dados no Supabase: 545 sales CA + 1196 sale_items CA
+  Dados no Supabase (pos-sync historico 2026-04-16b):
+    ~11.900+ sales CA (9379 historicas 2023-2025 + ~2500 Nov 2025-Abr 2026)
+    ~18.400+ sale_items (com 4 falhas por quantidade fracionaria, T52)
 
 [NUVEMSHOP] — ETL COMPLETO E RODANDO
   [x] Mapeamento tecnico (T5) — 2026-04-10
@@ -258,16 +264,21 @@ PROXIMO MARCO
 --------------------------------------------------------
 Frentes abertas, por prioridade:
 
-1. T49 Fechamento do gap residual de R$ 3.010 — requer acesso a
-   API CA (creds no .env.local ou workflow_dispatch). Ver HANDOFF
-   secao 0 para passos concretos.
-
-2. Webhooks LGPD (T44) — critico antes de producao:
+1. Webhooks LGPD (T44) — critico antes de producao:
    * 3 API routes Next.js
    * Validacao HMAC + logica de DELETE/export
 
-3. Cofre de senhas (T46) — resolver antes da proxima pessoa do
+2. Cofre de senhas (T46) — resolver antes da proxima pessoa do
    revezamento
 
-4. Rotacao de secrets (T47) — META + SUPABASE service_role passaram
+3. Rotacao de secrets (T47) — META + SUPABASE service_role passaram
    pelo chat
+
+4. T52 Migrar sale_items.quantity INT → NUMERIC(12,3) — descoberto
+   durante sync historico 2026-04-16b. Nao bloqueante (0.02% dos
+   items afetados), mas vale resolver antes que vire problema maior.
+
+5. T49 gap residual R$ 3.010 em Marco 2026 — pendente desde sessao
+   2026-04-15 (hipoteses: Morada, recebiveis sem "Venda N", criterio
+   de data diferente). Pode ser investigado agora que ha comparativo
+   historico.

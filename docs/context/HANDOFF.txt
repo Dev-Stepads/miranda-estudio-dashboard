@@ -4,135 +4,126 @@ HANDOFF — Dashboard Miranda Studio
 
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-16
-RESPONSAVEL: sessao 2026-04-15b/16 — fix % KPI + fix Comparativo Mensal + handoff p/ outra maquina
-BRANCH: main (changes uncommitted — ver secao "HANDOFF PRA OUTRA MAQUINA")
+RESPONSAVEL: sessao 2026-04-16b — sync historico CA COMPLETO (outra maquina)
+BRANCH: main
 
 --------------------------------------------------------
-0. HANDOFF PRA OUTRA MAQUINA (2026-04-16) — PROXIMO PASSO EXATO
+0. SESSAO ATUAL (2026-04-16b) — T51 PARTE B COMPLETA
 --------------------------------------------------------
-Esta sessao foi interrompida no meio do sync historico da Conta Azul pra
-permitir continuar em outra maquina. Tudo que esta feito ja esta no
-repo (modificado, nao commitado) ou no Supabase (compartilhado).
+Retomei o handoff da sessao anterior (2026-04-16) em outra maquina.
+Execucao executou exatamente os 6 chunks previstos no plano.
 
-ESTADO:
-  - Todos os fixes de codigo estao commited localmente? NAO.
-    Arquivos modificados (git status):
-      app/lib/queries.ts                 (+helper getPreviousPeriod + fix monthly partial)
-      app/components/kpi-cards.tsx       (percentChange → null quando prev=0)
-      app/components/monthly-comparison.tsx (badge "parcial" + legenda)
-      app/dashboard/page.tsx             (usa getPreviousPeriod)
-      app/dashboard/loja-fisica/page.tsx (idem)
-      app/dashboard/nuvemshop/page.tsx   (idem)
-      docs/context/DECISOES.txt          (append: 2026-04-15b + 2026-04-16)
-      docs/context/HANDOFF.txt           (este arquivo)
-      docs/context/STATUS_ATUAL.txt      (ultima atualizacao)
-      docs/producao/BACKLOG_MIRANDA.txt  (T50 + T51)
+O QUE FOI FEITO:
 
-  - Sync historico CA (Jan 2023 - Out 2025): parcialmente feito
-    - Processadas 550 de 9379 vendas (5.9%) antes de ser interrompido
-    - As 550 ja estao no Supabase (upserted, nao se perde)
-    - O que falta: processar as outras ~8829 vendas (~110 min)
-    - Confirmado que processo foi matado: nenhum tsx/node rodando
+  1. git pull (puxou 4 commits que a maquina anterior deu push:
+     8b22182, 72ed2be, 9713f4f, 0f28b07 — inclui todos os fixes do
+     Comparativo Mensal + registro do PAT novo do Meta em T47).
 
-PROXIMO PASSO EXATO — O QUE A OUTRA MAQUINA DEVE FAZER:
+  2. Rodei os 6 chunks em background, sequenciais, chained com &&
+     (set -e), logando em /tmp/miranda-sync/log.txt + Monitor stream
+     pra capturar SYNC COMPLETE e errors. Total wall clock ~3h 20min
+     (estimativa original era ~2h — 60% acima, mas OK).
 
-  1. git pull (puxar os commits que voce der push a partir desta maquina)
-     OU trabalhar com os arquivos modificados se nao der push antes.
+  3. Resultado (validado via script novo
+     src/scripts/validate-historic-ca.ts, diff R$ 0,00 em todos os
+     chunks vs API):
 
-  2. Confirmar que .env.local tem CONTA_AZUL_CLIENT_ID,
-     CONTA_AZUL_CLIENT_SECRET e CONTA_AZUL_REFRESH_TOKEN populados.
-     (O refresh_token vive em Supabase etl_config e sobrescreve o
-     do .env.local, entao se os 3 estao ali, funciona.)
+       Chunk 2023-H1     : 1209 sales | R$   422.061,03 | 25.8 min
+       Chunk 2023-H2     : 1445 sales | R$   634.971,71 | 32.2 min
+       Chunk 2024-H1     : 1522 sales | R$   630.191,22 | 33.3 min
+       Chunk 2024-H2     : 1682 sales | R$   693.896,63 | 35.4 min
+       Chunk 2025-H1     : 1949 sales | R$   734.309,39 | 40.2 min
+       Chunk 2025-Jul-Out: 1572 sales | R$   562.818,51 | 32.0 min
+       ---
+       TOTAL           : 9379 sales | R$ 3.678.248,49 (MATCH API)
 
-  3. Rodar o sync historico em chunks de 6 meses (sequencial):
+     Por ano no DB depois do sync:
+       2023: 350 dias | R$ 1.057.032,74
+       2024: 345 dias | R$ 1.324.087,85
+       2025: 355 dias | R$ 1.664.426,18 (Nov+Dez pre-existentes)
+       2026: 103 dias | R$   716.902,30 (Jan-Abr parcial)
 
-       npm run sync:contaazul -- --from 2023-01-01 --to 2023-06-30
+  4. typecheck OK, 134 testes passando.
+
+DIVIDA NOVA DESCOBERTA (T52): 4 items falharam com "invalid input
+syntax for type integer" porque a API CA retorna quantidades
+fracionarias (2.04, 2.7, 3.2, 7.02 — provavelmente kg/L) mas a
+coluna sale_items.quantity e INT. Sales correspondentes foram
+gravadas normalmente (zero erros de sale em nenhum chunk); apenas
+os 4 items individuais se perderam (0.02% de ~18k items).
+Impacto: ranking de produtos ignora esses 4 casos. Nao afeta
+faturamento. Fix = migration ALTER COLUMN quantity TYPE
+numeric(12,3) + resync dos meses afetados (2023-H2 e 2025-H1).
+
+PROXIMO PASSO QUANDO RETOMAR:
+
+  1. Abrir Vercel prod (ou localhost:3000) e conferir
+     Dashboard > Visao Geral > Comparativo Mensal:
+     - Deve mostrar tabs de ano: 2023, 2024, 2025, 2026
+     - Cada ano com 12 meses (onde houver venda)
+     - Abril 2026 badge "parcial" ainda presente
+     - % batendo com os totais por ano listados acima
+
+  2. (Opcional) Rodar migration T52 pra corrigir a coluna quantity:
+     ALTER TABLE sale_items ALTER COLUMN quantity TYPE numeric(12,3);
+     Depois resync dos meses afetados:
        npm run sync:contaazul -- --from 2023-07-01 --to 2023-12-31
-       npm run sync:contaazul -- --from 2024-01-01 --to 2024-06-30
-       npm run sync:contaazul -- --from 2024-07-01 --to 2024-12-31
        npm run sync:contaazul -- --from 2025-01-01 --to 2025-06-30
-       npm run sync:contaazul -- --from 2025-07-01 --to 2025-10-31
 
-     Cada chunk leva ~15-20min. Total ~2h. Fazer em sequencia porque
-     o refresh_token da CA eh single-use (paralelo da conflito).
+  3. Prioridades abertas (ordem por urgencia):
+     a. T44 Webhooks LGPD (critico antes de producao real)
+     b. T46 Cofre de senhas Stepads (bloqueia revezamento seguro)
+     c. T47 Rotacao dos secrets que passaram pelo chat
+        (META_APP_SECRET, META_SYSTEM_USER_TOKEN, PAT GitHub,
+         SUPABASE service_role)
+     d. T52 Fix coluna quantity INT → NUMERIC
 
-     POR QUE CHUNKS E NAO UM SYNC UNICO DE 3 ANOS:
-       - se der erro no meio, nao perde tudo
-       - progresso visivel
-       - upsert e idempotente, entao re-rodar um chunk ja feito nao
-         duplica dados
+ARQUIVOS TOCADOS NESTA SESSAO:
+  - src/scripts/validate-historic-ca.ts (novo, reusavel — diff por chunk)
+  - src/scripts/check-march.ts (herdado da sessao anterior, untracked;
+    deixado no disco pra diagnostico, nao commitado)
+  - docs vivos: HANDOFF.txt, STATUS_ATUAL.txt,
+    BACKLOG_MIRANDA.txt (T51 → [x], T52 novo), DECISOES.txt
+    (append 2026-04-16b)
 
-  4. Apos cada chunk, confirmar no terminal que mostrou
-     "SYNC COMPLETE" com "Errors: 0" e o valor de
-     "API totais.aprovado" bateu com o "Sales" upserted.
+BUILD: typecheck OK, 134 testes passando, zero regressao.
 
-  5. Apos os 6 chunks, validar com a API (script existe):
+--------------------------------------------------------
+0a. SESSAO ANTERIOR (2026-04-16) — HANDOFF INTER-MAQUINA
+--------------------------------------------------------
+FRENTE 1 — Bug no calculo de % nos KPI cards (CORRIGIDO):
+  Causa: fetchDailyRevenue(period.days * 2) + filter local criava
+  periodos anteriores truncados em 2 cenarios:
+    (a) Date picker custom "Mar 2026" → prev so 12 dias de Fev
+    (b) Filtro "1 ano" → prev vazio → +100% falso em todo card
+  Fix:
+    - Novo helper getPreviousPeriod(since, until) em queries.ts
+      computa janela anterior de MESMO tamanho imediatamente antes
+    - 3 pages (Visao Geral, Loja Fisica, Nuvemshop) atualizadas
+    - percentChange() retorna null quando previous=0 (nao mais 100)
 
-       npx tsx --env-file=.env.local src/scripts/probe-ca-history.ts
+FRENTE 2 — Validacao dos dados historicos CA (NAO HA INFLACAO):
+  Cruzei dados do banco com API CA (/v1/venda/busca.totais.aprovado)
+  pra Nov 2025 - Abr 2026: diff R$ 0,00 em TODOS os meses.
+  Dados sao reais — Jan 2026 teve mesmo 1019 vendas / R$ 361K.
+  A expectativa da Miranda de "+38% total" provavelmente se refere
+  a ano-a-ano (Mar 2025 vs Mar 2026) — com historico agora no
+  banco, essa comparacao vira possivel.
 
-     OBS: esse script NAO foi salvo no repo (foi removido apos uso).
-     Se precisar, reconstrua com o loop:
-       for (cada mes entre 2023-01 e 2025-10) chamar
-       /v1/venda/busca?data_inicio=YYYY-MM-01&data_fim=YYYY-MM-last
-       e cruzar totais.aprovado com sum(gross_revenue) do supabase
-       v_visao_geral_daily onde source=conta_azul e day no mes.
-     Diff esperado: R$ 0,00 em todos os meses (ETL ja foi validado
-     em sessao anterior 2026-04-15b pros meses Nov 2025 - Abr 2026).
+FRENTE 3 — Fix do Comparativo Mensal (% mes parcial):
+  Causa: mes atual (Abril 2026) tem so 15 dias mas era comparado
+  com Marco inteiro (31 dias) → mostrava -52% artificial.
+  Fix:
+    - fetchMonthlyComparison detecta mes parcial
+    - Pro mes parcial: compara com primeiros N dias do mes anterior
+    - MonthlyData ganhou flag `partial: boolean`
+    - Componente mostra badge "parcial" + legenda
+  Validado: Abril agora mostra +2.4% em vez de -52%.
 
-  6. Abrir o dashboard em localhost:3000 (ou Vercel prod) e conferir
-     a aba Visao Geral > Comparativo Mensal:
-     - Deve mostrar tabs com anos: 2023, 2024, 2025, 2026
-     - Cada ano mostra 12 meses
-     - Abril 2026 tem badge "parcial" amarelo
-     - % sao corretas (comparando cada mes vs anterior; mes parcial
-       vs mesmo periodo do anterior)
-
-  7. Commit + push:
-
-       git add app/ docs/ src/scripts/
-       git commit -m "feat: sync historico CA + fix % comparativo mensal"
-       git push
-
-  8. Atualizar docs vivos (este HANDOFF, STATUS_ATUAL, BACKLOG) pra
-     refletir que T51 (sync historico CA) esta completo.
-
-O QUE JA FOI FEITO NESTA SESSAO (2026-04-15b/16):
-
-  FRENTE 1 — Bug no calculo de % nos KPI cards (CORRIGIDO):
-    Causa: fetchDailyRevenue(period.days * 2) + filter local criava
-    periodos anteriores truncados em 2 cenarios:
-      (a) Date picker custom "Mar 2026" → prev so 12 dias de Fev
-      (b) Filtro "1 ano" → prev vazio → +100% falso em todo card
-    Fix:
-      - Novo helper getPreviousPeriod(since, until) em queries.ts
-        computa janela anterior de MESMO tamanho imediatamente antes
-      - 3 pages (Visao Geral, Loja Fisica, Nuvemshop) atualizadas
-      - percentChange() retorna null quando previous=0 (nao mais 100)
-
-  FRENTE 2 — Validacao dos dados historicos CA (NAO HA INFLACAO):
-    Cruzei dados do banco com API CA (/v1/venda/busca.totais.aprovado)
-    pra Nov 2025 - Abr 2026: diff R$ 0,00 em TODOS os meses.
-    Dados sao reais — Jan 2026 teve mesmo 1019 vendas / R$ 361K.
-    A expectativa da Miranda de "+38% total" provavelmente se refere
-    a ano-a-ano (Mar 2025 vs Mar 2026), que depende do sync historico.
-
-  FRENTE 3 — Fix do Comparativo Mensal (% mes parcial):
-    Causa: mes atual (Abril 2026) tem so 15 dias mas era comparado
-    com Marco inteiro (31 dias) → mostrava -52% artificial.
-    Fix:
-      - fetchMonthlyComparison detecta mes parcial
-      - Pro mes parcial: compara com primeiros N dias do mes anterior
-      - MonthlyData ganhou flag `partial: boolean`
-      - Componente mostra badge "parcial" + legenda
-    Validado: Abril agora mostra +2.4% em vez de -52%.
-
-  FRENTE 4 — Sync historico CA (EM ANDAMENTO):
-    API tem 9628 vendas entre Jan 2023 e Out 2025 (R$ 3.678.248,49).
-    Sync iniciado nesta maquina, processado 225 vendas antes de parar
-    pra handoff. Resto vai ser feito na outra maquina (ver passo 3
-    acima). Upsert eh idempotente, rodar de novo nao duplica.
-
-BUILD: typecheck OK, 134 testes passando (antes do sync historico).
+FRENTE 4 — Sync historico CA (INICIADO, HANDOFF PRA OUTRA MAQUINA):
+  API tem 9379 vendas entre Jan 2023 e Out 2025 (R$ 3.678.248,49).
+  Sync iniciado, processado 550 vendas antes do handoff. Resto
+  completado na sessao 2026-04-16b (ver secao 0 acima).
 
 --------------------------------------------------------
 0a. SESSAO ANTERIOR (2026-04-15b) — FIX % KPI + VALIDACAO CA (T50)
