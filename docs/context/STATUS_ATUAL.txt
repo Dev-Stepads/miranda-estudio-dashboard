@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-14c (🚨 T49 descoberto: ETL CA puxa so NF-e, perde 75% das vendas)
+Ultima atualizacao: 2026-04-15 (T49 fix TZ aplicado; gap residual R$ 3.010 pendente)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -211,16 +211,25 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
-- 🚨 T49 ETL CONTA AZUL INCOMPLETO (bloqueio CRITICO, descoberto
-  2026-04-14c apos reuniao com Miranda): src/etl/conta-azul/sync.ts
-  puxa apenas /v1/notas-fiscais, que captura so ~25% das vendas reais
-  da loja fisica. Fechamento marco 2026 da Miranda: R$ 82.944,79.
-  Dashboard mostrava R$ 20.187,58 (38 NF-e em 4 dias). Perfil das NF-e
-  eh B2B / envio remoto — PDV de balcao sai em NFC-e ou venda interna
-  e ficou invisivel. Nuvemshop bate nos centavos, CA nao. Aguardando
-  Miranda responder qual relatorio ela usa (Vendas / NF / CR) +
-  descoberta do endpoint correto na api-v2.contaazul.com.
-  Ver HANDOFF secao 0 + DECISOES 2026-04-14c + T49 no backlog.
+- T49 ETL CONTA AZUL — reescrita completa 2026-04-14 + fix TZ
+  2026-04-15. Marco 2026 agora: R$ 79.934,40 (gap -R$ 3.010,39 vs
+  target R$ 82.944,79 da Miranda). Estado dos fixes:
+    [x] Reescrito de /v1/notas-fiscais para /v1/venda/busca (2026-04-14)
+    [x] Abordagem hibrida recebiveis+vendas (2026-04-14d, sem centro
+        de custo = loja fisica)
+    [x] Fix TZ sale_date (2026-04-15) — gravava UTC midnight, view
+        fazia at time zone SP shiftando 3h pra tras. Fix: gravar
+        "T03:00:00Z". 2548 sales CA atualizados no banco (+3h) e 194
+        sales fantasma com gross=0 deletados.
+  GAP RESIDUAL R$ 3.010,39 — hipoteses (nao resolvidas):
+    - Morada (liq R$ 3.543,51 / bruto R$ 7.728) — proximo mas nao exato
+    - Recebiveis sem "Venda N" na descricao (regex filtra)
+    - Miranda pode usar data de pagamento, nao de vencimento
+  Bloqueio pra resolver: creds CA no .env.local estao vazias. Sem
+  acesso a API, nao da pra diagnosticar o gap exato. Scripts prontos
+  em src/scripts/debug-marco.ts (requer creds) e debug-marco-supabase.ts
+  (so Supabase, ja foi usado).
+  Ver HANDOFF secao 0 (sessao 2026-04-15) + DECISOES 2026-04-15.
 - META ADS: RESOLVIDO. Todos os 6 passos operacionais executados
   (2026-04-13b). Dados reais fluindo. 2 bugfixes aplicados (purchases
   5x overcount + seed data ficticia). Falta apenas git push (passo 6).
@@ -237,9 +246,9 @@ PROXIMO MARCO
 --------------------------------------------------------
 Frentes abertas, por prioridade:
 
-1. 🚨 T49 Fix ETL Conta Azul — mais critico, impacta veracidade
-   de toda a aba Loja Fisica e Visao Geral em periodos historicos.
-   Passos em HANDOFF secao 0. Aguardando input da Miranda.
+1. T49 Fechamento do gap residual de R$ 3.010 — requer acesso a
+   API CA (creds no .env.local ou workflow_dispatch). Ver HANDOFF
+   secao 0 para passos concretos.
 
 2. Webhooks LGPD (T44) — critico antes de producao:
    * 3 API routes Next.js

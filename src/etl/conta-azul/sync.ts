@@ -1,25 +1,49 @@
 /**
- * Conta Azul → Supabase ETL sync (Hybrid: Recebiveis + Vendas API).
+ * Conta Azul → Supabase ETL sync — /venda/busca direto.
  *
- * Flow:
- * 1. Refresh access_token via ContaAzulTokenManager
- * 2. Fetch Contas a Receber for the date range (data_vencimento)
- *    → This determines which month each sale belongs to (matches Miranda's logic)
- * 3. Filter: keep only recebiveis "sem centro de custo" (loja física)
- *    → Excludes "VENDAS SITE" (Nuvemshop), "ADMINISTRATIVO", etc.
- * 4. Extract unique venda numbers from descriptions ("Venda 15698 / NFC-e:7195")
- * 5. For each venda, search via /v1/venda/busca?termo_busca=NUM to get UUID
- * 6. Fetch detail (/v1/venda/{id}) and items (/v1/venda/{id}/itens)
- * 7. Upsert into canonical tables using data_vencimento as sale_date
+ * Architecture (v3, 2026-04-15):
+ * ----------------------------------------------------------------
+ * Pre-v3 ("receb-*" fallback era) used Contas a Receber as the primary
+ * source and tried to resolve each receivable to a venda via a second
+ * lookup. That produced numbers ~3.5% off Miranda's closing because
+ * totals were sum(pago) (cash basis) vs Miranda's sum(total aprovado)
+ * from the CA "Vendas" screen (accrual basis on sale date).
  *
- * Why this hybrid approach:
- * Miranda closes monthly revenue by receivable date (data_vencimento),
- * not by sale creation date. A sale created in February with a receivable
- * due in March counts as March revenue for Miranda. Using /v1/venda/busca
- * alone attributed sales to wrong months (R$ 14K vs R$ 83K expected).
+ * v3 flow matches the CA "Vendas" screen that Miranda actually uses to
+ * close the month:
+ *   1. Fetch /v1/venda/busca?data_inicio&data_fim — this returns
+ *      `totais.aprovado` which equals Miranda's "Faturamento Total"
+ *      at the cent. Example validated March 2026: R$ 116.544,00.
+ *   2. Dedup by `id` — the API returns the same venda multiple times
+ *      inside a single response (observed: 4 dups in March's 329 vendas).
+ *   3. Filter situacao ∈ {APROVADO, FATURADO} — excludes ORCAMENTO
+ *      (31.9K in March that's not real revenue yet).
+ *   4. Tag vendas with origem = "Nuvem Shop" by adding a `nstag-` prefix
+ *      to source_sale_id. We keep them in `sales` because sum(CA) must
+ *      equal `totais.aprovado` to derive Loja Física = CA − NS at the
+ *      dashboard layer (Miranda's subtraction formula). Rankings and
+ *      detail queries filter `nstag-%` out.
+ *   5. For each venda (loja + nstag), fetch /venda/{id} (payment method,
+ *      cliente doc) + /venda/{id}/itens and upsert into canonical tables.
  *
- * Rate limit: Conta Azul has spike arrest of 10 req/s.
- * We throttle to ~4 req/s to stay safe.
+ * Why no cross-source dedup against Nuvemshop customers: an earlier
+ * version tried matching CA vendas to NS orders by (email, date, total).
+ * Debugging showed 0 matches in March 2026 — CA loja customers and NS
+ * customers are different email universes. The ~R$ 1.346 gap between
+ * NS ETL total and CA NS-tagged total is driven by freight handling
+ * differences (NS includes frete in gross, CA records product subtotal),
+ * not duplicate sales. The dashboard subtraction pattern handles it.
+ *
+ * sale_date = `${venda.data}T03:00:00Z` (SP midnight). Writing the bare
+ * YYYY-MM-DD string makes Supabase store it as UTC midnight, which the
+ * dashboard view then shifts 3h back into the previous day. See DECISOES
+ * 2026-04-15.
+ *
+ * Token auto-refresh: CA access_tokens expire every hour. `fetchAuth()`
+ * catches 401, calls `tokenManager.refresh()`, and retries once. Essential
+ * for historical syncs longer than 1h.
+ *
+ * Rate limit: CA spike arrest is 10 req/s. We throttle to ~4 req/s.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -27,6 +51,7 @@ import { ContaAzulTokenManager } from '../../integrations/conta-azul/auth.ts';
 import {
   RawContaAzulVendaDetalheSchema,
   VendaItensResponseSchema,
+  VendaBuscaResponseSchema,
 } from '../../integrations/conta-azul/schemas.ts';
 
 // ------------------------------------------------------------
@@ -41,30 +66,37 @@ export interface ContaAzulSyncConfig {
 }
 
 export interface ContaAzulSyncResult {
-  recebiveisFetched: number;
-  vendasFound: number;
+  vendasFetched: number;
+  vendasAfterIdDedup: number;
+  vendasAfterSituacaoFilter: number;
+  vendasAfterOrigemFilter: number;
+  vendasSkippedNsCrossRef: number;
   vendasProcessed: number;
-  vendasNotFound: number;
   customersUpserted: number;
   salesUpserted: number;
   saleItemsInserted: number;
   errors: number;
   durationMs: number;
+  apiAprovadoTotal: number;
+}
+
+interface VendaListItem {
+  id: string;
+  numero: number;
+  data: string;
+  total: number;
+  origem?: string | null;
+  cliente?: { id: string; nome: string; email?: string | null } | null;
+  situacao?: { nome: string };
 }
 
 // ------------------------------------------------------------
-// Throttle helper
+// Constants
 // ------------------------------------------------------------
 
-const THROTTLE_MS = 250; // ~4 req/s
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ------------------------------------------------------------
-// Payment type map
-// ------------------------------------------------------------
+const BASE = 'https://api-v2.contaazul.com/v1';
+const THROTTLE_MS = 250;
+const PAGE_SIZE = 500;
 
 const PAYMENT_NAMES: Record<string, string> = {
   PIX_PAGAMENTO_INSTANTANEO: 'pix',
@@ -83,26 +115,37 @@ function mapPaymentForDb(tipo: string | undefined | null): string {
   return PAYMENT_NAMES[tipo] ?? 'outros';
 }
 
-// ------------------------------------------------------------
-// API base
-// ------------------------------------------------------------
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-const BASE = 'https://api-v2.contaazul.com/v1';
+const USER_AGENT = 'Miranda Dashboard ETL (dev@stepads.com.br)';
 
-// ------------------------------------------------------------
-// Receivable item shape (from /financeiro/.../contas-a-receber/buscar)
-// ------------------------------------------------------------
+/**
+ * Fetch wrapper that auto-refreshes the access_token on 401.
+ *
+ * CA access_tokens expire every hour. A full historical sync takes
+ * longer than that, so we must retry once with a fresh token when
+ * the API rejects us. `tokenManager.refresh()` rotates the
+ * refresh_token and persists via the onRefresh callback.
+ */
+async function fetchAuth(
+  url: string,
+  tokenManager: ContaAzulTokenManager,
+): Promise<Response> {
+  const token = await tokenManager.getAccessToken();
+  const makeHeaders = (t: string) => ({
+    Authorization: `Bearer ${t}`,
+    'User-Agent': USER_AGENT,
+  });
 
-interface RecebItem {
-  id: string;
-  status: string;
-  total: number;
-  descricao: string;
-  data_vencimento: string;
-  pago: number;
-  nao_pago: number;
-  centros_de_custo?: Array<{ id: string; nome: string }>;
-  cliente?: { id: string; nome: string };
+  const resp = await fetch(url, { headers: makeHeaders(token) });
+  if (resp.status !== 401) return resp;
+
+  // Force refresh and retry once.
+  await tokenManager.refresh();
+  const freshToken = await tokenManager.getAccessToken();
+  return fetch(url, { headers: makeHeaders(freshToken) });
 }
 
 // ------------------------------------------------------------
@@ -117,16 +160,21 @@ export async function syncContaAzul(
   log: (msg: string) => void,
 ): Promise<ContaAzulSyncResult> {
   const start = Date.now();
-  let recebiveisFetched = 0;
-  let vendasFound = 0;
-  let vendasProcessed = 0;
-  let vendasNotFound = 0;
-  let customersUpserted = 0;
-  let salesUpserted = 0;
-  let saleItemsInserted = 0;
-  let errors = 0;
+  const result: ContaAzulSyncResult = {
+    vendasFetched: 0,
+    vendasAfterIdDedup: 0,
+    vendasAfterSituacaoFilter: 0,
+    vendasAfterOrigemFilter: 0,
+    vendasSkippedNsCrossRef: 0,
+    vendasProcessed: 0,
+    customersUpserted: 0,
+    salesUpserted: 0,
+    saleItemsInserted: 0,
+    errors: 0,
+    durationMs: 0,
+    apiAprovadoTotal: 0,
+  };
 
-  // 1. Get access token
   log('🔄 Refreshing Conta Azul access_token...');
   const tokenManager = new ContaAzulTokenManager({
     clientId: config.clientId,
@@ -138,422 +186,338 @@ export async function syncContaAzul(
     },
   });
 
-  const accessToken = await tokenManager.getAccessToken();
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    'User-Agent': 'Miranda Dashboard ETL (dev@stepads.com.br)',
-  };
+  // Force an initial refresh so we know the token is fresh.
+  await tokenManager.getAccessToken();
 
   // ============================================================
-  // PHASE 1: Fetch Contas a Receber (receivables) for the period
+  // PHASE 1: Fetch ALL vendas in window (paginated, dedup by id)
   // ============================================================
-  log(`\n🔄 Fetching Contas a Receber (data_vencimento ${dataInicial} → ${dataFinal})...`);
+  log(`\n🔄 Fetching /venda/busca ${dataInicial} → ${dataFinal}...`);
 
-  const allRecebiveis: RecebItem[] = [];
+  const rawFetched: VendaListItem[] = [];
+  const seenIds = new Set<string>();
+  const uniqueVendas: VendaListItem[] = [];
   let page = 1;
 
   while (true) {
     await sleep(THROTTLE_MS);
-    const url = `${BASE}/financeiro/eventos-financeiros/contas-a-receber/buscar?data_vencimento_de=${dataInicial}&data_vencimento_ate=${dataFinal}&tamanho_pagina=200&pagina=${page}`;
-    const resp = await fetch(url, { headers });
+    const url = `${BASE}/venda/busca?data_inicio=${dataInicial}&data_fim=${dataFinal}&tamanho_pagina=${PAGE_SIZE}&pagina=${page}`;
+    const resp = await fetchAuth(url, tokenManager);
 
     if (!resp.ok) {
-      log(`  ❌ Recebiveis page ${page}: HTTP ${resp.status}`);
+      log(`  ❌ /venda/busca page ${page}: HTTP ${resp.status}`);
+      result.errors++;
       break;
     }
 
-    const json = await resp.json() as { itens_totais: number; itens: RecebItem[] };
-    if (json.itens.length === 0) break;
+    const json = await resp.json();
+    const parsed = VendaBuscaResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      log(`  ❌ /venda/busca page ${page}: validation — ${parsed.error.issues[0]?.message ?? '?'}`);
+      result.errors++;
+      break;
+    }
 
-    allRecebiveis.push(...json.itens);
-    log(`  Page ${page}: ${json.itens.length} recebiveis (total: ${allRecebiveis.length}/${json.itens_totais})`);
+    if (page === 1) {
+      result.apiAprovadoTotal = parsed.data.totais.aprovado;
+      log(
+        `  📊 API totals: aprovado R$ ${parsed.data.totais.aprovado.toFixed(2)} | ` +
+          `esperando R$ ${parsed.data.totais.esperando_aprovacao.toFixed(2)} | ` +
+          `itens ${parsed.data.quantidades.total}`,
+      );
+    }
 
-    if (allRecebiveis.length >= json.itens_totais) break;
+    rawFetched.push(...(parsed.data.itens as VendaListItem[]));
+    for (const v of parsed.data.itens as VendaListItem[]) {
+      if (!seenIds.has(v.id)) {
+        seenIds.add(v.id);
+        uniqueVendas.push(v);
+      }
+    }
+
+    const totalItens = parsed.data.quantidades.total;
+    log(`  Page ${page}: ${parsed.data.itens.length} raw (${uniqueVendas.length}/${totalItens} unique so far)`);
+
+    if (parsed.data.itens.length === 0) break;
+    if (uniqueVendas.length >= totalItens) break;
     page++;
+    if (page > 50) break; // safety
   }
 
-  recebiveisFetched = allRecebiveis.length;
+  result.vendasFetched = rawFetched.length;
+  result.vendasAfterIdDedup = uniqueVendas.length;
 
   // ============================================================
-  // PHASE 2: Filter recebiveis — keep only loja física
+  // PHASE 2: Filter situacao ∈ {APROVADO, FATURADO}
   // ============================================================
-  // "sem centro de custo" = loja física (PDV, balcão, link de pagamento)
-  // Only keep recebiveis with NO center assigned — all named centers are
-  // either Nuvemshop (VENDAS SITE), admin (ADMINISTRATIVO), consignment
-  // (CONSIGNAÇÃO/ATAKADO), or other revenue (RECEITA MIRA - MIRAGEM).
-  // Miranda's R$ 82.944,79 for March matches "sem centro" pago (R$ 79.934)
-  // plus some items. We keep only "sem centro" to stay closest to their number.
-  const lojaRecebiveis = allRecebiveis.filter(r => {
-    const centros = r.centros_de_custo ?? [];
-    return centros.length === 0;
+  const approvedOrInvoiced = uniqueVendas.filter((v) => {
+    const sit = v.situacao?.nome;
+    return sit === 'APROVADO' || sit === 'FATURADO';
+  });
+  result.vendasAfterSituacaoFilter = approvedOrInvoiced.length;
+
+  // ============================================================
+  // PHASE 3: Tag origem (loja vs Nuvem Shop)
+  // ============================================================
+  // We store BOTH loja and NS-tagged sales so that sum(CA) in Supabase
+  // equals `totais.aprovado` = Miranda's "Faturamento Total". NS-tagged
+  // vendas get a `nstag-` prefix in source_sale_id so the dashboard can
+  // filter them out of loja-física rankings while still including them
+  // in the KPI subtraction:
+  //   KPI Loja Física = sum(CA) - sum(NS) = 82.944,79 (March)
+  // See DECISOES 2026-04-15b for the reasoning.
+  const tagged = approvedOrInvoiced.map((v) => {
+    const origem = (v.origem ?? '').toLowerCase();
+    const isNsTagged = origem.includes('nuvem');
+    return { venda: v, isNsTagged };
   });
 
-  // Only keep recebiveis that reference a venda
-  const vendaRecebiveis = lojaRecebiveis.filter(r => /Venda \d+/.test(r.descricao));
+  const lojaCount = tagged.filter((t) => !t.isNsTagged).length;
+  const nsCount = tagged.filter((t) => t.isNsTagged).length;
+  result.vendasAfterOrigemFilter = lojaCount;
+  log(`  Loja física (origem != nuvem): ${lojaCount}`);
+  log(`  NS-tagged (origem = Nuvem Shop): ${nsCount}`);
 
-  // Group by venda number — deduplicate parcelas
-  const vendaGroups = new Map<number, {
-    recebiveis: RecebItem[];
-    earliestDate: string;
-    totalPago: number;
-    totalValor: number;
-  }>();
+  const lojaSum = tagged.filter((t) => !t.isNsTagged).reduce((s, t) => s + t.venda.total, 0);
+  const nsSum = tagged.filter((t) => t.isNsTagged).reduce((s, t) => s + t.venda.total, 0);
+  log(`  Expected loja sum: R$ ${lojaSum.toFixed(2)}`);
+  log(`  Expected NS-tagged sum: R$ ${nsSum.toFixed(2)}`);
+  log(`  Total CA expected (should match totais.aprovado): R$ ${(lojaSum + nsSum).toFixed(2)}`);
 
-  for (const r of vendaRecebiveis) {
-    const match = r.descricao.match(/Venda (\d+)/);
-    if (!match) continue;
-    const num = parseInt(match[1]!, 10);
-
-    const group = vendaGroups.get(num) ?? {
-      recebiveis: [],
-      earliestDate: r.data_vencimento,
-      totalPago: 0,
-      totalValor: 0,
-    };
-
-    group.recebiveis.push(r);
-    group.totalPago += r.pago;
-    group.totalValor += r.total;
-    if (r.data_vencimento < group.earliestDate) {
-      group.earliestDate = r.data_vencimento;
-    }
-
-    vendaGroups.set(num, group);
-  }
-
-  log(`\n  Total recebiveis: ${allRecebiveis.length}`);
-  log(`  Loja física (excl SITE + ADMIN): ${lojaRecebiveis.length}`);
-  log(`  Com ref a venda: ${vendaRecebiveis.length}`);
-  log(`  Vendas únicas: ${vendaGroups.size}`);
-  log(`  Sum(pago): R$ ${[...vendaGroups.values()].reduce((s, g) => s + g.totalPago, 0).toFixed(2)}\n`);
+  // Cross-source dedup vs NS disabled — debugging showed 0 matches
+  // because CA loja customers and NS customers are different universes
+  // (different email sets). The R$ 1.346 NS↔CA overlap is driven by
+  // freight handling differences, not by duplicate sales. The dashboard
+  // subtraction pattern handles this.
 
   // ============================================================
-  // PHASE 3: For each venda, search → detail → items → upsert
+  // PHASE 4: Fetch detail+items and upsert (loja + ns-tagged)
   // ============================================================
-  const vendaNums = [...vendaGroups.keys()].sort((a, b) => a - b);
-  const BATCH_LOG_INTERVAL = 20;
+  log('\n📥 Processing vendas (detail + items + upsert)...');
+  const BATCH_LOG_INTERVAL = 25;
 
-  for (let i = 0; i < vendaNums.length; i++) {
-    const num = vendaNums[i]!;
-    const group = vendaGroups.get(num)!;
-
+  for (let i = 0; i < tagged.length; i++) {
+    const t = tagged[i]!;
     try {
-      // Search for venda by number (wide date range to find vendas from any month)
-      await sleep(THROTTLE_MS);
-      const searchResp = await fetch(
-        `${BASE}/venda/busca?data_inicio=2024-01-01&data_fim=2027-01-01&situacoes=APPROVED&termo_busca=${num}&tamanho_pagina=50`,
-        { headers },
-      );
-
-      if (!searchResp.ok) {
-        // Try without status filter
-        await sleep(THROTTLE_MS);
-        const retryResp = await fetch(
-          `${BASE}/venda/busca?data_inicio=2024-01-01&data_fim=2027-01-01&termo_busca=${num}&tamanho_pagina=50`,
-          { headers },
-        );
-        if (!retryResp.ok) {
-          log(`  ❌ Search #${num}: HTTP ${retryResp.status}`);
-          vendasNotFound++;
-          errors++;
-          continue;
-        }
-        const retryJson = await retryResp.json() as { itens: Array<{ id: string; numero: number; total: number; data: string; origem?: string | null }> };
-        const match = retryJson.itens.find(v => v.numero === num);
-        if (!match) {
-          vendasNotFound++;
-          continue;
-        }
-        // Use this match
-        await processVenda(match.id, num, group, supabase, headers, log);
-        continue;
-      }
-
-      const searchJson = await searchResp.json() as { itens: Array<{ id: string; numero: number; total: number; data: string; origem?: string | null }> };
-      const vendaMatch = searchJson.itens.find(v => v.numero === num);
-
-      if (!vendaMatch) {
-        vendasNotFound++;
-        // Still create a sale record from recebivel data alone (no items)
-        await createSaleFromRecebivel(num, group, supabase, log);
-        continue;
-      }
-
-      vendasFound++;
-      await processVenda(vendaMatch.id, num, group, supabase, headers, log);
-
+      await processVenda(t.venda, t.isNsTagged, supabase, tokenManager, log, result);
     } catch (err) {
-      log(`  ❌ Venda #${num}: ${err instanceof Error ? err.message : String(err)}`);
-      errors++;
+      log(`  ❌ Venda #${t.venda.numero}: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors++;
     }
 
-    // Progress log
-    if ((i + 1) % BATCH_LOG_INTERVAL === 0 || i === vendaNums.length - 1) {
-      log(`  📦 ${i + 1}/${vendaNums.length} vendas (${salesUpserted} sales, ${saleItemsInserted} items, ${vendasNotFound} not found)`);
-    }
-  }
-
-  const durationMs = Date.now() - start;
-  log(`\n✅ Conta Azul sync complete: ${salesUpserted} sales, ${saleItemsInserted} items, ${customersUpserted} customers, ${vendasNotFound} not found, ${errors} errors, ${(durationMs / 1000).toFixed(1)}s`);
-
-  return { recebiveisFetched, vendasFound, vendasProcessed, vendasNotFound, customersUpserted, salesUpserted, saleItemsInserted, errors, durationMs };
-
-  // ============================================================
-  // Inner functions (close over counters and supabase)
-  // ============================================================
-
-  async function processVenda(
-    vendaId: string,
-    vendaNum: number,
-    group: { earliestDate: string; totalPago: number; totalValor: number },
-    sb: SupabaseClient,
-    hdrs: Record<string, string>,
-    lg: (msg: string) => void,
-  ): Promise<void> {
-    // Fetch detail
-    await sleep(THROTTLE_MS);
-    const detailResp = await fetch(`${BASE}/venda/${vendaId}`, { headers: hdrs });
-    if (!detailResp.ok) {
-      lg(`  ❌ Detail #${vendaNum}: HTTP ${detailResp.status}`);
-      errors++;
-      return;
-    }
-
-    const detailJson = await detailResp.json();
-    const detailParsed = RawContaAzulVendaDetalheSchema.safeParse(detailJson);
-    if (!detailParsed.success) {
-      lg(`  ❌ Detail #${vendaNum}: validation — ${detailParsed.error.issues[0]?.message ?? '?'} at ${detailParsed.error.issues[0]?.path?.join('.') ?? '?'}`);
-      errors++;
-      return;
-    }
-    const detail = detailParsed.data;
-
-    // Fetch items
-    await sleep(THROTTLE_MS);
-    const itemsResp = await fetch(`${BASE}/venda/${vendaId}/itens`, { headers: hdrs });
-    let vendaItems: Array<{ nome: string; quantidade: number; valor: number; id_item?: string }> = [];
-    if (itemsResp.ok) {
-      const itemsJson = await itemsResp.json();
-      const itemsParsed = VendaItensResponseSchema.safeParse(itemsJson);
-      if (itemsParsed.success) {
-        vendaItems = itemsParsed.data.itens;
-      }
-    }
-
-    // Extract data
-    // NOTE: Conta Azul naming is counterintuitive:
-    //   valor_bruto = sum of product unit prices (subtotal)
-    //   valor_liquido = final amount customer pays (subtotal - discount + frete)
-    const composicao = detail.venda?.composicao_valor;
-    const grossRevenue = group.totalPago;
-    const netRevenue = composicao?.valor_bruto ?? grossRevenue;
-    const paymentType = detail.venda?.condicao_pagamento?.tipo_pagamento;
-    const customerDoc = detail.cliente?.documento;
-    const customerName = detail.cliente?.nome;
-    // Use recebivel date as sale_date (matches Miranda's monthly attribution)
-    const saleDate = group.earliestDate;
-
-    // Store raw payload
-    await sb.from('raw_contaazul_sales').upsert(
-      {
-        source_id: vendaId,
-        payload: { venda_id: vendaId, numero: vendaNum, detail: detailJson, recebivel_date: saleDate },
-      },
-      { onConflict: 'source_id' },
-    );
-
-    // Upsert customer
-    const customerSourceId = customerDoc || detail.cliente?.uuid;
-    if (customerSourceId && customerName) {
-      const { error: custErr } = await sb
-        .from('customers')
-        .upsert(
-          {
-            source: 'conta_azul',
-            source_customer_id: customerSourceId,
-            name: customerName,
-            gender: 'unknown',
-            age_range: 'unknown',
-            state: null,
-            city: null,
-            email: null,
-            phone: null,
-          },
-          { onConflict: 'source,source_customer_id' },
-        );
-      if (custErr === null) customersUpserted++;
-    }
-
-    // Resolve customer FK
-    let customerId: number | null = null;
-    if (customerSourceId) {
-      const { data: custData } = await sb
-        .from('customers')
-        .select('customer_id')
-        .eq('source', 'conta_azul')
-        .eq('source_customer_id', customerSourceId)
-        .limit(1);
-      customerId = custData?.[0]?.customer_id as number | null ?? null;
-    }
-
-    // Upsert sale (use venda UUID as source_sale_id, recebivel date as sale_date)
-    const { data: saleData, error: saleErr } = await sb
-      .from('sales')
-      .upsert(
-        {
-          source: 'conta_azul',
-          source_sale_id: vendaId,
-          sale_date: saleDate,
-          gross_revenue: grossRevenue,
-          net_revenue: netRevenue,
-          status: 'paid',
-          customer_id: customerId,
-          payment_method: mapPaymentForDb(paymentType),
-        },
-        { onConflict: 'source,source_sale_id' },
-      )
-      .select('sale_id');
-
-    if (saleErr !== null) {
-      lg(`  ❌ Sale upsert #${vendaNum}: ${saleErr.message}`);
-      errors++;
-      return;
-    }
-
-    const saleId = saleData?.[0]?.sale_id as number | undefined;
-    if (saleId !== undefined) {
-      salesUpserted++;
-
-      if (vendaItems.length > 0) {
-        const items = vendaItems
-          .filter(item => item.quantidade > 0)
-          .map(item => ({
-            sale_id: saleId,
-            product_name: item.nome,
-            sku: item.id_item || null,
-            quantity: item.quantidade,
-            unit_price: item.valor,
-            total_price: item.valor * item.quantidade,
-          }));
-
-        await sb.from('sale_items').delete().eq('sale_id', saleId);
-        const { error: itemErr } = await sb.from('sale_items').insert(items);
-        if (itemErr === null) {
-          saleItemsInserted += items.length;
-        } else {
-          lg(`  ❌ Items #${vendaNum}: ${itemErr.message}`);
-        }
-      }
-    }
-
-    vendasProcessed++;
-  }
-
-  async function createSaleFromRecebivel(
-    vendaNum: number,
-    group: { earliestDate: string; totalPago: number; totalValor: number; recebiveis: RecebItem[] },
-    sb: SupabaseClient,
-    lg: (msg: string) => void,
-  ): Promise<void> {
-    // Create sale record from recebivel data (no items available)
-    // Use pago as revenue — if nothing was paid, skip (not yet realized revenue)
-    const saleDate = group.earliestDate;
-    const grossRevenue = group.totalPago;
-    const clienteName = group.recebiveis[0]?.cliente?.nome;
-    const clienteId = group.recebiveis[0]?.cliente?.id;
-
-    // Upsert customer if available
-    let customerId: number | null = null;
-    if (clienteId && clienteName) {
-      await sb.from('customers').upsert(
-        {
-          source: 'conta_azul',
-          source_customer_id: clienteId,
-          name: clienteName,
-          gender: 'unknown',
-          age_range: 'unknown',
-          state: null,
-          city: null,
-          email: null,
-          phone: null,
-        },
-        { onConflict: 'source,source_customer_id' },
+    if ((i + 1) % BATCH_LOG_INTERVAL === 0 || i === tagged.length - 1) {
+      log(
+        `  📦 ${i + 1}/${tagged.length} | ${result.salesUpserted} sales, ${result.saleItemsInserted} items, ${result.errors} errors`,
       );
-
-      const { data: custData } = await sb
-        .from('customers')
-        .select('customer_id')
-        .eq('source', 'conta_azul')
-        .eq('source_customer_id', clienteId)
-        .limit(1);
-      customerId = custData?.[0]?.customer_id as number | null ?? null;
-    }
-
-    // Use "receb-{vendaNum}" as source_sale_id since we don't have the venda UUID
-    const sourceId = `receb-${vendaNum}`;
-
-    const { data: saleData, error: saleErr } = await sb
-      .from('sales')
-      .upsert(
-        {
-          source: 'conta_azul',
-          source_sale_id: sourceId,
-          sale_date: saleDate,
-          gross_revenue: grossRevenue,
-          net_revenue: grossRevenue,
-          status: 'paid',
-          customer_id: customerId,
-          payment_method: 'outros',
-        },
-        { onConflict: 'source,source_sale_id' },
-      )
-      .select('sale_id');
-
-    if (saleErr === null && saleData?.[0]) {
-      salesUpserted++;
-      vendasProcessed++;
-    } else if (saleErr) {
-      lg(`  ❌ Recebivel-only #${vendaNum}: ${saleErr.message}`);
-      errors++;
     }
   }
+
+  result.durationMs = Date.now() - start;
+  log(
+    `\n✅ Conta Azul sync complete: ${result.salesUpserted} sales, ${result.saleItemsInserted} items, ` +
+      `${result.customersUpserted} customers, ${result.errors} errors, ${(result.durationMs / 1000).toFixed(1)}s`,
+  );
+
+  return result;
 }
 
-/**
- * Delete old records before re-sync. Handles both NF-e (44-char) and
- * venda UUID records. Call with --migrate flag.
- */
+// ------------------------------------------------------------
+// Process a single venda: fetch detail + items, upsert
+// ------------------------------------------------------------
+
+async function processVenda(
+  v: VendaListItem,
+  isNsTagged: boolean,
+  supabase: SupabaseClient,
+  tokenManager: ContaAzulTokenManager,
+  log: (msg: string) => void,
+  result: ContaAzulSyncResult,
+): Promise<void> {
+  // Detail
+  await sleep(THROTTLE_MS);
+  const detailResp = await fetchAuth(`${BASE}/venda/${v.id}`, tokenManager);
+  if (!detailResp.ok) {
+    log(`  ❌ Detail #${v.numero}: HTTP ${detailResp.status}`);
+    result.errors++;
+    return;
+  }
+
+  const detailJson = await detailResp.json();
+  const detailParsed = RawContaAzulVendaDetalheSchema.safeParse(detailJson);
+  if (!detailParsed.success) {
+    log(
+      `  ❌ Detail #${v.numero}: validation — ${detailParsed.error.issues[0]?.message ?? '?'} at ${detailParsed.error.issues[0]?.path?.join('.') ?? '?'}`,
+    );
+    result.errors++;
+    return;
+  }
+  const detail = detailParsed.data;
+
+  // Items
+  await sleep(THROTTLE_MS);
+  const itemsResp = await fetchAuth(`${BASE}/venda/${v.id}/itens`, tokenManager);
+  let vendaItems: Array<{ nome: string; quantidade: number; valor: number; id_item?: string }> = [];
+  if (itemsResp.ok) {
+    const itemsJson = await itemsResp.json();
+    const itemsParsed = VendaItensResponseSchema.safeParse(itemsJson);
+    if (itemsParsed.success) {
+      vendaItems = itemsParsed.data.itens;
+    }
+  }
+
+  // NOTE: use the list item's `total` as the canonical revenue value — it's
+  // what the CA "Vendas" screen aggregates into `totais.aprovado` and what
+  // Miranda reports. The detail endpoint's `composicao_valor.valor_bruto` is
+  // product-subtotal only (no freight), so it's kept as net_revenue.
+  const composicao = detail.venda?.composicao_valor;
+  const grossRevenue = v.total;
+  const netRevenue = composicao?.valor_bruto ?? grossRevenue;
+  const paymentType = detail.venda?.condicao_pagamento?.tipo_pagamento;
+  const customerDoc = detail.cliente?.documento ?? null;
+  const customerName = detail.cliente?.nome ?? v.cliente?.nome ?? null;
+  // SP midnight — see DECISOES 2026-04-15 about TZ bug
+  const saleDate = `${v.data.slice(0, 10)}T03:00:00Z`;
+
+  // `nstag-` prefix marks NS-tagged vendas so dashboard queries can
+  // filter them out of loja-física rankings while still including them
+  // in the sum(CA) total.
+  const sourceSaleId = isNsTagged ? `nstag-${v.id}` : v.id;
+
+  // Raw payload
+  await supabase.from('raw_contaazul_sales').upsert(
+    {
+      source_id: sourceSaleId,
+      payload: { venda_id: v.id, numero: v.numero, list_item: v, detail: detailJson, is_ns_tagged: isNsTagged },
+    },
+    { onConflict: 'source_id' },
+  );
+
+  // Customer upsert
+  const customerSourceId = customerDoc || detail.cliente?.uuid || v.cliente?.id;
+  let customerId: number | null = null;
+  if (customerSourceId && customerName) {
+    const { error: custErr } = await supabase.from('customers').upsert(
+      {
+        source: 'conta_azul',
+        source_customer_id: customerSourceId,
+        name: customerName,
+        gender: 'unknown',
+        age_range: 'unknown',
+        state: null,
+        city: null,
+        email: v.cliente?.email ?? null,
+        phone: null,
+      },
+      { onConflict: 'source,source_customer_id' },
+    );
+    if (custErr === null) result.customersUpserted++;
+
+    const { data: custData } = await supabase
+      .from('customers')
+      .select('customer_id')
+      .eq('source', 'conta_azul')
+      .eq('source_customer_id', customerSourceId)
+      .limit(1);
+    customerId = (custData?.[0]?.customer_id as number | null) ?? null;
+  }
+
+  // Sale upsert
+  const { data: saleData, error: saleErr } = await supabase
+    .from('sales')
+    .upsert(
+      {
+        source: 'conta_azul',
+        source_sale_id: sourceSaleId,
+        sale_date: saleDate,
+        gross_revenue: grossRevenue,
+        net_revenue: netRevenue,
+        status: 'paid',
+        customer_id: customerId,
+        payment_method: mapPaymentForDb(paymentType),
+      },
+      { onConflict: 'source,source_sale_id' },
+    )
+    .select('sale_id');
+
+  if (saleErr !== null) {
+    log(`  ❌ Sale upsert #${v.numero}: ${saleErr.message}`);
+    result.errors++;
+    return;
+  }
+
+  const saleId = saleData?.[0]?.sale_id as number | undefined;
+  if (saleId === undefined) return;
+
+  result.salesUpserted++;
+
+  if (vendaItems.length > 0) {
+    const items = vendaItems
+      .filter((item) => item.quantidade > 0)
+      .map((item) => ({
+        sale_id: saleId,
+        product_name: item.nome,
+        sku: item.id_item || null,
+        quantity: item.quantidade,
+        unit_price: item.valor,
+        total_price: item.valor * item.quantidade,
+      }));
+
+    await supabase.from('sale_items').delete().eq('sale_id', saleId);
+    const { error: itemErr } = await supabase.from('sale_items').insert(items);
+    if (itemErr === null) {
+      result.saleItemsInserted += items.length;
+    } else {
+      log(`  ❌ Items #${v.numero}: ${itemErr.message}`);
+    }
+  }
+
+  result.vendasProcessed++;
+}
+
+// ------------------------------------------------------------
+// Cleanup helper (kept for --migrate flag)
+// ------------------------------------------------------------
+
 export async function cleanupOldRecords(
   supabase: SupabaseClient,
   log: (msg: string) => void,
 ): Promise<{ salesDeleted: number; itemsDeleted: number }> {
   log('🧹 Cleaning up old Conta Azul records...');
 
-  const { data: oldSales } = await supabase
-    .from('sales')
-    .select('sale_id')
-    .eq('source', 'conta_azul')
-    .limit(10000);
+  // Paginate through all CA sales (the default PostgREST limit is 1000).
+  const allIds: number[] = [];
+  const PAGE = 1000;
+  let page = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('sale_id')
+      .eq('source', 'conta_azul')
+      .order('sale_id', { ascending: true })
+      .range(page * PAGE, (page + 1) * PAGE - 1);
+    if (error) throw new Error(`cleanupOldRecords: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allIds.push(...(data.map((s) => s.sale_id as number)));
+    if (data.length < PAGE) break;
+    page++;
+  }
 
-  if (!oldSales || oldSales.length === 0) {
+  if (allIds.length === 0) {
     log('  No old records found.');
     return { salesDeleted: 0, itemsDeleted: 0 };
   }
 
-  const saleIds = oldSales.map((s) => s.sale_id as number);
-
-  const { count: itemsCount } = await supabase
-    .from('sale_items')
-    .delete({ count: 'exact' })
-    .in('sale_id', saleIds);
-
-  const { count: salesCount } = await supabase
-    .from('sales')
-    .delete({ count: 'exact' })
-    .in('sale_id', saleIds);
-
-  const itemsDeleted = itemsCount ?? 0;
-  const salesDeleted = salesCount ?? 0;
+  // Delete in batches to avoid URL length limits on IN clauses.
+  let itemsDeleted = 0;
+  let salesDeleted = 0;
+  const BATCH = 200;
+  for (let i = 0; i < allIds.length; i += BATCH) {
+    const batch = allIds.slice(i, i + BATCH);
+    const { count: ic } = await supabase.from('sale_items').delete({ count: 'exact' }).in('sale_id', batch);
+    const { count: sc } = await supabase.from('sales').delete({ count: 'exact' }).in('sale_id', batch);
+    itemsDeleted += ic ?? 0;
+    salesDeleted += sc ?? 0;
+  }
 
   log(`  ✅ Deleted ${salesDeleted} sales + ${itemsDeleted} items`);
   return { salesDeleted, itemsDeleted };

@@ -11,18 +11,29 @@ import { AvgTicketChart } from '../components/avg-ticket-chart';
 import { ChannelDonut } from '../components/channel-donut';
 import { BrazilMap } from '../components/brazil-map';
 
+/**
+ * Build chart data. For Loja Física we use the subtraction formula:
+ *   loja_dia = CA_dia − NS_dia
+ * because sum(CA) in Supabase = totais.aprovado from the CA sales screen
+ * (which includes NS-tagged vendas). See DECISOES 2026-04-15b.
+ */
 function buildChartData(rows: { day: string; source: string; gross_revenue: number }[]) {
-  const byDay = new Map<string, { nuvemshop: number; conta_azul: number }>();
+  const byDay = new Map<string, { nuvemshop: number; ca_total: number }>();
 
   for (const row of rows) {
-    const existing = byDay.get(row.day) ?? { nuvemshop: 0, conta_azul: 0 };
+    const existing = byDay.get(row.day) ?? { nuvemshop: 0, ca_total: 0 };
     if (row.source === 'nuvemshop') existing.nuvemshop += row.gross_revenue;
-    else if (row.source === 'conta_azul') existing.conta_azul += row.gross_revenue;
+    else if (row.source === 'conta_azul') existing.ca_total += row.gross_revenue;
     byDay.set(row.day, existing);
   }
 
   return Array.from(byDay.entries())
-    .map(([day, values]) => ({ day, ...values }))
+    .map(([day, values]) => ({
+      day,
+      nuvemshop: values.nuvemshop,
+      // Loja Física real = CA total − NS (clamped to 0 on edge days)
+      conta_azul: Math.max(0, values.ca_total - values.nuvemshop),
+    }))
     .sort((a, b) => a.day.localeCompare(b.day));
 }
 
@@ -51,20 +62,29 @@ export default async function VisaoGeralPage({
   const prevPeriodRevenue = previousRevenue.filter((r) => r.day < period.since);
 
   // Current period KPIs
-  const totalRevenue = currentRevenue.reduce((sum, r) => sum + r.gross_revenue, 0);
-  const totalOrders = currentRevenue.reduce((sum, r) => sum + r.orders_count, 0);
+  // Identity: sum(CA) = totais.aprovado (includes NS-tagged vendas).
+  // So: Total = sum(CA). E-commerce = sum(NS). Loja Física = CA − NS.
+  // Summing CA + NS would double-count NS orders. See DECISOES 2026-04-15b.
+  const caRows = currentRevenue.filter((r) => r.source === 'conta_azul');
+  const nsRows = currentRevenue.filter((r) => r.source === 'nuvemshop');
+
+  const caRevenue = caRows.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const nuvemshopRevenue = nsRows.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const contaAzulRevenue = Math.max(0, caRevenue - nuvemshopRevenue);
+  const totalRevenue = caRevenue; // = loja física + e-commerce
+
+  // count(CA) = count(loja) + count(NS-tagged) ≈ count(loja) + count(NS),
+  // so total orders = count(CA).
+  const totalOrders = caRows.reduce((sum, r) => sum + r.orders_count, 0);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  const nuvemshopRevenue = currentRevenue
-    .filter(r => r.source === 'nuvemshop')
-    .reduce((sum, r) => sum + r.gross_revenue, 0);
-  const contaAzulRevenue = currentRevenue
-    .filter(r => r.source === 'conta_azul')
-    .reduce((sum, r) => sum + r.gross_revenue, 0);
-
-  // Previous period KPIs (for % change)
-  const prevTotalRevenue = prevPeriodRevenue.reduce((sum, r) => sum + r.gross_revenue, 0);
-  const prevTotalOrders = prevPeriodRevenue.reduce((sum, r) => sum + r.orders_count, 0);
+  // Previous period KPIs — same pattern
+  const prevCaRows = prevPeriodRevenue.filter((r) => r.source === 'conta_azul');
+  const prevNsRows = prevPeriodRevenue.filter((r) => r.source === 'nuvemshop');
+  const prevTotalRevenue = prevCaRows.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const prevTotalOrders = prevCaRows.reduce((sum, r) => sum + r.orders_count, 0);
+  // Keep prevNsRows referenced (used only if we later want split prev KPIs)
+  void prevNsRows;
 
   const chartData = buildChartData(currentRevenue);
 
@@ -134,18 +154,22 @@ export default async function VisaoGeralPage({
         <ChannelDonut nuvemshop={nuvemshopRevenue} contaAzul={contaAzulRevenue} />
       </div>
 
-      {/* Avg Ticket Chart — split por fonte */}
+      {/* Avg Ticket Chart — split por fonte.
+          Orders identity: count(CA) = count(loja) + count(NS-tagged),
+          so count(loja) = count(CA) − count(NS). Total orders = count(CA). */}
       <AvgTicketChart
         data={chartData.map(d => {
           const dayRows = currentRevenue.filter(r => r.day === d.day);
-          const nsOrders = dayRows.filter(r => r.source === 'nuvemshop').reduce((s, r) => s + r.orders_count, 0);
-          const caOrders = dayRows.filter(r => r.source === 'conta_azul').reduce((s, r) => s + r.orders_count, 0);
-          const totalOrders = nsOrders + caOrders;
+          const dayNsOrders = dayRows.filter(r => r.source === 'nuvemshop').reduce((s, r) => s + r.orders_count, 0);
+          const dayCaOrders = dayRows.filter(r => r.source === 'conta_azul').reduce((s, r) => s + r.orders_count, 0);
+          const dayLojaOrders = Math.max(0, dayCaOrders - dayNsOrders);
+          const dayTotalOrders = dayCaOrders; // = loja + NS
+          const dayTotalRevenue = d.nuvemshop + d.conta_azul; // already = loja + NS
           return {
             day: d.day,
-            avg_ticket: totalOrders > 0 ? (d.nuvemshop + d.conta_azul) / totalOrders : 0,
-            avg_ticket_nuvemshop: nsOrders > 0 ? d.nuvemshop / nsOrders : undefined,
-            avg_ticket_conta_azul: caOrders > 0 ? d.conta_azul / caOrders : undefined,
+            avg_ticket: dayTotalOrders > 0 ? dayTotalRevenue / dayTotalOrders : 0,
+            avg_ticket_nuvemshop: dayNsOrders > 0 ? d.nuvemshop / dayNsOrders : undefined,
+            avg_ticket_conta_azul: dayLojaOrders > 0 ? d.conta_azul / dayLojaOrders : undefined,
           };
         })}
       />

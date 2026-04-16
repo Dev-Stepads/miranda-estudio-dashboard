@@ -21,23 +21,39 @@ export default async function LojaFisicaPage({
     fetchTopCustomers(30, 'conta_azul', period.days, params.from, params.to),
   ]);
 
-  // Filter Conta Azul only
+  // Loja Física = total CA aprovado − total NS real.
+  // This mirrors Miranda's closing formula: `totais.aprovado` from the CA
+  // sales screen minus the Nuvemshop total. Needed because the CA includes
+  // NS-tagged vendas in its aprovado total, and we store those with a
+  // `nstag-` prefix so sum(CA) = totais.aprovado matches Miranda exactly.
+  // See DECISOES 2026-04-15b.
   const caDaily = dailyRevenue.filter(r => r.source === 'conta_azul');
-  const totalRevenue = caDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
-  const totalOrders = caDaily.reduce((sum, r) => sum + r.orders_count, 0);
+  const nsDailyForSubtraction = dailyRevenue.filter(r => r.source === 'nuvemshop');
+
+  const caSum = caDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const nsSum = nsDailyForSubtraction.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const totalRevenue = caSum - nsSum;
+  // Order count: use CA orders minus NS orders to stay consistent with the
+  // revenue derivation. The NS-tagged vendas inside CA are counted in caDaily
+  // but are not actual loja-física orders.
+  const caOrders = caDaily.reduce((sum, r) => sum + r.orders_count, 0);
+  const nsOrders = nsDailyForSubtraction.reduce((sum, r) => sum + r.orders_count, 0);
+  const totalOrders = Math.max(0, caOrders - nsOrders);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Previous period for comparison — use date strings to avoid timezone issues
-  const prevCaDaily = prevDailyRevenue
-    .filter(r => r.source === 'conta_azul' && r.day < period.since);
-  const prevRevenue = prevCaDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
-  const prevOrders = prevCaDaily.reduce((sum, r) => sum + r.orders_count, 0);
+  // Previous period for comparison — same subtraction pattern
+  const prevCa = prevDailyRevenue.filter(r => r.source === 'conta_azul' && r.day < period.since);
+  const prevNs = prevDailyRevenue.filter(r => r.source === 'nuvemshop' && r.day < period.since);
+  const prevRevenue = prevCa.reduce((sum, r) => sum + r.gross_revenue, 0) - prevNs.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const prevOrders = Math.max(0, prevCa.reduce((sum, r) => sum + r.orders_count, 0) - prevNs.reduce((sum, r) => sum + r.orders_count, 0));
 
-  // Chart data
+  // Chart: per-day loja física = CA(day) − NS(day). Clamp to 0 on days where
+  // NS outruns CA (rare edge — usually means CA hasn't synced that day yet).
+  const nsByDay = new Map(nsDailyForSubtraction.map(r => [r.day, r.gross_revenue]));
   const chartData = caDaily.map((d) => ({
     day: d.day,
     nuvemshop: 0,
-    conta_azul: d.gross_revenue,
+    conta_azul: Math.max(0, d.gross_revenue - (nsByDay.get(d.day) ?? 0)),
   }));
 
   // Products from Conta Azul
@@ -71,13 +87,21 @@ export default async function LojaFisicaPage({
       {/* Revenue Chart */}
       {chartData.length > 0 && <RevenueChart data={chartData} sources={['conta_azul']} />}
 
-      {/* Avg Ticket */}
+      {/* Avg Ticket — computed from loja física = CA − NS per day */}
       {chartData.length > 0 && (
         <AvgTicketChart
-          data={caDaily.map(d => ({
-            day: d.day,
-            avg_ticket: d.orders_count > 0 ? d.gross_revenue / d.orders_count : 0,
-          }))}
+          data={chartData.map(d => {
+            // loja orders(day) = CA orders(day) − NS orders(day). count(CA)
+            // already represents loja + nstag ≈ loja + NS orders, so
+            // subtracting NS orders isolates loja.
+            const caDayRow = caDaily.find(r => r.day === d.day);
+            const nsDayRow = nsDailyForSubtraction.find(r => r.day === d.day);
+            const lojaOrders = Math.max(0, (caDayRow?.orders_count ?? 0) - (nsDayRow?.orders_count ?? 0));
+            return {
+              day: d.day,
+              avg_ticket: lojaOrders > 0 ? d.conta_azul / lojaOrders : 0,
+            };
+          })}
           color="#F59E0B"
         />
       )}

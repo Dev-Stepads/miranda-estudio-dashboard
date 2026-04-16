@@ -3,12 +3,98 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-14 (noite)
-RESPONSAVEL: sessao 2026-04-14d — ETL CA reescrito para API de Vendas
+DATA: 2026-04-15
+RESPONSAVEL: sessao 2026-04-15 — fix TZ no ETL CA + cleanup de sales fantasma
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-14d) — ETL CONTA AZUL REESCRITO (T49 parcial)
+0. SESSAO ATUAL (2026-04-15) — FIX TZ + CLEANUP (T49 ainda parcial)
+--------------------------------------------------------
+O sessao anterior (2026-04-14d) migrou o ETL CA para /v1/venda/busca +
+hibrido com recebiveis, mas o dashboard passou a mostrar R$ 84.423,90
+em marco contra o target R$ 82.944,79 da Miranda — gap de +R$ 1.479,11.
+A suspeita inicial (Morada) era solta; fui investigar sistematicamente.
+
+INVESTIGACAO (scripts em src/scripts/):
+  - debug-marco-supabase.ts (usa so Supabase): mostrou 291 sales em
+    marco, sum gross R$ 84.423,90. 207 sao fallback "receb-*" (sem
+    item detalhado), 5 sales com gross=0 (fantasmas). 16 sales com
+    gross > net (frete, nao bug — CA separa valor_bruto=subtotal e
+    pago=subtotal+frete).
+  - debug-marco-tz.ts: testou 2 boundaries e isolou o bug principal.
+
+ACHADO 1 — BUG DE TIMEZONE em sale_date:
+  Causa: sync.ts gravava sale_date = group.earliestDate (string pura
+  "YYYY-MM-DD" do data_vencimento). Supabase interpreta como UTC
+  midnight → "2026-04-01T00:00:00Z". A view v_visao_geral_daily faz
+  "at time zone 'America/Sao_Paulo'" → vira "2026-03-31T21:00 SP" →
+  dia 2026-03-31. Resultado: recebiveis com vencimento no dia 1 do
+  mes seguinte entravam no mes atual.
+
+  Impacto em marco 2026:
+    - 15 sales com venc 01/04 entrando em marco: R$ 4.489,50
+    - 0 sales com venc 01/03 saindo (nada pra compensar)
+
+ACHADO 2 — SALES FANTASMA (gross=0):
+  createSaleFromRecebivel criava sale com status='paid' mesmo quando
+  totalPago=0 (recebivel ainda nao pago). Resultado: 194 sales com
+  gross=0 poluindo contagem de pedidos.
+
+FIX APLICADO:
+  1. sync.ts:
+     - processVenda: skip if grossRevenue <= 0 + sale_date = earliestDate + "T03:00:00Z"
+     - createSaleFromRecebivel: skip if grossRevenue <= 0 + mesmo fix TZ
+  2. Update massa no Supabase:
+     - Deletados 194 sales fantasma (gross=0) + seus sale_items
+     - Shift +3h em todos 2548 sales CA restantes (via sale_id, paginado)
+     - Flag "ca_tz_fix_applied" em etl_config pra idempotencia
+  3. Scripts one-shot (fix-ca-timezone*, debug-marco-tz) removidos
+     apos execucao. Mantidos: debug-marco-supabase.ts e debug-marco.ts
+     (diagnostico reutilizavel).
+
+RESULTADO POS-FIX (marco 2026):
+  - Antes: 291 sales, R$ 84.423,90 (diff +R$ 1.479,11 vs Miranda)
+  - Depois: 232 sales, R$ 79.934,40 (diff -R$ 3.010,39 vs Miranda)
+
+GAP RESIDUAL R$ 3.010,39 — 3 hipoteses:
+  (a) Morada: liq R$ 3.543,51 / bruto R$ 7.728. Proximo mas nao bate.
+      Pode ter centro de custo proprio que nosso filtro "sem centro"
+      exclui — mas Miranda deveria incluir.
+  (b) Recebiveis sem "Venda N" na descricao: nosso regex
+      /Venda \d+/.test(descricao) descarta. Podem existir recebiveis
+      de loja fisica lancados sem vinculo a venda.
+  (c) Criterio de data diferente: Miranda talvez feche por
+      data_pagamento (quando caixa recebeu), nao data_vencimento.
+
+PROXIMO PASSO EXATO QUANDO RETOMAR:
+  Precisa de uma destas:
+  1. Matheus preencher CONTA_AZUL_CLIENT_ID / CLIENT_SECRET /
+     REFRESH_TOKEN no .env.local (do cofre Stepads)
+  2. OU rodar workflow_dispatch "Sync ETL" no GitHub Actions
+  3. OU Matheus abrir o painel CA e reportar:
+     - Qual relatorio bate EXATO R$ 82.944,79 em marco
+     - Se Morada aparece como centro de custo ou cliente
+     - Se existem recebiveis PDV sem "Venda N" na descricao
+
+  Com creds no .env.local, rodar:
+    npx tsx --env-file=.env.local src/scripts/debug-marco.ts
+
+  Vai listar: breakdown por centro de custo, por status, alternativa
+  de filtro por data_pagamento, top 20 recebiveis sem centro pra
+  cross-check manual, shape completo de um recebivel.
+
+ARQUIVOS TOCADOS NESTA SESSAO:
+  - src/etl/conta-azul/sync.ts (fix TZ + skip zero)
+  - src/scripts/debug-marco.ts (novo — requer API CA)
+  - src/scripts/debug-marco-supabase.ts (novo — so Supabase)
+  - Supabase: update massa em sales (source=conta_azul) + delete 194
+    fantasmas + etl_config flag "ca_tz_fix_applied"
+  - docs vivos (este arquivo, STATUS_ATUAL, BACKLOG, DECISOES)
+
+BUILD: typecheck OK, 134 testes passando.
+
+--------------------------------------------------------
+0b. SESSAO ANTERIOR (2026-04-14d) — ETL CONTA AZUL REESCRITO
 --------------------------------------------------------
 ETL Conta Azul substituido de /v1/notas-fiscais para /v1/venda/busca.
 
@@ -44,7 +130,7 @@ ETL Conta Azul substituido de /v1/notas-fiscais para /v1/venda/busca.
   Mensagem preparada em docs/mensagem-miranda-validacao-dados.md.
 
 --------------------------------------------------------
-0b. SESSAO ANTERIOR (2026-04-14c) — descoberta T49
+0c. SESSAO ANTERIOR (2026-04-14c) — descoberta T49
 --------------------------------------------------------
 Apos reuniao de apresentacao do dashboard, a Miranda mandou o
 fechamento oficial de marco 2026:
@@ -121,7 +207,7 @@ ARQUIVOS CHAVE PRA RETOMAR:
 BACKLOG: ver T49 (ETAPA 9) em docs/producao/BACKLOG_MIRANDA.txt.
 
 --------------------------------------------------------
-0b. SESSAO ANTERIOR (2026-04-14b) — THUMBNAILS + LEADS NO RANKING DE CRIATIVOS
+0d. SESSAO ANTERIOR (2026-04-14b) — THUMBNAILS + LEADS NO RANKING DE CRIATIVOS
 --------------------------------------------------------
 Feedback da Miranda (via Matheus) com imagem de referencia: queriam
 o ranking de criativos como no Ads Manager — thumbnail do anuncio

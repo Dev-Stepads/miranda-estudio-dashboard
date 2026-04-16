@@ -1002,3 +1002,41 @@ DECISÕES REGISTRADAS
             Geografia perdida (NF-e trazia UF do destinatario, API de
             vendas nao). NF-e parser (nfe-parser.ts) fica como dead
             code mas preservado para historico.
+
+[2026-04-15] [BUG] Fix TZ no sale_date + cleanup de sales fantasma
+  Contexto: Apos a reescrita de 2026-04-14d, dashboard passou a
+            mostrar R$ 84.423,90 em marco 2026, enquanto Miranda
+            reportava R$ 82.944,79. Diff de +R$ 1.479,11 — aparente
+            "sobra". Investigacao via scripts diagnosticos
+            (src/scripts/debug-marco-*.ts) isolou 2 bugs:
+            1. sync.ts gravava sale_date = "YYYY-MM-DD" (string pura
+               do data_vencimento). Supabase interpreta strings de
+               date como UTC midnight. A view v_visao_geral_daily
+               aplica "at time zone 'America/Sao_Paulo'" antes de
+               truncar ::date, shiftando 3h pra tras. Resultado:
+               recebivel com venc 01/04 virava dia 31/03 SP e
+               entrava em marco. 15 sales impactados, R$ 4.489,50.
+            2. createSaleFromRecebivel criava sale com status='paid'
+               mesmo quando totalPago=0. 194 sales fantasma com
+               gross=0 (194 em todo banco, 59 especificamente em
+               marco 2026). Nao afetam soma de receita mas poluem
+               contagem de pedidos.
+  Decisao:  (a) sync.ts: gravar sale_date como "${dt}T03:00:00Z"
+                (SP midnight) + skip if grossRevenue <= 0 em ambas
+                funcoes (processVenda e createSaleFromRecebivel).
+            (b) Update massa retroativo no Supabase: +3h em todos
+                2548 sales CA + delete dos 194 fantasmas. Marcado
+                etl_config "ca_tz_fix_applied" pra idempotencia.
+            (c) Gap residual de R$ 3.010,39 (pos-fix marco = R$
+                79.934,40 vs target R$ 82.944,79) deixado pendente
+                ate ter acesso a API CA pra diagnosticar. Hipoteses
+                documentadas em HANDOFF secao 0.
+  Impacto:  Marco 2026 agora mostra numero "honesto" em vez do
+            inflado coincidentemente mais proximo do target. Outros
+            meses historicos tambem sao afetados pelo mesmo shift,
+            entao todos os numeros de Loja Fisica e Visao Geral
+            mudaram ligeiramente. NF so usa timestamp real dos
+            pedidos (nao date string), nao foi afetada. Regra nova:
+            qualquer fonte que grave sale_date a partir de date
+            string pura deve offsetar para SP midnight ou arriscar
+            o mesmo shift.

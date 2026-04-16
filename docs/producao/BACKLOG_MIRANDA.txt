@@ -249,13 +249,33 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
          Migration: supabase/migrations/20260412150000_etl_config_table.sql
 
 [~] T49 🚨 CRITICO — ETL Conta Azul puxa so NF-e, perde 75% das vendas
-         PARCIALMENTE RESOLVIDO (2026-04-14):
-         ETL reescrito de /v1/notas-fiscais para /v1/venda/busca.
+         PARCIALMENTE RESOLVIDO (2026-04-14 + 2026-04-15):
+         ETL reescrito de /v1/notas-fiscais para /v1/venda/busca + recebiveis.
          Resultado: 496 vendas + 900 itens (vs 110 NF-e anteriores).
          Cobertura: 20 dias/mes (vs 4 dias antes).
-         PENDENTE: validar com Miranda qual relatorio usam para fechar
-         o mes (data da venda vs data do recebivel). Mensagem enviada.
-         Commit: 5b24e21
+         Commits: 5b24e21 (reescrita), a1b141b (hybrid recebiveis).
+
+         [2026-04-15] Investigacao do gap de R$ 1.479:
+         - Bug TZ achado: sale_date gravado como YYYY-MM-DD (UTC midnight)
+           + view at time zone SP shiftava o dia 1h pra tras. Fix em
+           sync.ts (gravar "T03:00:00Z") + update massa no Supabase
+           (+3h em 2548 sales CA) + limpeza de 194 sales fantasma com
+           gross=0 criados pelo fallback createSaleFromRecebivel.
+         - Pos-fix: marco 2026 R$ 79.934,40 (diff -R$ 3.010,39 vs Miranda).
+         - Gap residual ainda pendente — hipoteses:
+           a. Morada (R$ 3.543,51 liq / R$ 7.728 bruto — proximo mas nao
+              exato — pode ter centro de custo proprio e nao estar
+              entrando no nosso filtro "sem centro")
+           b. Recebiveis sem "Venda N" na descricao (nosso regex filtra)
+           c. Miranda usa data diferente (ex: pagamento, nao vencimento)
+         - Scripts de diagnostico disponiveis em src/scripts/:
+           debug-marco-supabase.ts (nao precisa API) e debug-marco.ts
+           (requer CONTA_AZUL_* no .env.local).
+
+         PENDENTE:
+         - Creds CA no .env.local OU rodar GitHub Actions workflow
+         - Investigar gap de R$ 3.010 com acesso real a API
+         - Validar com Miranda qual relatorio ela usa
          ---
          CONTEXTO ORIGINAL:
          Descoberto em 2026-04-14c apos reuniao com a Miranda.

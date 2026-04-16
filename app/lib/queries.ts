@@ -122,7 +122,15 @@ export async function fetchDailyRevenue(days: number = 30, from?: string, to?: s
   return all;
 }
 
-/** Top products consolidated across sources, filtered by period */
+/**
+ * Top products consolidated across sources, filtered by period.
+ *
+ * Excludes CA vendas with `nstag-` prefix — those are NS orders tagged
+ * by the CA "Nuvem Shop" origem and are tracked separately to make
+ * sum(CA) match `totais.aprovado`. If we included them in product
+ * rankings, NS products would show up twice (once via NS source, once
+ * via CA nstag). See DECISOES 2026-04-15b.
+ */
 export async function fetchTopProducts(limit: number = 20, days: number = 30, from?: string, to?: string): Promise<TopProduct[]> {
   const supabase = getSupabase();
   const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
@@ -134,9 +142,10 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
   while (true) {
     let q = supabase
       .from('sale_items')
-      .select('product_name, sku, quantity, total_price, sales!inner(source, sale_date, status)')
+      .select('product_name, sku, quantity, total_price, sales!inner(source, source_sale_id, sale_date, status)')
       .eq('sales.status', 'paid')
       .not('product_name', 'is', null)
+      .not('sales.source_sale_id', 'ilike', 'nstag-%')
       .gte('sales.sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (untilStr) q = q.lte('sales.sale_date', toSPTimestamp(untilStr));
@@ -240,7 +249,10 @@ function classifyCustomer(name: string, source: string, sourceCustomerId?: strin
   return 'pessoa';
 }
 
-/** Top customers by revenue, filtered by period. Optional source filter. */
+/**
+ * Top customers by revenue, filtered by period. Optional source filter.
+ * Excludes CA vendas with `nstag-` prefix (see fetchTopProducts).
+ */
 export async function fetchTopCustomers(limit: number = 15, source?: string, days: number = 30, from?: string, to?: string): Promise<TopCustomer[]> {
   const supabase = getSupabase();
   const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
@@ -250,9 +262,10 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
   while (true) {
     let q = supabase
       .from('sales')
-      .select('customer_id, source, gross_revenue, customers!inner(name, state, source_customer_id, email, phone)')
+      .select('customer_id, source, source_sale_id, gross_revenue, customers!inner(name, state, source_customer_id, email, phone)')
       .eq('status', 'paid')
       .not('customer_id', 'is', null)
+      .not('source_sale_id', 'ilike', 'nstag-%')
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (source !== undefined) q = q.eq('source', source);
@@ -331,7 +344,7 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
     .slice(0, limit);
 }
 
-/** Geography (Conta Azul — Loja Física), filtered by period */
+/** Geography (Conta Azul — Loja Física), filtered by period. Excludes nstag-. */
 export async function fetchGeographyCA(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoData[]> {
   const supabase = getSupabase();
   const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
@@ -341,9 +354,10 @@ export async function fetchGeographyCA(limit: number = 15, days: number = 30, fr
   while (true) {
     let q = supabase
       .from('sales')
-      .select('gross_revenue, customers!inner(state, city)')
+      .select('gross_revenue, source_sale_id, customers!inner(state, city)')
       .eq('status', 'paid')
       .eq('source', 'conta_azul')
+      .not('source_sale_id', 'ilike', 'nstag-%')
       .not('customers.state', 'is', null)
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -380,7 +394,7 @@ export interface GeoConsolidated {
   revenue_conta_azul: number;
 }
 
-/** Geography consolidated (both sources), filtered by period */
+/** Geography consolidated (both sources), filtered by period. Excludes nstag-. */
 export async function fetchGeographyConsolidated(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoConsolidated[]> {
   const supabase = getSupabase();
   const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
@@ -390,8 +404,9 @@ export async function fetchGeographyConsolidated(limit: number = 15, days: numbe
   while (true) {
     let q = supabase
       .from('sales')
-      .select('source, gross_revenue, customers!inner(state)')
+      .select('source, source_sale_id, gross_revenue, customers!inner(state)')
       .eq('status', 'paid')
+      .not('source_sale_id', 'ilike', 'nstag-%')
       .not('customers.state', 'is', null)
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -432,7 +447,14 @@ export interface MonthlyData {
   changePercent: number | null;
 }
 
-/** Monthly comparison — all sources consolidated */
+/**
+ * Monthly comparison — "all sources consolidated".
+ *
+ * Uses sum(CA) alone because sum(CA) = totais.aprovado which already
+ * includes NS-tagged vendas (Miranda's "Faturamento Total"). Summing
+ * CA + NS here would double-count the NS overlap.
+ * See DECISOES 2026-04-15b.
+ */
 export async function fetchMonthlyComparison(months: number = 12): Promise<MonthlyData[]> {
   const supabase = getSupabase();
 
@@ -445,6 +467,7 @@ export async function fetchMonthlyComparison(months: number = 12): Promise<Month
     const { data: batch, error } = await supabase
       .from('v_visao_geral_daily')
       .select('day, gross_revenue, orders_count')
+      .eq('source', 'conta_azul')
       .order('day', { ascending: true })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -500,13 +523,14 @@ export interface RecentOrder {
   customer_name: string | null;
 }
 
-/** Recent orders within the period */
+/** Recent orders within the period. Excludes CA nstag- (NS duplicates). */
 export async function fetchRecentOrders(limit: number = 10, days: number = 30, from?: string, to?: string): Promise<RecentOrder[]> {
   const supabase = getSupabase();
 
   let query = supabase
     .from('sales')
-    .select('sale_id, source, sale_date, gross_revenue, status, payment_method, customers(name)')
+    .select('sale_id, source, source_sale_id, sale_date, gross_revenue, status, payment_method, customers(name)')
+    .not('source_sale_id', 'ilike', 'nstag-%')
     .order('sale_date', { ascending: false })
     .limit(limit);
 
@@ -546,16 +570,17 @@ export async function fetchCustomerRecurrence(days: number = 30, from?: string, 
   const supabase = getSupabase();
   const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  // Query sales with customer_id, filtered by period
+  // Query sales with customer_id, filtered by period. Excludes nstag-.
   const allRows = await (async () => {
     const rows: Array<{ customer_id: number; source: string }> = [];
     let page = 0;
     while (true) {
       let q = supabase
         .from('sales')
-        .select('customer_id, source')
+        .select('customer_id, source, source_sale_id')
         .eq('status', 'paid')
         .not('customer_id', 'is', null)
+        .not('source_sale_id', 'ilike', 'nstag-%')
         .gte('sale_date', toSPTimestamp(sinceStr))
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
       if (to) q = q.lte('sale_date', toSPTimestamp(to));
