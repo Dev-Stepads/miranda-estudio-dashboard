@@ -318,3 +318,81 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
            - aba Visao Geral: total subestimado (NS ok, CA faltando)
            - aba Nuvemshop: NAO afetada (bate nos centavos)
            - aba Meta Ads: NAO afetada
+
+[x] T50 Fix porcentagens erradas nos KPI cards — 2026-04-15
+         Miranda reportou que as % no canto superior direito dos cards
+         nao batiam com o esperado (mostravam valores muito mais altos).
+         CAUSA: comparacao de periodos desiguais. O codigo fazia
+         fetchDailyRevenue(days * 2) + filter(day < since), que truncava
+         o periodo anterior em dois cenarios:
+           (a) custom date range (ex: "Marco 2026" → prev ficava com
+               so 12 dias de Fev em vez de 28-30)
+           (b) "1 ano" (prev ficava vazio → percentChange retornava 100
+               → mostrava +100% falso em todos os cards)
+         FIX:
+           - novo helper getPreviousPeriod(since, until) em queries.ts
+             calcula a janela anterior de MESMO tamanho, deslocada
+             imediatamente antes de [since, until]
+           - 3 pages (Visao Geral, Loja Fisica, Nuvemshop) passaram a
+             buscar previsly correctly via fetchDailyRevenue/Nuvemshop
+             com prevSince/prevUntil explicitos
+           - percentChange() retorna null quando previous === 0 (antes
+             retornava 100 → falso +100% badge)
+         VALIDACAO PARALELA:
+           - Cruzado dados do banco com API CA real via
+             /v1/venda/busca.totais.aprovado pra Nov-Abr: diff R$ 0,00
+             em TODOS os meses. Dados historicos NAO estao inflados,
+             batem exato com a API. A expectativa de Miranda de +38%
+             total provavelmente era contra periodo que nao temos
+             (ex: ano-a-ano vs Mar 2025).
+         Arquivos: app/lib/queries.ts, app/components/kpi-cards.tsx,
+                   app/dashboard/page.tsx, app/dashboard/loja-fisica/page.tsx,
+                   app/dashboard/nuvemshop/page.tsx
+         Script de validacao: src/scripts/validate-ca-api-totals.ts
+
+[~] T51 Sync historico Conta Azul (3 anos) + fix % Comparativo Mensal
+         Iniciado 2026-04-16, interrompido pra handoff de maquina.
+
+         PARTE A — FIX % COMPARATIVO MENSAL (concluido):
+           Antes: mes parcial atual (Abr 2026 com 15 dias) era comparado
+           com mes anterior completo (Mar com 31 dias) → -52% artificial.
+           Depois: fetchMonthlyComparison detecta mes parcial e compara
+           com primeiros N dias do mes anterior (N = dias com dados no
+           mes parcial). Abril agora mostra +2.4% em vez de -52%.
+           Componente ganhou badge "parcial" amarelo + legenda embaixo
+           explicando. Flag `partial: boolean` em MonthlyData.
+           Arquivos: app/lib/queries.ts, app/components/monthly-comparison.tsx.
+
+         PARTE B — SYNC HISTORICO CA (EM ANDAMENTO):
+           API CA probe mostrou 9628 vendas disponiveis entre Jan 2023 e
+           Out 2025 (R$ 3.678.248,49 totais aprovados). Isso vai expandir
+           o Comparativo Mensal de 6 meses (Nov 2025-Abr 2026) pra ~41
+           meses (Jan 2023-Abr 2026).
+
+           Estado: sync processou 550/9379 vendas (5.9%) antes de parar.
+           Upsert eh idempotente — rerun nao duplica. Processo matado
+           confirmadamente, nao ha tsx/node rodando em background.
+
+           PROXIMO PASSO (outra maquina ou esta mesma):
+             npm run sync:contaazul -- --from 2023-01-01 --to 2023-06-30
+             npm run sync:contaazul -- --from 2023-07-01 --to 2023-12-31
+             npm run sync:contaazul -- --from 2024-01-01 --to 2024-06-30
+             npm run sync:contaazul -- --from 2024-07-01 --to 2024-12-31
+             npm run sync:contaazul -- --from 2025-01-01 --to 2025-06-30
+             npm run sync:contaazul -- --from 2025-07-01 --to 2025-10-31
+
+           Chunks de 6 meses pra ser resiliente (erro num chunk nao perde
+           os outros). Cada chunk ~15-20min = ~2h total. Sequencial
+           porque refresh_token CA eh single-use.
+
+           VALIDACAO APOS SYNC:
+             Cruzar api vs banco pros meses sincronizados — script pode
+             ser reconstruido baseado em validate-ca-api-totals.ts
+             (removido apos uso). Diff esperado: R$ 0,00 por mes.
+
+           APOS CONCLUIR:
+             - Dashboard > Visao Geral > Comparativo Mensal: deve mostrar
+               anos 2023/2024/2025/2026 com 12 meses cada
+             - Marcar T51 como [x] neste backlog
+             - Atualizar HANDOFF + STATUS_ATUAL
+             - Commit + push

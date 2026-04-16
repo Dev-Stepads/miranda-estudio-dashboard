@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-15 (T49 fix TZ aplicado; gap residual R$ 3.010 pendente)
+Ultima atualizacao: 2026-04-16 (T50 fix % KPI + T51 parcial: fix % Comparativo Mensal feito, sync historico CA interrompido p/ handoff — ver HANDOFF.txt secao 0)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -83,6 +83,18 @@ Etapa 9 — Divida tecnica: PARCIAL
          [ ] T46 cofre de senhas — pendente
          [ ] T47 rotacao secrets — pendente
          [x] T48 scheduler — RESOLVIDO (cron 30 min, 3 fontes, fail-fast)
+         [x] T50 fix % KPI cards — RESOLVIDO (2026-04-15b)
+             getPreviousPeriod() novo helper + 3 pages atualizadas +
+             percentChange null quando previous=0. Validado vs API CA:
+             dados historicos batem cent a cent, nao ha inflacao no ETL.
+         [~] T51 sync historico CA + fix % Comparativo Mensal — EM ANDAMENTO (2026-04-16)
+             Parte A (% Comparativo Mensal): CONCLUIDA. Mes parcial agora
+             compara com primeiros N dias do mes anterior. Badge "parcial"
+             visual no componente.
+             Parte B (sync historico): PARCIAL. 550/9379 vendas (5.9%)
+             processadas, interrompido pra handoff de maquina. Processo
+             morto, nao ha tsx/node rodando. Outra maquina deve rodar
+             6 chunks de 6 meses em sequencia (ver HANDOFF secao 0).
 
 --------------------------------------------------------
 INFRAESTRUTURA

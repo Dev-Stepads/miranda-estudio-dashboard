@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, fetchCustomerRecurrence, fetchMonthlyComparison, parsePeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, fetchCustomerRecurrence, fetchMonthlyComparison, parsePeriod, getPreviousPeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
@@ -45,10 +45,14 @@ export default async function VisaoGeralPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
-  // Fetch current period + previous period (for % change comparison)
-  const [currentRevenue, previousRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence, monthly] = await Promise.all([
+  // Fetch current period + previous period (for % change comparison).
+  // Previous period = window of the same length immediately before [since, until].
+  // Computed explicitly so custom date ranges (e.g. "March 2026") and long
+  // periods (e.g. "1 ano") compare fairly instead of getting truncated.
+  const { prevSince, prevUntil } = getPreviousPeriod(period.since, period.until);
+  const [currentRevenue, prevPeriodRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence, monthly] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
-    fetchDailyRevenue(period.days * 2),
+    fetchDailyRevenue(period.days, prevSince, prevUntil),
     fetchTopProducts(15, period.days, params.from, params.to),
     fetchGeographyConsolidated(10, period.days, params.from, params.to),
     fetchTopCustomers(30, undefined, period.days, params.from, params.to),
@@ -56,10 +60,6 @@ export default async function VisaoGeralPage({
     fetchCustomerRecurrence(period.days, params.from, params.to),
     fetchMonthlyComparison(36),
   ]);
-
-  // Split previous period data using date strings (YYYY-MM-DD) to avoid
-  // timezone issues. period.since is in São Paulo timezone from parsePeriod().
-  const prevPeriodRevenue = previousRevenue.filter((r) => r.day < period.since);
 
   // Current period KPIs
   // Identity: sum(CA) = totais.aprovado (includes NS-tagged vendas).

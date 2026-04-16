@@ -31,9 +31,17 @@ export function KpiCard({ title, value, subtitle, change }: KpiCardProps) {
   );
 }
 
-/** Calculate % change between current and previous values. */
+/** Calculate % change between current and previous values.
+ *
+ * Returns null when previous === 0. We used to return 100 when previous=0 and
+ * current>0, but that produced a fake "+100%" badge on every card when the
+ * previous period had no data (e.g. "1 ano" filter with data only from Nov 2025,
+ * or any period where the comparison window falls before our data floor). A
+ * null return hides the badge, which is more honest than displaying a
+ * mathematically undefined number as a real growth figure.
+ */
 export function percentChange(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? 100 : null;
+  if (previous === 0) return null;
   return ((current - previous) / previous) * 100;
 }
 

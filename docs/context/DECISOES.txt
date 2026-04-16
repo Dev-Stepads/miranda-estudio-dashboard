@@ -1040,3 +1040,91 @@ DECISÕES REGISTRADAS
             qualquer fonte que grave sale_date a partir de date
             string pura deve offsetar para SP midnight ou arriscar
             o mesmo shift.
+
+[2026-04-15] [UX] Calculo do periodo anterior nos KPI cards (% change)
+  Contexto: Miranda reportou que as porcentagens no canto superior
+            direito dos KPI cards estavam muito mais elevadas do que
+            o esperado. A investigacao mostrou que o codigo
+            calculava o "periodo anterior" via
+              fetchDailyRevenue(days * 2) + filter(r.day < since)
+            Esse padrao funciona pro caso default de "Ultimos N dias"
+            porque busca 2N dias a partir de HOJE e depois separa em
+            dois blocos de N dias. Mas quebrava em 2 cenarios:
+              (a) date picker custom (ex: "Mar 2026"). days*2 = 60
+                  buscava Feb 14 → Apr 15. Filter day<Mar 1 deixava
+                  so 12 dias de Fev como "periodo anterior" vs os 31
+                  dias do atual → comparacao injusta inflacionando %.
+              (b) filtro "1 ano" (365d). O periodo anterior caia antes
+                  de Nov 2025 (data floor do nosso sync) → prev = 0
+                  → percentChange(current, 0) retornava 100 → todo
+                  card mostrava "+100%" falso.
+            Validacao paralela: cruzamos dados do banco com a API CA
+            via /v1/venda/busca.totais.aprovado para Nov 2025 - Abr
+            2026. Diff foi R$ 0,00 em todos os meses. Ou seja, nao ha
+            inflacao nos dados historicos — sao reais da API. A
+            expectativa de +38% da Miranda deve se referir a um
+            comparativo que nao temos (provavel: Mar 2025 vs Mar 2026
+            ano-a-ano, e nossos dados comecam em Nov 2025).
+  Decisao:  (a) novo helper getPreviousPeriod(since, until) em
+                queries.ts computa a janela anterior de MESMO tamanho
+                imediatamente antes de [since, until]. Ex:
+                [Mar 1, Mar 31] → [Jan 30, Feb 28].
+            (b) 3 pages (Visao Geral, Loja Fisica, Nuvemshop) passaram
+                a fazer o fetch do periodo anterior com prevSince e
+                prevUntil explicitos em vez de days*2 + filter.
+            (c) percentChange() retorna null quando previous === 0
+                em vez de 100. KpiCard ja nao renderiza badge pra
+                null, entao cards ficam sem % em vez de mostrar
+                "+100%" enganoso quando nao ha dado pra comparar.
+  Impacto:  KPI cards mostram % corretas pra qualquer escolha de
+            periodo. Date picker custom ("Marco 2026") compara com
+            janela de mesmo tamanho imediatamente antes ("Jan 30 -
+            Feb 28"). "1 ano" nao mostra mais +100% falso — mostra
+            simplesmente sem badge. Loja Fisica aba continua usando
+            a formula CA - NS pra revenue e orders no prev periodo
+            (subtracao espelhada). Esse fix nao resolve a discrepancia
+            das % que Miranda mencionou (+42%/+13%/+38%) — isso e um
+            comparativo diferente. O que foi corrigido eh que as %
+            exibidas sao agora matematicamente corretas e comparam
+            janelas equivalentes.
+
+[2026-04-16] [UX] Comparativo Mensal — mes parcial compara mesmo periodo
+  Contexto: O componente MonthlyComparison mostrava o mes atual (Abril
+            2026, com 15 dias de dados) comparado com o mes anterior
+            inteiro (Marco, 31 dias). Resultado: -52% artificial em
+            Abril. Nao refletia "esta caindo" — refletia "ainda faltam
+            dias pra terminar o mes".
+  Decisao:  fetchMonthlyComparison() passa a detectar o mes cronologi-
+            camente mais recente no banco. Se o `lastDay` dele for antes
+            do ultimo dia do calendario, eh marcado como `partial: true`.
+            Pro mes parcial, o % anterior compara APENAS os primeiros N
+            dias do mes anterior (onde N = vals.lastDay do mes parcial).
+            Ex: Abr 1-15 (R$ 55.5K) vs Mar 1-15 (R$ 54.2K) = +2.4%.
+            Componente ganhou badge amarelo "parcial" ao lado do nome
+            do mes + legenda embaixo explicando a convencao.
+            MonthlyData.partial: boolean foi adicionado ao interface.
+  Impacto:  Comparativo Mensal nao mostra mais queda enganosa no mes
+            atual. Meses passados continuam comparados mes-cheio vs
+            mes-cheio. O total do ano no rodape ainda inclui o mes
+            parcial, mas isso eh esperado (total YTD).
+
+[2026-04-16] [DADOS] Expansao do historico CA de 6 meses pra 3 anos
+  Contexto: Sync original da Conta Azul foi 180 dias (Nov 2025-Abr 2026),
+            entao o Comparativo Mensal so conseguia mostrar anos 2025 e
+            2026. Probe da API /v1/venda/busca mostrou que a CA tem
+            dados disponiveis desde Jan 2023 (~9600 vendas, R$ 3.68M).
+  Decisao:  Rodar sync historico adicional pros meses Jan 2023 a Out 2025
+            (Nov 2025+ ja tem). Vai dar ao Comparativo Mensal 41 meses
+            de historico (3+ anos). Estrategia: rodar em 6 chunks de 6
+            meses em sequencia (nao paralelo — refresh_token CA eh
+            single-use). Cada chunk ~15-20 min. Total ~2h.
+            Comandos:
+              npm run sync:contaazul -- --from 2023-01-01 --to 2023-06-30
+              npm run sync:contaazul -- --from 2023-07-01 --to 2023-12-31
+              ...ate 2025-10-31
+            Sessao 2026-04-16 iniciou o sync mas precisou interromper em
+            225/9379 vendas pra handoff de maquina. Upsert idempotente
+            permite continuar sem duplicar.
+  Impacto:  Dashboard vai ter comparativo de 3+ anos. Miranda podera ver
+            tendencias ano-a-ano. Tempo de sync eh pontual — depois, o
+            sync incremental (cron 30min) so puxa dados novos.

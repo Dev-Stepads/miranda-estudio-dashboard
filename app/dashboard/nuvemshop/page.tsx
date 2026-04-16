@@ -8,6 +8,7 @@ import {
   fetchAbandonedDetails,
   fetchTopCustomers,
   parsePeriod,
+  getPreviousPeriod,
 } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
@@ -23,9 +24,12 @@ export default async function NuvemshopPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
+  // Previous period = same-length window immediately before [since, until].
+  // Explicit computation avoids the truncation bug that used `days * 2` + filter.
+  const { prevSince, prevUntil } = getPreviousPeriod(period.since, period.until);
   const [daily, prevDaily, topProducts, geography, abandoned, abandonedDetails, topCustomers] = await Promise.all([
     fetchNuvemshopDaily(period.days, params.from, params.to),
-    fetchNuvemshopDaily(period.days * 2),
+    fetchNuvemshopDaily(period.days, prevSince, prevUntil),
     fetchTopProducts(20, period.days, params.from, params.to),
     fetchGeography(15, period.days, params.from, params.to),
     fetchAbandoned(period.days, params.from, params.to),
@@ -38,13 +42,10 @@ export default async function NuvemshopPage({
   const totalOrders = daily.reduce((sum, r) => sum + r.orders_count, 0);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Previous period for comparison — use date strings to avoid timezone issues
-  const prevRevenue = prevDaily
-    .filter(r => r.day < period.since)
-    .reduce((sum, r) => sum + r.gross_revenue, 0);
-  const prevOrders = prevDaily
-    .filter(r => r.day < period.since)
-    .reduce((sum, r) => sum + r.orders_count, 0);
+  // Previous period for comparison — date window already enforced by
+  // fetchNuvemshopDaily via prevSince/prevUntil.
+  const prevRevenue = prevDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const prevOrders = prevDaily.reduce((sum, r) => sum + r.orders_count, 0);
 
   const totalAbandoned = abandoned.reduce((sum, r) => sum + r.abandoned_count, 0);
   const totalAbandonedValue = abandoned.reduce((sum, r) => sum + r.total_amount, 0);

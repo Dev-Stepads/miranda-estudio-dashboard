@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchTopCustomers, parsePeriod } from '../../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchTopCustomers, parsePeriod, getPreviousPeriod } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../../components/kpi-cards';
 import { RevenueChart } from '../../components/revenue-chart';
 import { AvgTicketChart } from '../../components/avg-ticket-chart';
@@ -14,9 +14,14 @@ export default async function LojaFisicaPage({
   const params = await searchParams;
   const period = parsePeriod(params);
 
+  // Previous period = same-length window immediately before [since, until].
+  // Explicit computation avoids the truncation bug that happened when we used
+  // `fetchDailyRevenue(days * 2)` + filter by `day < since` (e.g. "March 2026"
+  // custom range gave only ~12 days of Feb as "previous", inflating %).
+  const { prevSince, prevUntil } = getPreviousPeriod(period.since, period.until);
   const [dailyRevenue, prevDailyRevenue, topProducts, topCustomers] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
-    fetchDailyRevenue(period.days * 2),
+    fetchDailyRevenue(period.days, prevSince, prevUntil),
     fetchTopProducts(20, period.days, params.from, params.to),
     fetchTopCustomers(30, 'conta_azul', period.days, params.from, params.to),
   ]);
@@ -41,9 +46,11 @@ export default async function LojaFisicaPage({
   const totalOrders = Math.max(0, caOrders - nsOrders);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Previous period for comparison — same subtraction pattern
-  const prevCa = prevDailyRevenue.filter(r => r.source === 'conta_azul' && r.day < period.since);
-  const prevNs = prevDailyRevenue.filter(r => r.source === 'nuvemshop' && r.day < period.since);
+  // Previous period for comparison — same subtraction pattern. Filter by
+  // source only; the date window is already enforced by fetchDailyRevenue
+  // via prevSince/prevUntil.
+  const prevCa = prevDailyRevenue.filter(r => r.source === 'conta_azul');
+  const prevNs = prevDailyRevenue.filter(r => r.source === 'nuvemshop');
   const prevRevenue = prevCa.reduce((sum, r) => sum + r.gross_revenue, 0) - prevNs.reduce((sum, r) => sum + r.gross_revenue, 0);
   const prevOrders = Math.max(0, prevCa.reduce((sum, r) => sum + r.orders_count, 0) - prevNs.reduce((sum, r) => sum + r.orders_count, 0));
 

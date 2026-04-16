@@ -3,12 +3,211 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-15
-RESPONSAVEL: sessao 2026-04-15 — fix TZ no ETL CA + cleanup de sales fantasma
-BRANCH: main
+DATA: 2026-04-16
+RESPONSAVEL: sessao 2026-04-15b/16 — fix % KPI + fix Comparativo Mensal + handoff p/ outra maquina
+BRANCH: main (changes uncommitted — ver secao "HANDOFF PRA OUTRA MAQUINA")
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-15) — FIX TZ + CLEANUP (T49 ainda parcial)
+0. HANDOFF PRA OUTRA MAQUINA (2026-04-16) — PROXIMO PASSO EXATO
+--------------------------------------------------------
+Esta sessao foi interrompida no meio do sync historico da Conta Azul pra
+permitir continuar em outra maquina. Tudo que esta feito ja esta no
+repo (modificado, nao commitado) ou no Supabase (compartilhado).
+
+ESTADO:
+  - Todos os fixes de codigo estao commited localmente? NAO.
+    Arquivos modificados (git status):
+      app/lib/queries.ts                 (+helper getPreviousPeriod + fix monthly partial)
+      app/components/kpi-cards.tsx       (percentChange → null quando prev=0)
+      app/components/monthly-comparison.tsx (badge "parcial" + legenda)
+      app/dashboard/page.tsx             (usa getPreviousPeriod)
+      app/dashboard/loja-fisica/page.tsx (idem)
+      app/dashboard/nuvemshop/page.tsx   (idem)
+      docs/context/DECISOES.txt          (append: 2026-04-15b + 2026-04-16)
+      docs/context/HANDOFF.txt           (este arquivo)
+      docs/context/STATUS_ATUAL.txt      (ultima atualizacao)
+      docs/producao/BACKLOG_MIRANDA.txt  (T50 + T51)
+
+  - Sync historico CA (Jan 2023 - Out 2025): parcialmente feito
+    - Processadas 550 de 9379 vendas (5.9%) antes de ser interrompido
+    - As 550 ja estao no Supabase (upserted, nao se perde)
+    - O que falta: processar as outras ~8829 vendas (~110 min)
+    - Confirmado que processo foi matado: nenhum tsx/node rodando
+
+PROXIMO PASSO EXATO — O QUE A OUTRA MAQUINA DEVE FAZER:
+
+  1. git pull (puxar os commits que voce der push a partir desta maquina)
+     OU trabalhar com os arquivos modificados se nao der push antes.
+
+  2. Confirmar que .env.local tem CONTA_AZUL_CLIENT_ID,
+     CONTA_AZUL_CLIENT_SECRET e CONTA_AZUL_REFRESH_TOKEN populados.
+     (O refresh_token vive em Supabase etl_config e sobrescreve o
+     do .env.local, entao se os 3 estao ali, funciona.)
+
+  3. Rodar o sync historico em chunks de 6 meses (sequencial):
+
+       npm run sync:contaazul -- --from 2023-01-01 --to 2023-06-30
+       npm run sync:contaazul -- --from 2023-07-01 --to 2023-12-31
+       npm run sync:contaazul -- --from 2024-01-01 --to 2024-06-30
+       npm run sync:contaazul -- --from 2024-07-01 --to 2024-12-31
+       npm run sync:contaazul -- --from 2025-01-01 --to 2025-06-30
+       npm run sync:contaazul -- --from 2025-07-01 --to 2025-10-31
+
+     Cada chunk leva ~15-20min. Total ~2h. Fazer em sequencia porque
+     o refresh_token da CA eh single-use (paralelo da conflito).
+
+     POR QUE CHUNKS E NAO UM SYNC UNICO DE 3 ANOS:
+       - se der erro no meio, nao perde tudo
+       - progresso visivel
+       - upsert e idempotente, entao re-rodar um chunk ja feito nao
+         duplica dados
+
+  4. Apos cada chunk, confirmar no terminal que mostrou
+     "SYNC COMPLETE" com "Errors: 0" e o valor de
+     "API totais.aprovado" bateu com o "Sales" upserted.
+
+  5. Apos os 6 chunks, validar com a API (script existe):
+
+       npx tsx --env-file=.env.local src/scripts/probe-ca-history.ts
+
+     OBS: esse script NAO foi salvo no repo (foi removido apos uso).
+     Se precisar, reconstrua com o loop:
+       for (cada mes entre 2023-01 e 2025-10) chamar
+       /v1/venda/busca?data_inicio=YYYY-MM-01&data_fim=YYYY-MM-last
+       e cruzar totais.aprovado com sum(gross_revenue) do supabase
+       v_visao_geral_daily onde source=conta_azul e day no mes.
+     Diff esperado: R$ 0,00 em todos os meses (ETL ja foi validado
+     em sessao anterior 2026-04-15b pros meses Nov 2025 - Abr 2026).
+
+  6. Abrir o dashboard em localhost:3000 (ou Vercel prod) e conferir
+     a aba Visao Geral > Comparativo Mensal:
+     - Deve mostrar tabs com anos: 2023, 2024, 2025, 2026
+     - Cada ano mostra 12 meses
+     - Abril 2026 tem badge "parcial" amarelo
+     - % sao corretas (comparando cada mes vs anterior; mes parcial
+       vs mesmo periodo do anterior)
+
+  7. Commit + push:
+
+       git add app/ docs/ src/scripts/
+       git commit -m "feat: sync historico CA + fix % comparativo mensal"
+       git push
+
+  8. Atualizar docs vivos (este HANDOFF, STATUS_ATUAL, BACKLOG) pra
+     refletir que T51 (sync historico CA) esta completo.
+
+O QUE JA FOI FEITO NESTA SESSAO (2026-04-15b/16):
+
+  FRENTE 1 — Bug no calculo de % nos KPI cards (CORRIGIDO):
+    Causa: fetchDailyRevenue(period.days * 2) + filter local criava
+    periodos anteriores truncados em 2 cenarios:
+      (a) Date picker custom "Mar 2026" → prev so 12 dias de Fev
+      (b) Filtro "1 ano" → prev vazio → +100% falso em todo card
+    Fix:
+      - Novo helper getPreviousPeriod(since, until) em queries.ts
+        computa janela anterior de MESMO tamanho imediatamente antes
+      - 3 pages (Visao Geral, Loja Fisica, Nuvemshop) atualizadas
+      - percentChange() retorna null quando previous=0 (nao mais 100)
+
+  FRENTE 2 — Validacao dos dados historicos CA (NAO HA INFLACAO):
+    Cruzei dados do banco com API CA (/v1/venda/busca.totais.aprovado)
+    pra Nov 2025 - Abr 2026: diff R$ 0,00 em TODOS os meses.
+    Dados sao reais — Jan 2026 teve mesmo 1019 vendas / R$ 361K.
+    A expectativa da Miranda de "+38% total" provavelmente se refere
+    a ano-a-ano (Mar 2025 vs Mar 2026), que depende do sync historico.
+
+  FRENTE 3 — Fix do Comparativo Mensal (% mes parcial):
+    Causa: mes atual (Abril 2026) tem so 15 dias mas era comparado
+    com Marco inteiro (31 dias) → mostrava -52% artificial.
+    Fix:
+      - fetchMonthlyComparison detecta mes parcial
+      - Pro mes parcial: compara com primeiros N dias do mes anterior
+      - MonthlyData ganhou flag `partial: boolean`
+      - Componente mostra badge "parcial" + legenda
+    Validado: Abril agora mostra +2.4% em vez de -52%.
+
+  FRENTE 4 — Sync historico CA (EM ANDAMENTO):
+    API tem 9628 vendas entre Jan 2023 e Out 2025 (R$ 3.678.248,49).
+    Sync iniciado nesta maquina, processado 225 vendas antes de parar
+    pra handoff. Resto vai ser feito na outra maquina (ver passo 3
+    acima). Upsert eh idempotente, rodar de novo nao duplica.
+
+BUILD: typecheck OK, 134 testes passando (antes do sync historico).
+
+--------------------------------------------------------
+0a. SESSAO ANTERIOR (2026-04-15b) — FIX % KPI + VALIDACAO CA (T50)
+--------------------------------------------------------
+Miranda reportou que as porcentagens no canto superior direito dos
+KPI cards estavam muito mais elevadas do que o esperado. Investigacao
+rodou em 2 frentes em paralelo.
+
+FRENTE 1 — Bug no calculo de % (CORRIGIDO):
+  Causa: fetchDailyRevenue(period.days * 2) + filter(day < since).
+  Funciona pro default "Ultimos N dias" mas quebra em:
+    (a) Date picker custom (ex: "Mar 2026"). days*2 = 60 dias retroativos
+        de HOJE → prev fica com so 12 dias de Fev (vs 31 do atual).
+        Comparacao 31d vs 12d = % artificialmente inflada (+103% total
+        observado no debug v4).
+    (b) Filtro "1 ano" (365d). Previous period cai antes de Nov 2025
+        (data floor do sync) → prev = 0 → percentChange retornava 100
+        → todos os cards mostravam "+100%" falso.
+  Fix:
+    - Novo helper getPreviousPeriod(since, until) em app/lib/queries.ts
+      calcula janela anterior de MESMO tamanho imediatamente antes
+      de [since, until]. Ex: [Mar 1, Mar 31] → [Jan 30, Feb 28].
+    - 3 pages (Visao Geral, Loja Fisica, Nuvemshop) passam prevSince
+      e prevUntil explicitos no fetch. Filtro local `day < since`
+      removido (nao precisa mais — a query ja filtra).
+    - percentChange() retorna null em vez de 100 quando previous === 0.
+      KpiCard nao renderiza badge pra null → UI fica limpa em vez
+      de mostrar +100% enganoso.
+  Validacao: simulacao v5 confirma comparacoes justas em todos os
+  periodos. Default 30d = +0.9%. 1 ano = sem badge (correto).
+
+FRENTE 2 — Inflacao historica suspeita (NAO HA BUG):
+  Suspeita inicial: Nov/Dez/Jan/Feb mostravam valores altos no banco
+  (Jan 2026: 1009 vendas / R$ 361K) vs Miranda esperando +38% total
+  sobre ~R$ 84K de base. Hipotese: dual-insert entre commits a1b141b
+  (receb-* hybrid) e 8b22182 (v3 vendas API) sem cleanup.
+  Validacao: script validate-ca-api-totals.ts chama a API CA real
+  (/v1/venda/busca.totais.aprovado) pra cada mes Nov-Abr e cruza com
+  o banco. Resultado — diff R$ 0,00 EXATO em TODOS os meses:
+    Nov 2025:  R$ 122.983,98 (API) = R$ 122.983,98 (Banco)
+    Dez 2025:  R$ 244.314,30 (API) = R$ 244.314,30 (Banco)
+    Jan 2026:  R$ 361.152,43 (API) = R$ 361.152,43 (Banco) [1019 vendas]
+    Fev 2026:  R$ 183.664,10 (API) = R$ 183.664,10 (Banco)
+    Mar 2026:  R$ 116.544,00 (API) = R$ 116.544,00 (Banco)
+    Abr 2026:  R$ 55.541,77 (API) = R$ 55.541,77 (Banco)
+  Conclusao: ETL esta 100% correto. Dados historicos sao os que a API
+  CA tem. A expectativa de +38% total da Miranda se refere a algum
+  comparativo que NOS NAO TEMOS — provavel ano-a-ano (Mar 2025 vs
+  Mar 2026), mas nosso sync comecou em Nov 2025.
+
+ARQUIVOS TOCADOS:
+  - app/lib/queries.ts (novo helper getPreviousPeriod)
+  - app/components/kpi-cards.tsx (fix percentChange → null quando prev=0)
+  - app/dashboard/page.tsx (usa getPreviousPeriod)
+  - app/dashboard/loja-fisica/page.tsx (idem)
+  - app/dashboard/nuvemshop/page.tsx (idem)
+  - src/scripts/validate-ca-api-totals.ts (novo, reutilizavel)
+  - docs vivos (este arquivo, STATUS_ATUAL, BACKLOG, DECISOES)
+
+BUILD: typecheck OK, 134 testes passando.
+
+PROXIMO PASSO QUANDO RETOMAR:
+  - git push (o fix ja esta commitado localmente? conferir antes)
+  - Se Miranda continuar reportando % divergentes, alinhar com ela
+    QUAL comparativo ela usa. Opcoes:
+      a. Mesmo periodo ano anterior (nao temos dados)
+      b. Crescimento vs meta/orcamento (precisa info da meta)
+      c. % do total (nao e "change")
+    Sem essa informacao, a conta nao consegue bater pq nao sabemos
+    a base esperada.
+  - Gap residual T49 de R$ 3.010 em Marco continua pendente (hipotese
+    Morada/recebiveis) — requer investigacao mais profunda via API.
+
+--------------------------------------------------------
+0a. SESSAO ANTERIOR (2026-04-15) — FIX TZ + CLEANUP (T49 ainda parcial)
 --------------------------------------------------------
 O sessao anterior (2026-04-14d) migrou o ETL CA para /v1/venda/busca +
 hibrido com recebiveis, mas o dashboard passou a mostrar R$ 84.423,90

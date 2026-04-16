@@ -97,6 +97,35 @@ export function parsePeriod(params: { days?: string; from?: string; to?: string 
   };
 }
 
+/**
+ * Compute the previous period with the SAME length as [since, until], immediately
+ * preceding it. Used for % change KPI comparison.
+ *
+ * Why this exists: the old pattern was `fetchDailyRevenue(days * 2)` + filter by
+ * `day < since`. That broke for custom date ranges (e.g. "March 2026" gave only
+ * ~12 days of Feb as "previous" because the query always started from today) and
+ * for "1 ano" (previous range extended past the data floor, returning 0 and
+ * yielding a fake +100%). The fix is to compute the previous window explicitly
+ * and fetch it with an exact from/to.
+ *
+ * Example: since="2026-03-01", until="2026-03-31" → prevSince="2026-01-30",
+ * prevUntil="2026-02-28" (30-day window immediately before March).
+ */
+export function getPreviousPeriod(since: string, until: string): {
+  prevSince: string;
+  prevUntil: string;
+} {
+  const sinceDate = new Date(`${since}T00:00:00Z`);
+  const untilDate = new Date(`${until}T00:00:00Z`);
+  const lengthMs = untilDate.getTime() - sinceDate.getTime();
+  const prevUntilDate = new Date(sinceDate.getTime() - 24 * 60 * 60 * 1000);
+  const prevSinceDate = new Date(prevUntilDate.getTime() - lengthMs);
+  return {
+    prevSince: prevSinceDate.toISOString().split('T')[0]!,
+    prevUntil: prevUntilDate.toISOString().split('T')[0]!,
+  };
+}
+
 /** Visão Geral: revenue by day and source */
 export async function fetchDailyRevenue(days: number = 30, from?: string, to?: string): Promise<DailyRevenue[]> {
   const supabase = getSupabase();
@@ -445,6 +474,11 @@ export interface MonthlyData {
   orders: number;
   avgTicket: number;
   changePercent: number | null;
+  /** True when this month is the current (incomplete) one — the revenue/orders
+   * reflect only days 1..N where N is the last day with data. The changePercent
+   * for a partial month is computed against the PREVIOUS month's first N days,
+   * so the comparison stays fair (not partial-month vs full-month). */
+  partial: boolean;
 }
 
 /**
@@ -454,6 +488,13 @@ export interface MonthlyData {
  * includes NS-tagged vendas (Miranda's "Faturamento Total"). Summing
  * CA + NS here would double-count the NS overlap.
  * See DECISOES 2026-04-15b.
+ *
+ * Partial-month handling (2026-04-16): the most recent month is flagged
+ * `partial: true` when its last day with data is before the last calendar
+ * day of that month. The `changePercent` for a partial month is computed
+ * against the PREVIOUS month's first N days (N = days with data in the
+ * partial month), so the comparison is day-to-day fair instead of
+ * partial-vs-full (which was giving misleading -50% style badges).
  */
 export async function fetchMonthlyComparison(months: number = 12): Promise<MonthlyData[]> {
   const supabase = getSupabase();
@@ -478,14 +519,27 @@ export async function fetchMonthlyComparison(months: number = 12): Promise<Month
     page++;
   }
 
-  // Aggregate by month
-  const byMonth = new Map<string, { revenue: number; orders: number }>();
+  // Aggregate by month with per-day detail (needed for partial comparisons)
+  const byMonth = new Map<string, { revenue: number; orders: number; lastDay: number }>();
   for (const row of allRows) {
     const month = row.day.slice(0, 7); // "2026-04"
-    const existing = byMonth.get(month) ?? { revenue: 0, orders: 0 };
+    const dayOfMonth = Number(row.day.slice(8, 10)); // "15"
+    const existing = byMonth.get(month) ?? { revenue: 0, orders: 0, lastDay: 0 };
     existing.revenue += row.gross_revenue;
     existing.orders += row.orders_count;
+    existing.lastDay = Math.max(existing.lastDay, dayOfMonth);
     byMonth.set(month, existing);
+  }
+
+  // Detect which months are "partial" — the most recent one if its lastDay
+  // is before the month's total days. We only flag the chronologically-last
+  // month as partial; earlier months with gaps are assumed complete (gaps
+  // there would indicate sync issues, not "in-progress" months).
+  const sortedMonthsAsc = Array.from(byMonth.keys()).sort();
+  const latestMonth = sortedMonthsAsc[sortedMonthsAsc.length - 1];
+  function totalDaysInMonth(monthStr: string): number {
+    const [y, m] = monthStr.split('-').map(Number);
+    return new Date(y!, m!, 0).getDate(); // day 0 of next month = last day of this month
   }
 
   // Sort descending (most recent first) and limit
@@ -493,10 +547,25 @@ export async function fetchMonthlyComparison(months: number = 12): Promise<Month
     .sort((a, b) => b[0].localeCompare(a[0]))
     .slice(0, months);
 
-  // Calculate % change vs previous month
+  // Calculate % change vs previous month. For a partial month, compare
+  // only the first N days against the previous month's first N days.
   const result: MonthlyData[] = sorted.map(([month, vals], i) => {
     const prevMonth = sorted[i + 1];
-    const prevRevenue = prevMonth ? prevMonth[1].revenue : null;
+    const isPartial = month === latestMonth && vals.lastDay < totalDaysInMonth(month);
+
+    let prevRevenue: number | null = null;
+    if (prevMonth) {
+      if (isPartial) {
+        // Sum prev-month revenue for days 1..vals.lastDay only
+        const prevMonthKey = prevMonth[0];
+        prevRevenue = allRows
+          .filter(r => r.day.startsWith(prevMonthKey) && Number(r.day.slice(8, 10)) <= vals.lastDay)
+          .reduce((s, r) => s + r.gross_revenue, 0);
+      } else {
+        prevRevenue = prevMonth[1].revenue;
+      }
+    }
+
     const changePercent = prevRevenue !== null && prevRevenue > 0
       ? ((vals.revenue - prevRevenue) / prevRevenue) * 100
       : null;
@@ -507,6 +576,7 @@ export async function fetchMonthlyComparison(months: number = 12): Promise<Month
       orders: vals.orders,
       avgTicket: vals.orders > 0 ? vals.revenue / vals.orders : 0,
       changePercent,
+      partial: isPartial,
     };
   });
 

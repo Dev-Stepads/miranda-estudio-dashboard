@@ -83,6 +83,11 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
               >
                 <td className="px-4 sm:px-6 py-2.5 font-medium text-gray-800 dark:text-gray-200 text-xs sm:text-sm">
                   {formatMonth(row.month)}
+                  {row.partial && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                      parcial
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 sm:px-6 py-2.5">
                   <div className="flex items-center gap-2">
@@ -139,6 +144,12 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
           </tfoot>
         </table>
       </div>
+      {filtered.some(d => d.partial) && (
+        <p className="px-4 sm:px-6 py-2 text-[11px] text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
+          <span className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 font-semibold text-amber-700 dark:text-amber-400 mr-1">parcial</span>
+          mês em andamento — a % compara o mesmo número de dias do mês anterior (dia a dia) pra não mostrar queda artificial
+        </p>
+      )}
     </div>
   );
 }
