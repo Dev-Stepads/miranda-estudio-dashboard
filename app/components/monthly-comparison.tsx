@@ -41,7 +41,7 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
               Comparativo Mensal
             </h3>
-            <p className="text-xs sm:text-sm text-gray-400 mt-0.5">Evolução mês a mês (todas as fontes)</p>
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5">Faturamento total (Loja Física + E-commerce)</p>
           </div>
           {/* Year filter */}
           <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
