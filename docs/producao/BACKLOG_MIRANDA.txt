@@ -239,6 +239,12 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
 
 [ ] T47 Rotacionar secrets que passaram pelo chat (pre-producao)
          Criticidade: MEDIA
+         Secrets confirmados que passaram pelo chat:
+           - META_APP_SECRET (sessao 2026-04-13)
+           - META_SYSTEM_USER_TOKEN (sessao 2026-04-13)
+           - GitHub PAT pro Dev-Stepads org (sessao 2026-04-16,
+             usado pontualmente pra push — REVOGAR em
+             https://github.com/settings/tokens)
 
 [x] T48 Scheduler/worker pra ETL — 2026-04-12
          RESOLVIDO: GitHub Actions cron a cada 30 minutos.
