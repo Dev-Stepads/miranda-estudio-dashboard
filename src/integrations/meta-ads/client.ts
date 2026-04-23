@@ -262,24 +262,42 @@ export class MetaAdsClient {
   private async fetchJson(
     url: string,
   ): Promise<{ body: unknown; headers: Headers }> {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
+    const MAX_RETRIES = 3;
+    let lastError: unknown;
 
-    const contentType = response.headers.get('content-type') ?? '';
-    const body: unknown = contentType.includes('application/json')
-      ? await safeJson(response)
-      : await response.text();
+    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
 
-    if (!response.ok) {
-      // Try to surface the Meta error envelope — the actual payload is
-      // much more useful than "HTTP 400".
+      const contentType = response.headers.get('content-type') ?? '';
+      const body: unknown = contentType.includes('application/json')
+        ? await safeJson(response)
+        : await response.text();
+
+      if (response.ok) {
+        return { body, headers: response.headers };
+      }
+
       const message = extractMetaError(body) ?? `HTTP ${response.status}`;
-      throw new Error(`[meta-ads] ${message} — url: ${url.split('?')[0]}`);
+      lastError = new Error(`[meta-ads] ${message} — url: ${url.split('?')[0]}`);
+
+      // Retry on transient errors (429, 5xx)
+      const isTransient = response.status === 429 || response.status >= 500;
+      if (!isTransient || attempt > MAX_RETRIES) throw lastError;
+
+      const delayMs = response.status === 429
+        ? 60_000 // Meta recommends waiting ~1 min on rate limit
+        : 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+      console.log(
+        `  ⏳ [meta-ads] ${response.status} on attempt ${attempt}/${MAX_RETRIES + 1}, ` +
+        `retrying in ${Math.round(delayMs / 1000)}s...`,
+      );
+      await sleep(delayMs);
     }
 
-    return { body, headers: response.headers };
+    throw lastError;
   }
 }
 

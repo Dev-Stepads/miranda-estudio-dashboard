@@ -435,8 +435,12 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
 [x] T57 Retry no saveRefreshToken (CA) — 2026-04-23
          3 tentativas com backoff (2s, 4s) antes de throw.
 
-[ ] T58 Retry em falhas transientes (429/5xx) — PENDENTE
-         Requer mudanca nos HTTP clients das 3 integracoes.
+[x] T58 Retry em falhas transientes (429/5xx) — 2026-04-23
+         3 pipelines com retry e backoff exponencial:
+         - CA: fetchAuth retenta 429/5xx ate 3x (1s, 2s, 4s; 429=10s)
+         - NS: paginateAll retenta por pagina ate 3x (1s, 2s, 4s)
+         - Meta: fetchJson privado retenta 429/5xx ate 3x (429=60s)
+         Helper withRetry generico exportado em src/lib/http.ts.
 
 [x] T59 Checkout abandonado com batching — 2026-04-23
          Trocado loop N+1 por batches de 100 (mesmo padrao de orders).

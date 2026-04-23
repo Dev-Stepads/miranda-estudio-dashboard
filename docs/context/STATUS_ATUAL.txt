@@ -142,7 +142,7 @@ INFRAESTRUTURA
 [x] TypeScript 0 erros — 2026-04-23 (T64)
 [ ] Cofre de senhas Stepads (1P ou Bitwarden) — PENDENTE (task T46)
 [ ] Rotacao de secrets que passaram pelo chat — PENDENTE (task T47)
-[ ] Retry falhas transientes 429/5xx — PENDENTE (task T58)
+[x] Retry falhas transientes 429/5xx — 2026-04-23 (T58)
 
 Links:
 - GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard

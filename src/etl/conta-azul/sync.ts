@@ -139,13 +139,32 @@ async function fetchAuth(
     'User-Agent': USER_AGENT,
   });
 
-  const resp = await fetch(url, { headers: makeHeaders(token) });
-  if (resp.status !== 401) return resp;
+  const MAX_RETRIES = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+    const resp = await fetch(url, { headers: makeHeaders(attempt === 1 ? token : await tokenManager.getAccessToken()) });
 
-  // Force refresh and retry once.
-  await tokenManager.refresh();
-  const freshToken = await tokenManager.getAccessToken();
-  return fetch(url, { headers: makeHeaders(freshToken) });
+    // 401 → force refresh and retry (existing logic)
+    if (resp.status === 401 && attempt === 1) {
+      await tokenManager.refresh();
+      continue;
+    }
+
+    // Transient errors (429, 5xx) → retry with backoff
+    if ((resp.status === 429 || resp.status >= 500) && attempt <= MAX_RETRIES) {
+      const delayMs = resp.status === 429 ? 10_000 : 1000 * Math.pow(2, attempt - 1);
+      console.log(
+        `  ⏳ [conta-azul] ${resp.status} on attempt ${attempt}/${MAX_RETRIES + 1}, ` +
+        `retrying in ${Math.round(delayMs / 1000)}s...`,
+      );
+      await sleep(delayMs);
+      continue;
+    }
+
+    return resp;
+  }
+
+  // Shouldn't reach here, but safety fallback
+  return fetch(url, { headers: makeHeaders(await tokenManager.getAccessToken()) });
 }
 
 // ------------------------------------------------------------

@@ -95,13 +95,39 @@ async function paginateAll<T>(
   const allItems: T[] = [];
   let page = 1;
 
+  const MAX_RETRIES = 3;
+
   while (true) {
-    const result = await fetcher(page);
-    allItems.push(...result.items);
+    let result: { items: T[]; pagination: { nextUrl: string | null }; rateLimit: { remaining: number } };
 
-    log(`  page ${page}: ${result.items.length} items (total so far: ${allItems.length}, rate remaining: ${result.rateLimit.remaining})`);
+    // Retry transient errors (429, 5xx, network) with backoff
+    let lastErr: unknown;
+    let fetched = false;
+    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+      try {
+        result = await fetcher(page);
+        fetched = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+        const isTransient = err instanceof Error && (
+          err.message.includes('429') || err.message.includes('5') ||
+          err.constructor.name === 'RateLimitError' ||
+          (err.constructor.name === 'HttpError' && 'status' in err && ((err as { status: number }).status === 0 || (err as { status: number }).status >= 500))
+        );
+        if (!isTransient || attempt > MAX_RETRIES) throw err;
+        const delayMs = 1000 * Math.pow(2, attempt - 1);
+        log(`  ⏳ page ${page} attempt ${attempt}/${MAX_RETRIES + 1} failed, retrying in ${Math.round(delayMs / 1000)}s...`);
+        await sleep(delayMs);
+      }
+    }
+    if (!fetched) throw lastErr;
 
-    if (result.pagination.nextUrl === null || result.items.length === 0) {
+    allItems.push(...result!.items);
+
+    log(`  page ${page}: ${result!.items.length} items (total so far: ${allItems.length}, rate remaining: ${result!.rateLimit.remaining})`);
+
+    if (result!.pagination.nextUrl === null || result!.items.length === 0) {
       break;
     }
 
@@ -110,8 +136,8 @@ async function paginateAll<T>(
       break;
     }
 
-    if (result.rateLimit.remaining <= RATE_LIMIT_THRESHOLD) {
-      log(`  ⏸ rate limit low (${result.rateLimit.remaining}), cooling down ${RATE_LIMIT_COOLDOWN_MS}ms...`);
+    if (result!.rateLimit.remaining <= RATE_LIMIT_THRESHOLD) {
+      log(`  ⏸ rate limit low (${result!.rateLimit.remaining}), cooling down ${RATE_LIMIT_COOLDOWN_MS}ms...`);
       await sleep(RATE_LIMIT_COOLDOWN_MS);
     }
 

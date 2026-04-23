@@ -142,3 +142,58 @@ async function safeTextParse(response: Response): Promise<string | null> {
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
+
+// ------------------------------------------------------------
+// Retry wrapper for transient failures (429, 5xx, timeout)
+// ------------------------------------------------------------
+
+function isTransient(error: unknown): boolean {
+  if (error instanceof RateLimitError) return true;
+  if (error instanceof HttpError) return error.status === 0 || error.status >= 500;
+  return false;
+}
+
+function getRetryDelay(error: unknown, attempt: number): number {
+  if (error instanceof RateLimitError) {
+    return Math.min(error.retryAfterMs, 60_000);
+  }
+  // Exponential backoff: 1s, 2s, 4s
+  return Math.min(1000 * Math.pow(2, attempt - 1), 8_000);
+}
+
+const DEFAULT_MAX_RETRIES = 3;
+
+/**
+ * Generic retry wrapper for any async operation that may hit transient errors.
+ * Use this in ETL sync loops to wrap individual API calls.
+ *
+ * Retries on: 429 (rate limit), 5xx (server error), timeout/network (status 0).
+ * Does NOT retry on: 401, 404, 400, ValidationError.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts?: { maxRetries?: number; label?: string },
+): Promise<T> {
+  const maxRetries = opts?.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const label = opts?.label ?? '';
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt > maxRetries || !isTransient(error)) throw error;
+
+      const delayMs = getRetryDelay(error, attempt);
+      const tag = error instanceof RateLimitError ? '429' :
+        error instanceof HttpError ? `${error.status}` : 'network';
+      console.log(
+        `  ⏳ ${label ? `[${label}] ` : ''}${tag} on attempt ${attempt}/${maxRetries + 1}, ` +
+        `retrying in ${Math.round(delayMs / 1000)}s...`,
+      );
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
