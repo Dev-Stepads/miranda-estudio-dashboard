@@ -31,8 +31,8 @@ export interface RateLimitUsage {
   totalCpuTime: number;
   /** 0-100 — wall time used. */
   totalTime: number;
-  /** Seconds until the throttle clears. 0 when not throttled. */
-  estimatedRegainSeconds: number;
+  /** Minutes until the throttle clears. 0 when not throttled. */
+  estimatedRegainMinutes: number;
 }
 
 export interface RateLimitDecision {
@@ -54,12 +54,12 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitDecision {
 
   const usage = mergeWorstCase(buc, aau);
 
-  // Hard throttle: Meta told us exactly how long to wait.
-  if (usage.estimatedRegainSeconds > 0) {
+  // Hard throttle: Meta told us exactly how long to wait (value is in minutes).
+  if (usage.estimatedRegainMinutes > 0) {
     return {
       usage,
       shouldBackoff: true,
-      sleepMs: usage.estimatedRegainSeconds * 1000,
+      sleepMs: usage.estimatedRegainMinutes * 60 * 1000,
     };
   }
 
@@ -109,19 +109,19 @@ function mergeWorstCase(...groups: RawBucEntry[][]): RateLimitUsage {
   let callCount = 0;
   let totalCpuTime = 0;
   let totalTime = 0;
-  let estimatedRegainSeconds = 0;
+  let estimatedRegainMinutes = 0;
 
   for (const group of groups) {
     for (const entry of group) {
       callCount = Math.max(callCount, entry.call_count ?? 0);
       totalCpuTime = Math.max(totalCpuTime, entry.total_cputime ?? 0);
       totalTime = Math.max(totalTime, entry.total_time ?? 0);
-      estimatedRegainSeconds = Math.max(
-        estimatedRegainSeconds,
+      estimatedRegainMinutes = Math.max(
+        estimatedRegainMinutes,
         entry.estimated_time_to_regain_access ?? 0,
       );
     }
   }
 
-  return { callCount, totalCpuTime, totalTime, estimatedRegainSeconds };
+  return { callCount, totalCpuTime, totalTime, estimatedRegainMinutes };
 }

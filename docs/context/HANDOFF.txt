@@ -4,7 +4,7 @@ HANDOFF — Dashboard Miranda Studio
 
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-23
-RESPONSAVEL: sessao 2026-04-23b — Matheus + Claude
+RESPONSAVEL: sessao 2026-04-23c — Matheus + Claude (handoff pro socio)
 BRANCH: main
 
 ========================================================
@@ -13,73 +13,94 @@ LEIA ISTO PRIMEIRO — RESUMO PRA QUEM ESTA ASSUMINDO
 
 O DASHBOARD ESTA PRONTO E EM PRODUCAO.
 URL: https://miranda-estudio-dashboard.vercel.app
-Login: mirandaestudio / (senha no .env.local ou cofre Stepads)
+Login: mirandaestudio / (senha no .env.local — pedir ao Matheus)
 
-NAO HA CODIGO PENDENTE. Todas as tasks de codigo estao concluidas.
-O que falta sao 2 acoes operacionais que um humano precisa fazer
-(detalhes na secao 2 abaixo):
-  1. T46 — Criar cofre de senhas (1Password ou Bitwarden)
-  2. T47 — Rotacionar secrets que passaram pelo chat
+TODO O CODIGO ESTA CONCLUIDO. 6 rodadas de auditoria foram feitas
+nesta sessao, resultando em 31 fixes (T53-T80). O codebase esta com:
+  - TypeScript: 0 erros
+  - Testes: 134 passando
+  - Build: limpo
+  - Dados: 42 meses validados contra API Conta Azul (R$ 0,00 diff)
 
-DADOS: 100% validados. 42 meses de Conta Azul cruzados com a API
-(R$ 0,00 de diferenca em TODOS). Nuvemshop match exato nos centavos.
-Meta Ads match exato com a API.
+O QUE VOCE (SOCIO) PRECISA FAZER:
+  1. T46 — Criar cofre de senhas (ver secao 2 abaixo)
+  2. T47 — Rotacionar secrets que passaram pelo chat (ver secao 2)
+  3. Rodar 1 migration no Supabase (ver secao 3)
 
 SE VOCE PRECISA RODAR LOCAL:
-  1. git pull origin main
+  1. git clone https://github.com/Dev-Stepads/miranda-estudio-dashboard.git
+     (ou git pull se ja tem o repo)
   2. npm install
-  3. Pegar .env.local do Matheus (ou do cofre quando T46 estiver feita)
+  3. Pegar .env.local com o Matheus (contem todas as credenciais)
+     IMPORTANTE: precisa ter SESSION_SECRET no .env.local. Se nao tiver:
+     node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+     e adicionar como SESSION_SECRET=<valor gerado>
   4. npm run dev → localhost:3000
-  5. Login com as credenciais do DASHBOARD_LOGIN/DASHBOARD_PASSWORD
+  5. Login: mirandaestudio / (valor de DASHBOARD_PASSWORD no .env.local)
+
+LINKS IMPORTANTES:
+  - Dashboard:  https://miranda-estudio-dashboard.vercel.app
+  - GitHub:     https://github.com/Dev-Stepads/miranda-estudio-dashboard
+  - Supabase:   https://pntlbaffrelxymiodelj.supabase.co
+  - Vercel:     https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
 
 --------------------------------------------------------
-0. ULTIMAS 2 SESSOES (2026-04-22/23) — O QUE FOI FEITO
+0. O QUE FOI FEITO NESTA SESSAO (2026-04-23, 31 fixes)
 --------------------------------------------------------
 
-SESSAO 2026-04-22/23 (14 fixes — dados + seguranca):
-  Auditoria completa de integridade de dados. Destaques:
-  - T49 RESOLVIDO: gap de R$ 3.010 em marco era do ETL antigo
-  - T52: sale_items.quantity INT → NUMERIC (items fracionarios)
-  - T44: 3 webhooks LGPD implementados com validacao HMAC
-  - 152 sales fantasma (gross=0) removidas do banco
-  - Ranking de produtos corrigido (desconto proporcional)
-  - Login movido para env vars (SESSION_HMAC + rate limiting)
-  - Sessao HMAC com assinatura criptografica
-  Commit: 4aba806
+Esta sessao fez 6 rodadas de auditoria automatizada de todo o
+codebase (frontend, ETL, infra, seguranca). 31 issues encontrados
+e resolvidos, organizados por categoria:
 
-SESSAO 2026-04-23b (12 fixes — seguranca + resiliencia + qualidade):
-  Auditoria automatizada de todo o codebase. Destaques:
+SEGURANCA (5 fixes):
+  T53 — SESSION_SECRET separado do password
+        Sessao HMAC usava DASHBOARD_PASSWORD como chave. Se a senha
+        vazasse, todas as sessoes ficavam forjaveis. Agora usa secret
+        criptografico separado (SESSION_SECRET).
+  T54 — Middleware migrado para Web Crypto API
+        Era Node crypto, incompativel com Edge Runtime do Vercel.
+  T55 — LGPD: raw tables incluidas na redacao
+        Webhook customers-redact agora deleta raw_nuvemshop_orders
+        do cliente (antes ficava PII no payload JSON).
+  T79 — Rate limiter: cleanup de IPs expirados
+        Map crescia infinitamente. Agora limpa entries expiradas.
+  T80 — Flash de tema branco prevenido
+        Script inline no <head> aplica dark mode antes do body.
 
-  SEGURANCA:
-  - T53: SESSION_SECRET separado do password (antes usava a senha
-    do dashboard como chave HMAC — se vazasse, sessoes forjaveis)
-  - T54: Middleware migrado para Web Crypto API (era Node crypto,
-    incompativel com Edge Runtime do Vercel)
-  - T55: LGPD webhooks agora limpam raw tables (antes deletavam
-    customer mas deixavam PII nos payloads JSON brutos)
+RESILIENCIA DO ETL (6 fixes):
+  T56 — Error handling em raw payload upserts (3 pipelines)
+  T57 — Retry com backoff no save do refresh token CA
+  T58 — Retry com backoff em falhas transientes (429/5xx/timeout)
+        nas 3 pipelines (CA, NS, Meta Ads)
+  T59 — Checkout abandonado com batching (era N+1)
+  T76 — Meta Ads rate-limit: era 60x curto demais
+        estimated_time_to_regain_access e em MINUTOS, codigo tratava
+        como segundos. Podia causar ban da conta Meta.
+  T77 — Checkout schema: .nullable() nos contact fields
 
-  RESILIENCIA DO ETL:
-  - T56: Error handling em upserts de raw payloads (antes engoliam
-    erros silenciosamente nas 3 pipelines)
-  - T57: Retry com backoff no save do refresh token CA (token
-    single-use — se salvar falhava, perdia o token pra sempre)
-  - T58: Retry com backoff exponencial em falhas transientes
-    (429/5xx/timeout) nas 3 pipelines (CA, NS, Meta)
-  - T59: Checkout abandonado com batching (era N+1, agora batches)
+FRONTEND / UX (7 fixes):
+  T60 — Desconto proporcional sem perda de centavos
+  T62 — Error boundary + loading skeleton no dashboard
+  T66 — Gridlines dos graficos adaptam a dark/light mode
+  T70 — SimpleTable com padding responsivo (mobile)
+  T71 — Dark mode variants em KPI badges e recurrence card
+  T72 — Period filter valida from <= to + botao disabled
+  T74 — Empty state no comparativo mensal quando ano sem dados
 
-  QUALIDADE:
-  - T60: Arredondamento de desconto sem perda de centavos
-  - T61: View de geografia com filtro IS NOT NULL
-  - T62: Error boundary + loading skeleton no dashboard
-  - T64: TypeScript zero erros (7 corrigidos em scripts)
-  Commits: ab7f68b + f35da8b
+QUALIDADE (5 fixes):
+  T61 — View geografia com filtro IS NOT NULL
+  T64 — TypeScript zero erros (7 corrigidos em scripts)
+  T68 — Index em sales.source (performance de queries)
+  T75 — Aria-labels nos inputs de data (acessibilidade)
+  T78 — Fallback de nome de produto em checkouts abandonados
+  T73 — Thumbnail de criativo com fallback React state
 
-  VARIAVEIS DE AMBIENTE ADICIONADAS NESTA SESSAO:
-    SESSION_SECRET (ja na Vercel Production + Preview)
-    Gerar com: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+VARIAVEIS DE AMBIENTE NOVAS (ja na Vercel):
+  SESSION_SECRET — chave HMAC para sessoes (separada do password)
 
-  MIGRATIONS APLICADAS NESTA SESSAO:
-    20260423140000_fix_geografia_null_filter.sql (ja rodada no Supabase)
+MIGRATIONS DESTA SESSAO (AMBAS JA RODADAS NO SUPABASE):
+  20260423140000_fix_geografia_null_filter.sql
+  20260423150000_add_sales_source_index.sql
 
 --------------------------------------------------------
 0a. O QUE FOI FEITO NESTA SESSAO (14 fixes)

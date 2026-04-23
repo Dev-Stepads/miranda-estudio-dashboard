@@ -13,7 +13,11 @@ const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
   const entry = failedAttempts.get(ip);
-  if (!entry || now > entry.resetAt) return false;
+  if (!entry) return false;
+  if (now > entry.resetAt) {
+    failedAttempts.delete(ip);
+    return false;
+  }
   return entry.count >= MAX_ATTEMPTS;
 }
 
@@ -21,6 +25,12 @@ function recordFailedAttempt(ip: string): void {
   const now = Date.now();
   const entry = failedAttempts.get(ip);
   if (!entry || now > entry.resetAt) {
+    // Periodically purge expired entries to prevent memory growth
+    if (failedAttempts.size > 1000) {
+      for (const [k, v] of failedAttempts) {
+        if (now > v.resetAt) failedAttempts.delete(k);
+      }
+    }
     failedAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
   } else {
     entry.count++;

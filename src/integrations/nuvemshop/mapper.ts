@@ -177,7 +177,7 @@ export function mapCheckoutToCanonicalAbandoned(
 
   // Extract products list
   const products = (raw.products ?? []).map((p) => ({
-    name: extractLocalized(p.name) ?? String(p.product_id ?? '?'),
+    name: extractLocalized(p.name) || String(p.product_id ?? '?'),
     quantity: p.quantity ?? 1,
     price: safeParseMoney(p.price),
     variant_id: p.variant_id ?? null,

@@ -1240,3 +1240,23 @@ DECISÕES REGISTRADAS
             correspondentes em batches de 500, (3) deleta
             raw_nuvemshop_customers. store-redact ja deletava tudo.
   Impacto:  Redacao LGPD agora cobre 100% dos dados armazenados.
+
+[2026-04-23c] [BUG] Meta Ads rate-limit era 60x curto demais (T76)
+  Contexto: O header `estimated_time_to_regain_access` do Meta retorna
+            valor em MINUTOS (conforme docs oficiais). O codigo tratava
+            como SEGUNDOS: `sleepMs = value * 1000`. Se Meta dizia
+            "aguarde 5 min", o ETL esperava 5 segundos e tentava de
+            novo, martelando a API.
+  Decisao:  Corrigido para `sleepMs = value * 60 * 1000`. Campo
+            renomeado de `estimatedRegainSeconds` para
+            `estimatedRegainMinutes` para evitar confusao futura.
+  Impacto:  ETL agora respeita rate-limit do Meta corretamente.
+            Previne risco de ban da conta de anuncios.
+
+[2026-04-23c] [UX] Dark mode: flash de tema branco prevenido (T80)
+  Contexto: Usuarios com dark mode viam flash branco no carregamento
+            porque o tema so era aplicado apos hidratacao do React.
+  Decisao:  Inline script no <head> do layout detecta localStorage
+            + prefers-color-scheme e aplica classe `dark` no <html>
+            antes do body renderizar. Zero dependencia de React.
+  Impacto:  Transicao suave, sem flash. Funciona com e sem JS.

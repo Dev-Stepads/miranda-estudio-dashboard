@@ -459,3 +459,44 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
 [x] T64 TypeScript errors nos scripts corrigidos — 2026-04-23
          7 erros em 5 scripts de diagnostico resolvidos. tsc --noEmit
          agora passa limpo.
+
+[x] T66 Gridlines dos graficos adaptam a dark/light mode — 2026-04-23
+         Hook useDarkMode + cor dinamica nos 4 componentes de grafico.
+
+[x] T68 Index em sales.source — 2026-04-23
+         Migration 20260423150000. Ja aplicada no Supabase.
+
+[x] T70 SimpleTable com padding responsivo — 2026-04-23
+         px-3 sm:px-6 em todas as celulas (antes px-6 fixo).
+
+[x] T71 Dark mode variants em KPI badges e recurrence — 2026-04-23
+         Adicionadas variantes dark: em emerald/red badges.
+
+[x] T72 Period filter valida from <= to — 2026-04-23
+         Botao disabled quando datas invalidas ou invertidas.
+
+[x] T73 Thumbnail de criativo com fallback React state — 2026-04-23
+         onError com useState (substitui DOM manipulation fragil).
+
+[x] T74 Empty state no comparativo mensal — 2026-04-23
+         Mensagem "Sem dados para {ano}" quando ano vazio.
+
+[x] T75 Aria-labels nos inputs de data — 2026-04-23
+         "Data de inicio" e "Data de fim" para acessibilidade.
+
+[x] T76 Meta Ads rate-limit corrigido (60x) — 2026-04-23
+         estimated_time_to_regain_access e minutos, nao segundos.
+         Renomeado estimatedRegainSeconds → estimatedRegainMinutes.
+         Sleep corrigido de *1000 para *60*1000.
+
+[x] T77 Checkout schema .nullable() — 2026-04-23
+         contact_name e contact_phone com .nullable() no Zod.
+
+[x] T78 Fallback nome produto checkout — 2026-04-23
+         extractLocalized(p.name) || fallback (era ?? que nao pegava '').
+
+[x] T79 Rate limiter cleanup memory leak — 2026-04-23
+         failedAttempts.delete() em entries expiradas + purge periodico.
+
+[x] T80 Flash de dark mode prevenido — 2026-04-23
+         Inline script no <head> aplica classe dark antes do body.

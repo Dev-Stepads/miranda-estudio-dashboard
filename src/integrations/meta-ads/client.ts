@@ -152,7 +152,7 @@ export class MetaAdsClient {
       callCount: 0,
       totalCpuTime: 0,
       totalTime: 0,
-      estimatedRegainSeconds: 0,
+      estimatedRegainMinutes: 0,
     };
 
     while (nextUrl !== null) {
@@ -206,7 +206,7 @@ export class MetaAdsClient {
       callCount: 0,
       totalCpuTime: 0,
       totalTime: 0,
-      estimatedRegainSeconds: 0,
+      estimatedRegainMinutes: 0,
     };
 
     while (nextUrl !== null) {
