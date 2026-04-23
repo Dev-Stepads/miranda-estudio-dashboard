@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-16b (T51 COMPLETO — sync historico CA 2023-2025 finalizado, 9379 vendas / R$ 3.678.248,49 no banco, diff R$ 0,00 vs API; T52 novo aberto: coluna quantity precisa virar NUMERIC)
+Ultima atualizacao: 2026-04-23 (sessao 2026-04-22/23: T52 aplicada + T44 LGPD implementada + T49 resolvida + 152 sales gross=0 limpas + ranking produtos corrigido + login movido pra env)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -78,27 +78,23 @@ Etapa 8 — QA: CONCLUIDA (2026-04-14)
          [x] Seed data limpa (20 sales + 32 items + 5 abandoned + 35 meta)
          [x] 134 tests passando, build limpo
 Etapa 9 — Divida tecnica: PARCIAL
-         [~] T44 LGPD webhooks — stubs respondendo 200 (falta implementacao real)
+         [x] T44 LGPD webhooks — IMPLEMENTADOS (2026-04-23)
+             3 rotas com validacao HMAC + logica real de export/delete.
+             customers-data-request, customers-redact, store-redact.
          [x] T45 NF-e detail — RESOLVIDO
          [ ] T46 cofre de senhas — pendente
          [ ] T47 rotacao secrets — pendente
          [x] T48 scheduler — RESOLVIDO (cron 30 min, 3 fontes, fail-fast)
+         [x] T49 Gap R$ 3.010 Marco 2026 — RESOLVIDO (2026-04-23)
+             Gap era do ETL antigo (recebiveis). ETL atual (vendas API)
+             bate R$ 0,00 em todos os 42 meses vs API totais.aprovado.
+             152 sales com gross=0 limpas + ETL filtro adicionado.
+             Ranking de produtos corrigido (desconto proporcional em
+             9.171 sales / 15.868 items).
          [x] T50 fix % KPI cards — RESOLVIDO (2026-04-15b)
-             getPreviousPeriod() novo helper + 3 pages atualizadas +
-             percentChange null quando previous=0. Validado vs API CA:
-             dados historicos batem cent a cent, nao ha inflacao no ETL.
-         [x] T51 sync historico CA + fix % Comparativo Mensal — CONCLUIDO (2026-04-16b)
-             Parte A (% Comparativo Mensal): CONCLUIDA na sessao 2026-04-16.
-             Parte B (sync historico): CONCLUIDA na sessao 2026-04-16b
-             (outra maquina). 6 chunks de 6 meses, 9379 sales / R$
-             3.678.248,49. Diff R$ 0,00 vs API em todos os chunks.
-             Dashboard Comparativo Mensal agora cobre 2023-2026 (41 meses).
-             Script src/scripts/validate-historic-ca.ts reusavel.
-         [ ] T52 Migrar sale_items.quantity INT → NUMERIC(12,3) — NOVO
-             Exposicao 2026-04-16b durante sync historico: 4 items
-             (de ~18k) com quantidade fracionaria (2.04, 2.7, 3.2, 7.02
-             kg/L) falharam insert porque coluna e INT. Sales OK, apenas
-             items pontuais perdidos (0.02%). Nao bloqueante.
+         [x] T51 sync historico CA — CONCLUIDO (2026-04-16b)
+         [x] T52 quantity INT → NUMERIC — CONCLUIDO (2026-04-22/23)
+             Migration aplicada + resync 2023-H2 e 2025-H1 completos.
 
 --------------------------------------------------------
 INFRAESTRUTURA
@@ -127,13 +123,15 @@ INFRAESTRUTURA
 [x] Deploy Vercel production — LIVE (2026-04-12)
     https://miranda-estudio-dashboard.vercel.app
 [x] Migration raw table dedup + unique index — APLICADA (2026-04-12)
-[x] LGPD webhook stubs (3 endpoints) — respondendo 200 (2026-04-12)
+[x] LGPD webhooks (3 endpoints) — IMPLEMENTADOS com HMAC (2026-04-23)
 [x] Customer linkage fix (customer object vs customer_id) — 2026-04-12
 [x] Mobile responsive — 2026-04-12
 [x] Date picker custom + filtro persiste entre abas — 2026-04-12
+[x] Sessao HMAC + rate limiting — 2026-04-23
+[x] Indexes: sales.source_sale_id + customers.state — 2026-04-23
+[x] Views quantity ::numeric(12,2) — 2026-04-23
 [ ] Cofre de senhas Stepads (1P ou Bitwarden) — PENDENTE (task T46)
 [ ] Rotacao de secrets que passaram pelo chat — PENDENTE (task T47)
-[ ] Deploy do frontend no Vercel — PENDENTE (codigo pronto, falta push)
 
 Links:
 - GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard
@@ -229,56 +227,28 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
-- T49 ETL CONTA AZUL — reescrita completa 2026-04-14 + fix TZ
-  2026-04-15. Marco 2026 agora: R$ 79.934,40 (gap -R$ 3.010,39 vs
-  target R$ 82.944,79 da Miranda). Estado dos fixes:
-    [x] Reescrito de /v1/notas-fiscais para /v1/venda/busca (2026-04-14)
-    [x] Abordagem hibrida recebiveis+vendas (2026-04-14d, sem centro
-        de custo = loja fisica)
-    [x] Fix TZ sale_date (2026-04-15) — gravava UTC midnight, view
-        fazia at time zone SP shiftando 3h pra tras. Fix: gravar
-        "T03:00:00Z". 2548 sales CA atualizados no banco (+3h) e 194
-        sales fantasma com gross=0 deletados.
-  GAP RESIDUAL R$ 3.010,39 — hipoteses (nao resolvidas):
-    - Morada (liq R$ 3.543,51 / bruto R$ 7.728) — proximo mas nao exato
-    - Recebiveis sem "Venda N" na descricao (regex filtra)
-    - Miranda pode usar data de pagamento, nao de vencimento
-  Bloqueio pra resolver: creds CA no .env.local estao vazias. Sem
-  acesso a API, nao da pra diagnosticar o gap exato. Scripts prontos
-  em src/scripts/debug-marco.ts (requer creds) e debug-marco-supabase.ts
-  (so Supabase, ja foi usado).
-  Ver HANDOFF secao 0 (sessao 2026-04-15) + DECISOES 2026-04-15.
-- META ADS: RESOLVIDO. Todos os 6 passos operacionais executados
-  (2026-04-13b). Dados reais fluindo. 2 bugfixes aplicados (purchases
-  5x overcount + seed data ficticia). Falta apenas git push (passo 6).
+- T49 ETL CONTA AZUL — RESOLVIDO (2026-04-23). Auditoria completa
+  cruzou 42 meses com API CA: R$ 0,00 diff em TODOS. Marco 2026
+  bate exato com Miranda (Loja R$ 82.944,79). Gap anterior era do
+  ETL de recebiveis (substituido pelo ETL de vendas API em 2026-04-14).
+  152 sales com gross=0 limpas + ETL filtro adicionado. Ranking de
+  produtos corrigido (desconto proporcional em 15.868 items).
+- META ADS: RESOLVIDO.
 - COFRE DE SENHAS STEPADS (bloqueio operacional): task T46 pendente.
-- LGPD WEBHOOKS (bloqueio pre-producao): task T44 pendente.
+- LGPD WEBHOOKS: RESOLVIDO (T44, 2026-04-23). 3 rotas implementadas
+  com validacao HMAC + logica real.
 - OWNERSHIP DA APP META (divida tecnica): a app Marketing esta sob
-  conta FB "Angelo Meirelles". Se essa conta for perdida, a app
-  fica orfa (token continua funcionando ate rotacao manual).
-  Mitigacao: adicionar segundo admin FB em Settings > Roles quando
-  houver 2a conta disponivel. Ver DECISOES 2026-04-13.
+  conta FB "Angelo Meirelles". Mitigacao pendente.
 
 --------------------------------------------------------
 PROXIMO MARCO
 --------------------------------------------------------
 Frentes abertas, por prioridade:
 
-1. Webhooks LGPD (T44) — critico antes de producao:
-   * 3 API routes Next.js
-   * Validacao HMAC + logica de DELETE/export
-
-2. Cofre de senhas (T46) — resolver antes da proxima pessoa do
+1. Cofre de senhas (T46) — resolver antes da proxima pessoa do
    revezamento
 
-3. Rotacao de secrets (T47) — META + SUPABASE service_role passaram
+2. Rotacao de secrets (T47) — META + SUPABASE service_role passaram
    pelo chat
 
-4. T52 Migrar sale_items.quantity INT → NUMERIC(12,3) — descoberto
-   durante sync historico 2026-04-16b. Nao bloqueante (0.02% dos
-   items afetados), mas vale resolver antes que vire problema maior.
-
-5. T49 gap residual R$ 3.010 em Marco 2026 — pendente desde sessao
-   2026-04-15 (hipoteses: Morada, recebiveis sem "Venda N", criterio
-   de data diferente). Pode ser investigado agora que ha comparativo
-   historico.
+3. git push + deploy Vercel (todos os fixes da sessao 2026-04-22/23)

@@ -248,11 +248,17 @@ export async function syncContaAzul(
   result.vendasAfterIdDedup = uniqueVendas.length;
 
   // ============================================================
-  // PHASE 2: Filter situacao ∈ {APROVADO, FATURADO}
+  // PHASE 2: Filter situacao ∈ {APROVADO, FATURADO} + total > 0
   // ============================================================
   const approvedOrInvoiced = uniqueVendas.filter((v) => {
     const sit = v.situacao?.nome;
-    return sit === 'APROVADO' || sit === 'FATURADO';
+    if (sit !== 'APROVADO' && sit !== 'FATURADO') return false;
+    // Skip vendas with total=0 — these are exchanges, bonuses, or
+    // cancelled sales that CA keeps as "approved" with zero value.
+    // They inflate order counts and deflate avg ticket. The API
+    // confirms total=0 on the detail endpoint too (validated 2026-04-22).
+    if (v.total <= 0) return false;
+    return true;
   });
   result.vendasAfterSituacaoFilter = approvedOrInvoiced.length;
 
@@ -451,7 +457,7 @@ async function processVenda(
   result.salesUpserted++;
 
   if (vendaItems.length > 0) {
-    const items = vendaItems
+    const rawItems = vendaItems
       .filter((item) => item.quantidade > 0)
       .map((item) => ({
         sale_id: saleId,
@@ -461,6 +467,17 @@ async function processVenda(
         unit_price: item.valor,
         total_price: item.valor * item.quantidade,
       }));
+
+    // Distribute order-level discounts proportionally across items so that
+    // sum(item.total_price) = grossRevenue. Without this, product rankings
+    // show pre-discount revenue (inflated). See audit 2026-04-22.
+    const itemsRawSum = rawItems.reduce((s, i) => s + i.total_price, 0);
+    const items = itemsRawSum > 0 && Math.abs(itemsRawSum - grossRevenue) > 0.01
+      ? rawItems.map((item) => ({
+          ...item,
+          total_price: Math.round((item.total_price / itemsRawSum) * grossRevenue * 100) / 100,
+        }))
+      : rawItems;
 
     await supabase.from('sale_items').delete().eq('sale_id', saleId);
     const { error: itemErr } = await supabase.from('sale_items').insert(items);

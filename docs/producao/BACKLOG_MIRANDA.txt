@@ -217,15 +217,12 @@ ETAPA 8 — QA E HOMOLOGACAO
 ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
 --------------------------------------------------------
 
-[ ] T44 Implementar webhooks LGPD da Nuvemshop
-         Criticidade: ALTA (compliance legal LGPD)
-         3 URLs placeholder cadastradas mas rotas NAO existem no Vercel.
-         O que fazer:
-           - Criar 3 Next.js API routes
-           - Validar HMAC do webhook
-           - store-redact: DELETE dados da loja
-           - customers-redact: DELETE dados do customer
-           - customers-data-request: retornar JSON com dados do customer
+[x] T44 Implementar webhooks LGPD da Nuvemshop — 2026-04-23
+         3 rotas implementadas com validacao HMAC-SHA256 + logica real:
+         - customers-data-request: export JSON (customer+sales+items+checkouts)
+         - customers-redact: anonimiza sales + deleta checkouts/raw/customer
+         - store-redact: deleta TUDO da Nuvemshop (preserva CA e Meta)
+         Todas idempotentes, respondem <3s, rejeitam 401 sem HMAC valido.
 
 [x] T45 Descobrir endpoint de DETALHE de NF-e do Conta Azul — 2026-04-12
          RESOLVIDO: GET /v1/notas-fiscais/{chave_acesso} retorna XML
@@ -254,8 +251,12 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
          no Supabase (resolve rotacao em CI/cron).
          Migration: supabase/migrations/20260412150000_etl_config_table.sql
 
-[~] T49 🚨 CRITICO — ETL Conta Azul puxa so NF-e, perde 75% das vendas
-         PARCIALMENTE RESOLVIDO (2026-04-14 + 2026-04-15):
+[x] T49 ETL Conta Azul — RESOLVIDO (2026-04-23)
+         Auditoria 2026-04-22/23: 42 meses cruzados com API CA, R$ 0,00
+         diff em TODOS. Marco 2026 = R$ 82.944,79 = target Miranda EXATO.
+         152 sales gross=0 limpas + ETL filtro total<=0. Ranking de
+         produtos corrigido (desconto proporcional em 15.868 items).
+         HISTORICO (parcialmente resolvido em 2026-04-14 + 2026-04-15):
          ETL reescrito de /v1/notas-fiscais para /v1/venda/busca + recebiveis.
          Resultado: 496 vendas + 900 itens (vs 110 NF-e anteriores).
          Cobertura: 20 dias/mes (vs 4 dias antes).
@@ -403,24 +404,13 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
 
            Arquivos novos: src/scripts/validate-historic-ca.ts.
 
-[ ] T52 Mudar sale_items.quantity de INT pra NUMERIC
-         Origem: sync historico CA (T51 parte B, 2026-04-16) expos
-         que CA permite itens fracionarios (ex: "2,04 kg de material"
-         em anuncios de producao). Schema atual 20260411120000 tem
-         `quantity int not null check (quantity > 0)` — inserts falham
-         com "invalid input syntax for type integer: '2.04'".
+[x] T52 Mudar sale_items.quantity de INT pra NUMERIC — 2026-04-22
+         Migration: supabase/migrations/20260422120000_sale_items_quantity_numeric.sql
+         ALTER TABLE sale_items ALTER COLUMN quantity TYPE numeric(12,3);
+         CHECK constraint recriada. Views com sum(si.quantity)::int nao
+         precisam mudar (::int arredonda na agregacao, semantica preservada).
 
-         Casos observados: 4 items em ~18k (0.02%) — 3.2, 2.04, 2.7, 7.02.
-         Todos em vendas #4835, #5159, #5181, #10430 (2023-H2 e 2025-H1).
-
-         Fix proposto (migration):
-           ALTER TABLE sale_items ALTER COLUMN quantity TYPE numeric(12,3);
-         + atualizar views que fazem sum(si.quantity)::int — mudar pra
-           numeric ou manter ::int no agregado (views nao precisam mudar,
-           mas vale confirmar).
-
-         Apos migration, rodar um sync adicional pros meses afetados pra
-         recuperar os 4 items (upsert de sale substitui os itens).
-
-         Nao eh bloqueante — ranking de produtos continua funcionando,
-         so perde 4 entradas.
+         PENDENTE APOS APLICAR MIGRATION NO SUPABASE:
+         Rodar resync dos 2 chunks afetados pra recuperar os 4 items:
+           npm run sync:contaazul -- --from 2023-07-01 --to 2023-12-31
+           npm run sync:contaazul -- --from 2025-01-01 --to 2025-06-30

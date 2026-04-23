@@ -5,12 +5,19 @@
  * Server Components run ONLY on the server — the key never reaches
  * the browser. The dashboard is internal (no public API exposed).
  *
- * Reads from process.env which Next.js populates from .env.local.
+ * Singleton: the client is created once and reused across all requests
+ * within the same server process. Each page load makes 8+ parallel
+ * queries — without caching, that would create 8 separate client
+ * instances with 8 separate HTTP connection pools.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-export function getSupabase() {
+let _client: SupabaseClient | null = null;
+
+export function getSupabase(): SupabaseClient {
+  if (_client) return _client;
+
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -21,7 +28,9 @@ export function getSupabase() {
     );
   }
 
-  return createClient(url, key, {
+  _client = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  return _client;
 }

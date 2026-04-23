@@ -74,19 +74,24 @@ function toSaoPauloDateStr(d: Date): string {
 }
 
 /** Parse period from searchParams: supports { days } or { from, to } */
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DAYS = 1825; // 5 years
+
 export function parsePeriod(params: { days?: string; from?: string; to?: string }): {
   since: string;
   until: string;
   days: number;
   label: string;
 } {
-  if (params.from && params.to) {
+  if (params.from && params.to && DATE_REGEX.test(params.from) && DATE_REGEX.test(params.to)) {
     const from = new Date(params.from);
     const to = new Date(params.to);
-    const diffDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
-    return { since: params.from, until: params.to, days: diffDays, label: `${params.from} → ${params.to}` };
+    if (!isNaN(from.getTime()) && !isNaN(to.getTime()) && to >= from) {
+      const diffDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+      return { since: params.from, until: params.to, days: diffDays, label: `${params.from} → ${params.to}` };
+    }
   }
-  const days = Math.max(1, Number(params.days ?? '30') || 30);
+  const days = Math.min(MAX_DAYS, Math.max(1, Number(params.days ?? '30') || 30));
   const now = new Date();
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   return {
@@ -212,7 +217,15 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
     byProduct.set(key, existing);
   }
 
+  // Round accumulated values to 2 decimal places to prevent floating-point drift
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   return Array.from(byProduct.values())
+    .map((p) => ({
+      ...p,
+      revenue_total: round2(p.revenue_total),
+      revenue_loja_fisica: round2(p.revenue_loja_fisica),
+      revenue_nuvemshop: round2(p.revenue_nuvemshop),
+    }))
     .sort((a, b) => b.revenue_total - a.revenue_total)
     .slice(0, limit);
 }
@@ -326,8 +339,13 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
     byCustomer.set(row.customer_id, existing);
   }
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   return Array.from(byCustomer.values())
-    .map(c => ({ ...c, avg_ticket: c.orders_count > 0 ? c.total_revenue / c.orders_count : 0 }))
+    .map(c => ({
+      ...c,
+      total_revenue: round2(c.total_revenue),
+      avg_ticket: c.orders_count > 0 ? round2(c.total_revenue / c.orders_count) : 0,
+    }))
     .sort((a, b) => b.total_revenue - a.total_revenue)
     .slice(0, limit);
 }
@@ -499,16 +517,22 @@ export interface MonthlyData {
 export async function fetchMonthlyComparison(months: number = 12): Promise<MonthlyData[]> {
   const supabase = getSupabase();
 
-  // Paginate to get ALL rows (Supabase default limit is 1000)
+  // Compute date floor: (months + 1) months ago, to have 1 extra month
+  // for the changePercent of the oldest displayed month.
+  const floorDate = new Date();
+  floorDate.setMonth(floorDate.getMonth() - months - 1);
+  const floorStr = toSaoPauloDateStr(floorDate);
+
+  // Paginate to get rows from floor date onward (not ALL history)
   const allRows: Array<{ day: string; gross_revenue: number; orders_count: number }> = [];
   let page = 0;
-  const PAGE_SIZE = 1000;
 
   while (true) {
     const { data: batch, error } = await supabase
       .from('v_visao_geral_daily')
       .select('day, gross_revenue, orders_count')
       .eq('source', 'conta_azul')
+      .gte('day', floorStr)
       .order('day', { ascending: true })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -960,19 +984,24 @@ export async function fetchAbandoned(days: number = 30, from?: string, to?: stri
   const supabase = getSupabase();
   const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
 
-  let query = supabase
-    .from('v_nuvemshop_abandonados')
-    .select('*')
-    .order('day', { ascending: false })
-    .gte('day', sinceStr);
-
-  if (to) {
-    query = query.lte('day', to);
+  const all: AbandonedData[] = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('v_nuvemshop_abandonados')
+      .select('*')
+      .order('day', { ascending: false })
+      .gte('day', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('day', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchAbandoned: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...(data as AbandonedData[]));
+    if (data.length < PAGE_SIZE) break;
+    page++;
   }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`fetchAbandoned: ${error.message}`);
-  return (data ?? []) as AbandonedData[];
+  return all;
 }
 
 export interface AbandonedCheckoutDetail {
@@ -996,11 +1025,11 @@ export async function fetchAbandonedDetails(days: number = 30, from?: string, to
     .from('abandoned_checkouts')
     .select('checkout_id, source_checkout_id, created_at, total_amount, contact_name, contact_email, contact_phone, contact_state, products')
     .order('created_at', { ascending: false })
-    .gte('created_at', sinceStr)
+    .gte('created_at', toSPTimestamp(sinceStr))
     .limit(limit);
 
   if (to) {
-    query = query.lte('created_at', to);
+    query = query.lte('created_at', toSPTimestamp(to));
   }
 
   const { data, error } = await query;

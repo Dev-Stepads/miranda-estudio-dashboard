@@ -3,12 +3,207 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-16
-RESPONSAVEL: sessao 2026-04-16b — sync historico CA COMPLETO (outra maquina)
+DATA: 2026-04-23
+RESPONSAVEL: sessao 2026-04-22/23 — Matheus + Claude
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-16b) — T51 PARTE B COMPLETA
+0. SESSAO ATUAL (2026-04-22/23) — RESUMO EXECUTIVO
+--------------------------------------------------------
+Sessao longa focada em integridade de dados e seguranca.
+O dashboard agora esta com dados 100% validados contra a API do
+Conta Azul (42 meses cruzados, R$ 0,00 de diff em TODOS) e com
+todas as dividas tecnicas criticas e altas resolvidas.
+
+ESTADO DO DASHBOARD AGORA:
+  - Dados de faturamento: 100% corretos (42 meses CA validados)
+  - Marco 2026: Loja R$ 82.944,79 = target Miranda EXATO
+  - Nuvemshop: match exato em todos os meses
+  - Meta Ads: funcionando, dados reais fluindo
+  - LGPD: 3 webhooks implementados com validacao HMAC
+  - Autenticacao: sessao assinada com HMAC, rate limiting ativo
+  - Rankings de produtos: corrigidos (desconto proporcional)
+  - Contagem de pedidos: corrigida (152 fantasmas removidos)
+
+--------------------------------------------------------
+0a. O QUE FOI FEITO NESTA SESSAO (14 fixes)
+--------------------------------------------------------
+
+  DADOS (6 fixes):
+  1. T52 — sale_items.quantity: INT → NUMERIC(12,3)
+     Migration aplicada. 4 items fracionarios recuperados.
+     Resync 2023-H2 (1445 sales) + 2025-H1 (1925 sales) completos.
+
+  2. T49 — Gap de R$ 3.010 em Marco: RESOLVIDO
+     Gap era do ETL antigo (recebiveis). ETL atual (vendas API) bate
+     centavo a centavo em todos os 42 meses.
+
+  3. 152 sales com gross=0 limpas do banco
+     API CA confirma total=0 (trocas/bonificacoes). ETL agora filtra
+     v.total <= 0 automaticamente. Contagem de pedidos e ticket medio
+     corrigidos.
+
+  4. Ranking de produtos corrigido (desconto proporcional)
+     sale_items.total_price armazenava valor pre-desconto — inflava o
+     ranking. Fix: ETLs CA e NS distribuem desconto proporcionalmente.
+     17.923 sales verificadas, 9.171 corrigidas, 15.868 items ajustados.
+
+  5. Views SQL: quantity ::int → ::numeric(12,2)
+     As 3 views de produtos truncavam quantidades fracionarias.
+     Migration aplicada no Supabase.
+
+  6. Indexes adicionados no Supabase:
+     - sales.source_sale_id (filtro nstag-% usado em 6 queries)
+     - customers.state (geography queries)
+
+  SEGURANCA (4 fixes):
+  7. T44 — LGPD Webhooks Nuvemshop IMPLEMENTADOS
+     3 rotas com validacao HMAC-SHA256 + logica real:
+     - customers-data-request: retorna JSON com dados do cliente
+     - customers-redact: anonimiza sales + deleta PII
+     - store-redact: deleta TUDO da Nuvemshop
+
+  8. Sessao com validacao HMAC
+     Token assinado com HMAC-SHA256. Middleware valida assinatura.
+     Cookie falso/aleatorio eh rejeitado e limpo.
+
+  9. Login sem fallback de password vazio
+     Se DASHBOARD_LOGIN ou DASHBOARD_PASSWORD nao estiverem no env,
+     o servidor lanca erro (antes aceitava senha vazia).
+     Comparacao usa crypto.timingSafeEqual (anti timing attack).
+
+  10. Rate limiting no login
+      5 tentativas por IP a cada 15 min. Retorna 429 apos exceder.
+
+  PERFORMANCE/QUALIDADE (4 fixes):
+  11. Supabase client singleton (era recriado a cada request)
+  12. fetchMonthlyComparison com filtro de data (era full scan)
+  13. Loja Fisica revenue com Math.max(0, ...) (podia ficar negativa)
+  14. parsePeriod com validacao (regex YYYY-MM-DD + clamp days 1-1825)
+  15. fetchAbandoned com paginacao (truncava em 1000 rows)
+  16. Floating-point arredondado para 2 casas nos rankings
+  17. paginateAll do NS com MAX_PAGES=500 (previne loop infinito)
+  18. fetchAbandonedDetails com toSPTimestamp (timezone corrigido)
+
+VARIAVEIS DE AMBIENTE NOVAS (ja na Vercel):
+  DASHBOARD_LOGIN=mirandaestudio
+  DASHBOARD_PASSWORD=DashMiranda@14
+  (Adicionadas em Production + Preview na Vercel)
+
+MIGRATIONS APLICADAS NO SUPABASE NESTA SESSAO:
+  1. 20260422120000_sale_items_quantity_numeric.sql (quantity INT→NUMERIC)
+  2. 20260423120000_fix_quantity_cast_in_views.sql (views ::numeric)
+  3. 20260423130000_add_missing_indexes.sql (2 indexes)
+  Todas ja rodadas — nao precisa rodar de novo.
+
+--------------------------------------------------------
+1. O que esta funcionando
+--------------------------------------------------------
+- ETL Nuvemshop: full + incremental, cron 30 min. ~6000 orders.
+- ETL Conta Azul: full + incremental, cron 30 min. ~12000+ sales
+  (historico 2023-2026). Dados validados centavo a centavo.
+- ETL Meta Ads: incremental 7 dias, cron 30 min. ~600+ insights.
+- Frontend Next.js 16: 4 abas completas + login + dark mode.
+- LGPD webhooks: 3 rotas implementadas com HMAC.
+- Autenticacao: sessao HMAC + rate limiting.
+- Deploy Vercel: miranda-estudio-dashboard.vercel.app
+
+--------------------------------------------------------
+2. O que falta fazer
+--------------------------------------------------------
+Apenas 2 tasks operacionais (nao sao codigo):
+
+  [ ] T46 — Cofre de senhas Stepads (~15 min)
+      Criar item no 1Password ou Bitwarden com conteudo do .env.local.
+      Sem isso, proximo dev do revezamento nao consegue credenciais.
+      COMO FAZER:
+        1. Decidir: Bitwarden (free) ou 1Password (pago)
+        2. Criar item "Miranda Dashboard — .env.local"
+        3. Colar conteudo COMPLETO do .env.local
+        4. Compartilhar acesso com a equipe
+
+  [ ] T47 — Rotacao de secrets (~30 min)
+      Secrets que passaram pelo chat e devem ser rotacionados:
+        - META_APP_SECRET: rotacionar em developers.facebook.com >
+          Miranda Dashboard ETL > Configuracoes > Basico > Redefinir
+        - META_SYSTEM_USER_TOKEN: regar no BM da Miranda >
+          Configuracoes > Usuarios do sistema > StepadsDashboard >
+          Gerar novo token (ads_read + business_management, nunca expira)
+        - GitHub PAT: revogar em github.com/settings/tokens
+      Apos rotacionar:
+        1. Atualizar cofre de senhas
+        2. Atualizar .env.local na maquina local
+        3. Atualizar GitHub Secrets (Settings > Secrets > Actions)
+        4. Atualizar Vercel env vars se aplicavel
+
+--------------------------------------------------------
+3. Proximo passo exato para quem assumir
+--------------------------------------------------------
+ANTES DE COMECAR:
+  - git pull (puxar os commits desta sessao)
+  - npm install
+  - Verificar .env.local (pegar do cofre ou pedir ao Matheus)
+  - npm run dev (frontend em localhost:3000)
+  - Conferir se o login funciona (credenciais no .env.local)
+
+O DASHBOARD JA ESTA EM PRODUCAO E COM DADOS CORRETOS.
+Nao ha codigo pendente. As 2 tasks restantes (T46/T47) sao
+acoes operacionais que o dev humano precisa fazer.
+
+SCRIPTS UTEIS:
+  npm run dev                    — frontend local
+  npm run sync:nuvemshop         — sync incremental NS
+  npm run sync:contaazul         — sync incremental CA
+  npm run sync:meta-ads          — sync incremental Meta
+  npm run sync:contaazul:full    — sync completo CA (3+ anos)
+  npx tsx --env-file=.env.local src/scripts/validate-all-data.ts
+                                 — auditoria completa de dados
+  npx tsx --env-file=.env.local src/scripts/verify-t49.ts
+                                 — verificar marco 2026 vs Miranda
+  npx tsx --env-file=.env.local src/scripts/deep-audit.ts
+                                 — auditoria profunda linha a linha
+
+EFEITO COLATERAL DO DEPLOY:
+  Quem tiver cookie de sessao antigo (sem assinatura HMAC) sera
+  redirecionado para o login na proxima visita. Comportamento
+  correto — sessoes antigas sem assinatura devem ser invalidadas.
+
+--------------------------------------------------------
+4. Arquivos tocados nesta sessao
+--------------------------------------------------------
+ALTERADOS:
+  - middleware.ts (validacao HMAC da sessao)
+  - app/api/auth/login/route.ts (HMAC + rate limiting + env vars)
+  - app/api/webhooks/nuvemshop/lgpd/customers-data-request/route.ts
+  - app/api/webhooks/nuvemshop/lgpd/customers-redact/route.ts
+  - app/api/webhooks/nuvemshop/lgpd/store-redact/route.ts
+  - app/lib/queries.ts (paginacao + timezone + validacao + arredondamento)
+  - app/lib/supabase-server.ts (singleton)
+  - app/dashboard/loja-fisica/page.tsx (Math.max revenue)
+  - src/etl/conta-azul/sync.ts (filtro total<=0 + desconto proporcional)
+  - src/etl/nuvemshop/sync.ts (desconto proporcional + MAX_PAGES)
+  - .env.example (DASHBOARD_LOGIN, DASHBOARD_PASSWORD)
+  - .env.local (idem)
+
+NOVOS:
+  - supabase/migrations/20260422120000_sale_items_quantity_numeric.sql
+  - supabase/migrations/20260423120000_fix_quantity_cast_in_views.sql
+  - supabase/migrations/20260423130000_add_missing_indexes.sql
+  - src/scripts/validate-all-data.ts (auditoria completa)
+  - src/scripts/validate-api-months.ts (CA vs API por mes)
+  - src/scripts/verify-t49.ts (marco 2026 vs Miranda)
+  - src/scripts/deep-audit.ts (auditoria profunda)
+  - src/scripts/investigate-issues.ts (investigacao de anomalias)
+  - src/scripts/cleanup-zero-gross.ts (limpeza sales gross=0)
+  - src/scripts/fix-item-prices.ts (desconto proporcional retroativo)
+  - src/scripts/check-nov.ts (diagnostico Nov 2025)
+  - src/scripts/check-9856.ts (verificacao venda #9856)
+
+BUILD: typecheck OK no codigo principal. Erros apenas em scripts
+de diagnostico (variaveis nao usadas — nao afetam runtime).
+
+--------------------------------------------------------
+0a. SESSAO ANTERIOR (2026-04-16b) — T51 PARTE B COMPLETA
 --------------------------------------------------------
 Retomei o handoff da sessao anterior (2026-04-16) em outra maquina.
 Execucao executou exatamente os 6 chunks previstos no plano.

@@ -86,6 +86,8 @@ async function sleep(ms: number): Promise<void> {
  * Paginate through ALL pages of a Nuvemshop list endpoint.
  * Pauses when rate limit is close to exhaustion.
  */
+const MAX_PAGES = 500; // safety limit to prevent infinite loops
+
 async function paginateAll<T>(
   fetcher: (page: number) => Promise<{ items: T[]; pagination: { nextUrl: string | null }; rateLimit: { remaining: number } }>,
   log: (msg: string) => void,
@@ -100,6 +102,11 @@ async function paginateAll<T>(
     log(`  page ${page}: ${result.items.length} items (total so far: ${allItems.length}, rate remaining: ${result.rateLimit.remaining})`);
 
     if (result.pagination.nextUrl === null || result.items.length === 0) {
+      break;
+    }
+
+    if (page >= MAX_PAGES) {
+      log(`  ⚠ Hit max page limit (${MAX_PAGES}), stopping pagination`);
       break;
     }
 
@@ -318,15 +325,26 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
       for (const { canonical } of batch) {
         const saleId = saleIdMap.get(canonical.source_id);
         if (saleId === undefined) continue;
-        for (const item of canonical.items) {
-          if (item.quantity <= 0) continue; // skip invalid quantities (DB CHECK)
+        const validItems = canonical.items.filter((item) => item.quantity > 0);
+        if (validItems.length === 0) continue;
+
+        // Distribute order-level discounts proportionally across items so that
+        // sum(item.total_price) = gross_revenue. Without this, product rankings
+        // show pre-discount revenue (inflated). See audit 2026-04-22.
+        const rawSum = validItems.reduce((s, i) => s + i.total_price, 0);
+        const gross = canonical.total_gross;
+        const needsAdjust = rawSum > 0 && Math.abs(rawSum - gross) > 0.01;
+
+        for (const item of validItems) {
           allItems.push({
             sale_id: saleId,
             product_name: item.product_name,
             sku: item.sku,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            total_price: item.total_price,
+            total_price: needsAdjust
+              ? Math.round((item.total_price / rawSum) * gross * 100) / 100
+              : item.total_price,
           });
         }
       }

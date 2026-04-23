@@ -37,7 +37,7 @@ export default async function LojaFisicaPage({
 
   const caSum = caDaily.reduce((sum, r) => sum + r.gross_revenue, 0);
   const nsSum = nsDailyForSubtraction.reduce((sum, r) => sum + r.gross_revenue, 0);
-  const totalRevenue = caSum - nsSum;
+  const totalRevenue = Math.max(0, caSum - nsSum);
   // Order count: use CA orders minus NS orders to stay consistent with the
   // revenue derivation. The NS-tagged vendas inside CA are counted in caDaily
   // but are not actual loja-física orders.
@@ -51,7 +51,7 @@ export default async function LojaFisicaPage({
   // via prevSince/prevUntil.
   const prevCa = prevDailyRevenue.filter(r => r.source === 'conta_azul');
   const prevNs = prevDailyRevenue.filter(r => r.source === 'nuvemshop');
-  const prevRevenue = prevCa.reduce((sum, r) => sum + r.gross_revenue, 0) - prevNs.reduce((sum, r) => sum + r.gross_revenue, 0);
+  const prevRevenue = Math.max(0, prevCa.reduce((sum, r) => sum + r.gross_revenue, 0) - prevNs.reduce((sum, r) => sum + r.gross_revenue, 0));
   const prevOrders = Math.max(0, prevCa.reduce((sum, r) => sum + r.orders_count, 0) - prevNs.reduce((sum, r) => sum + r.orders_count, 0));
 
   // Chart: per-day loja física = CA(day) − NS(day). Clamp to 0 on days where

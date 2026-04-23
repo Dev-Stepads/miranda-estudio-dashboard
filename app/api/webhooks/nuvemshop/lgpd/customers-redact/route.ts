@@ -1,30 +1,104 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 /**
  * LGPD Webhook: Customers Redact
  *
- * Called by Nuvemshop when a specific customer requests data deletion
- * (right to be forgotten under LGPD/GDPR).
- * We must delete all data belonging to that customer from our database.
+ * Called by Nuvemshop when a customer requests data deletion
+ * (right to be forgotten under LGPD/GDPR Art. 18).
+ * We delete all PII for that customer but preserve anonymized
+ * sales data for financial reporting integrity.
  *
- * For now: acknowledges with 200 OK and logs the event.
- * TODO: implement actual customer data deletion.
+ * Must respond 2xx within 3 seconds.
  */
+
+function verifyHmac(rawBody: string, signature: string | null): boolean {
+  const secret = process.env.NUVEMSHOP_CLIENT_SECRET;
+  if (!secret || !signature) return false;
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
+
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
+  const rawBody = await request.text();
+  const signature = request.headers.get('x-linkedstore-hmac-sha256');
+
+  if (!verifyHmac(rawBody, signature)) {
+    console.log('[LGPD] customers-redact: invalid HMAC, rejected');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let body: { store_id?: number; id?: number | string };
   try {
-    const body = await request.json();
-
-    // TODO: validate HMAC-SHA256 signature
-    // TODO: extract customer identifiers from body
-    // TODO: delete from:
-    //   - customers WHERE source='nuvemshop' AND source_customer_id = <id>
-    //   - sales WHERE customer_id = <resolved_id> (or set customer_id = null)
-    //   - raw_nuvemshop_customers WHERE source_id = <id>
-
-    console.log('[LGPD] Customers redact webhook received:', JSON.stringify(body).slice(0, 200));
-
-    return NextResponse.json({ status: 'received' }, { status: 200 });
+    body = JSON.parse(rawBody);
   } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const customerId = String(body.id ?? '');
+  if (!customerId) {
+    return NextResponse.json({ error: 'Missing customer id' }, { status: 400 });
+  }
+
+  console.log(`[LGPD] customers-redact: store=${body.store_id} customer=${customerId}`);
+
+  try {
+    const sb = getSupabase();
+
+    // Find customer to get internal ID
+    const { data: customer } = await sb
+      .from('customers')
+      .select('customer_id')
+      .eq('source', 'nuvemshop')
+      .eq('source_customer_id', customerId)
+      .limit(1);
+
+    const cust = customer?.[0];
+    if (!cust) {
+      // No data to delete — still return 200 (idempotent)
+      return NextResponse.json({ status: 'no_data' });
+    }
+
+    const internalId = cust.customer_id as number;
+
+    // Anonymize sales (keep financial data, remove customer link)
+    await sb
+      .from('sales')
+      .update({ customer_id: null })
+      .eq('customer_id', internalId)
+      .eq('source', 'nuvemshop');
+
+    // Delete abandoned checkouts (contains PII: name, email, phone)
+    await sb
+      .from('abandoned_checkouts')
+      .delete()
+      .eq('customer_id', internalId);
+
+    // Delete raw customer data
+    await sb
+      .from('raw_nuvemshop_customers')
+      .delete()
+      .eq('source_id', customerId);
+
+    // Delete the customer record
+    await sb
+      .from('customers')
+      .delete()
+      .eq('customer_id', internalId);
+
+    console.log(`[LGPD] customers-redact: deleted customer ${customerId} (internal ${internalId})`);
+
+    return NextResponse.json({ status: 'redacted' });
+  } catch (err) {
+    console.error('[LGPD] customers-redact error:', err);
+    return NextResponse.json({ status: 'error' }, { status: 500 });
   }
 }

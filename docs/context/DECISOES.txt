@@ -1175,3 +1175,35 @@ DECISÕES REGISTRADAS
             sum(si.quantity)::int continuam valendo (o cast final
             arredonda na agregacao).
   Impacto:  Divida tecnica documentada. Prioridade baixa.
+
+[2026-04-23] [DADOS] Auditoria completa + 4 fixes de integridade
+  Contexto: Auditoria profunda linha a linha de todos os dados do
+            dashboard. 42 meses de CA cruzados com API totais.aprovado.
+  Decisao:  4 acoes tomadas:
+            (a) 152 sales com gross_revenue=0 deletadas (API CA confirma
+                total=0 — trocas/bonificacoes). ETL sync.ts atualizado
+                com filtro v.total <= 0 na phase 2.
+            (b) Ranking de produtos corrigido: sale_items.total_price
+                agora reflete desconto proporcional quando sum(items) !=
+                gross_revenue. 9.171 sales / 15.868 items ajustados
+                retroativamente. ETLs CA e NS atualizados.
+            (c) T49 gap R$ 3.010 em Marco 2026 RESOLVIDO — gap era do
+                ETL antigo de recebiveis. ETL atual bate R$ 0,00 em
+                todos os 42 meses.
+            (d) Login hardcoded movido para DASHBOARD_LOGIN e
+                DASHBOARD_PASSWORD em process.env.
+  Impacto:  Contagem de pedidos e ticket medio corrigidos (152 fantasmas
+            removidos). Ranking de produtos reflete receita real pos-
+            desconto. Faturamento total inalterado (ja estava correto).
+
+[2026-04-23] [SEGURANCA] LGPD webhooks Nuvemshop implementados (T44)
+  Contexto: Nuvemshop exige 3 endpoints LGPD funcionais. Stubs
+            respondiam 200 sem logica desde 2026-04-12.
+  Decisao:  Implementar os 3 endpoints com:
+            - Validacao HMAC-SHA256 (rejeita 401 sem assinatura valida)
+            - customers-data-request: retorna JSON com todos os dados
+            - customers-redact: anonimiza sales (remove FK) + deleta PII
+            - store-redact: deleta TUDO da Nuvemshop (CA e Meta intactos)
+            Escolha de design: customers-redact anonimiza vendas em vez
+            de deletar, preservando integridade financeira do faturamento.
+  Impacto:  Dashboard em compliance com LGPD. Nuvemshop nao suspende app.
