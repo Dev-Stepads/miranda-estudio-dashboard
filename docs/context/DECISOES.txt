@@ -1207,3 +1207,36 @@ DECISÕES REGISTRADAS
             Escolha de design: customers-redact anonimiza vendas em vez
             de deletar, preservando integridade financeira do faturamento.
   Impacto:  Dashboard em compliance com LGPD. Nuvemshop nao suspende app.
+
+[2026-04-23b] [SEGURANCA] SESSION_SECRET separado do DASHBOARD_PASSWORD
+  Contexto: A sessao HMAC usava DASHBOARD_PASSWORD como chave para
+            assinar tokens. Se a senha vazasse (ex: shoulder surfing,
+            log acidental), todas as sessoes ficavam forjaveis. Alem
+            disso, trocar a senha invalidava todas as sessoes ativas.
+  Decisao:  Criar variavel SESSION_SECRET (32 bytes random hex) usada
+            exclusivamente para HMAC de sessao. DASHBOARD_PASSWORD
+            continua sendo usado apenas para validar login.
+  Impacto:  Nova env var obrigatoria. Adicionar na Vercel e no cofre.
+            Sessoes existentes sao invalidadas (token assinado com
+            secret diferente). Usuarios precisam fazer login novamente.
+
+[2026-04-23b] [ARQUITETURA] Middleware migrado para Web Crypto API
+  Contexto: middleware.ts importava `import crypto from 'crypto'` (modulo
+            Node.js). Next.js 16 roda middleware em Edge Runtime por
+            padrao, que nao suporta modulos Node. Funcionava em dev
+            (Node runtime) mas podia quebrar em producao (Edge).
+  Decisao:  Reescrito usando Web Crypto API (crypto.subtle.importKey +
+            crypto.subtle.sign) que funciona em ambos runtimes.
+            timingSafeEqual reimplementado manualmente (XOR byte-a-byte).
+  Impacto:  Middleware agora e Edge-compatible. Sem dependencia de Node.
+
+[2026-04-23b] [SEGURANCA] LGPD: raw tables incluidas na redacao
+  Contexto: Os webhooks LGPD (T44) deletavam customers e anonimizavam
+            sales, mas as tabelas raw_nuvemshop_orders e
+            raw_nuvemshop_customers contém payloads JSON com PII
+            (nome, email, telefone, CPF) que nao eram tocadas.
+  Decisao:  customers-redact agora: (1) busca source_sale_ids das
+            vendas do cliente, (2) deleta raw_nuvemshop_orders
+            correspondentes em batches de 500, (3) deleta
+            raw_nuvemshop_customers. store-redact ja deletava tudo.
+  Impacto:  Redacao LGPD agora cobre 100% dos dados armazenados.

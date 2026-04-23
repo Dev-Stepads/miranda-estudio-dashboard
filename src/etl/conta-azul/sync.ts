@@ -390,13 +390,14 @@ async function processVenda(
   const sourceSaleId = isNsTagged ? `nstag-${v.id}` : v.id;
 
   // Raw payload
-  await supabase.from('raw_contaazul_sales').upsert(
+  const { error: rawErr } = await supabase.from('raw_contaazul_sales').upsert(
     {
       source_id: sourceSaleId,
       payload: { venda_id: v.id, numero: v.numero, list_item: v, detail: detailJson, is_ns_tagged: isNsTagged },
     },
     { onConflict: 'source_id' },
   );
+  if (rawErr) log(`  ⚠ raw_contaazul_sales #${v.numero}: ${rawErr.message}`);
 
   // Customer upsert
   const customerSourceId = customerDoc || detail.cliente?.uuid || v.cliente?.id;
@@ -472,12 +473,17 @@ async function processVenda(
     // sum(item.total_price) = grossRevenue. Without this, product rankings
     // show pre-discount revenue (inflated). See audit 2026-04-22.
     const itemsRawSum = rawItems.reduce((s, i) => s + i.total_price, 0);
-    const items = itemsRawSum > 0 && Math.abs(itemsRawSum - grossRevenue) > 0.01
-      ? rawItems.map((item) => ({
-          ...item,
-          total_price: Math.round((item.total_price / itemsRawSum) * grossRevenue * 100) / 100,
-        }))
-      : rawItems;
+    let items = rawItems;
+    if (itemsRawSum > 0 && Math.abs(itemsRawSum - grossRevenue) > 0.01) {
+      const adjusted = rawItems.map((item) => ({
+        ...item,
+        total_price: Math.round((item.total_price / itemsRawSum) * grossRevenue * 100) / 100,
+      }));
+      // Last item absorbs rounding residual so sum matches grossRevenue exactly
+      const partialSum = adjusted.slice(0, -1).reduce((s, i) => s + i.total_price, 0);
+      adjusted[adjusted.length - 1]!.total_price = Math.round((grossRevenue - partialSum) * 100) / 100;
+      items = adjusted;
+    }
 
     await supabase.from('sale_items').delete().eq('sale_id', saleId);
     const { error: itemErr } = await supabase.from('sale_items').insert(items);

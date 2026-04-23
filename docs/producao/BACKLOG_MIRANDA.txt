@@ -414,3 +414,44 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
          Rodar resync dos 2 chunks afetados pra recuperar os 4 items:
            npm run sync:contaazul -- --from 2023-07-01 --to 2023-12-31
            npm run sync:contaazul -- --from 2025-01-01 --to 2025-06-30
+
+[x] T53 SESSION_SECRET separado do password — 2026-04-23
+         Sessao HMAC usava DASHBOARD_PASSWORD como secret. Agora usa
+         SESSION_SECRET (env var separada, 32 bytes random). Middleware
+         e login/route.ts atualizados.
+
+[x] T54 Middleware migrado para Web Crypto API — 2026-04-23
+         middleware.ts usava import crypto (Node) incompativel com Edge
+         Runtime. Reescrito com SubtleCrypto + timingSafeEqual manual.
+
+[x] T55 LGPD: raw tables incluidas na redacao — 2026-04-23
+         customers-redact agora deleta raw_nuvemshop_orders do cliente
+         alem de raw_nuvemshop_customers (ja existia).
+
+[x] T56 Error handling em raw payload upserts — 2026-04-23
+         3 pipelines (CA, NS, Meta) agora checam e logam erros nos
+         upserts de raw payloads. NS removeu ignoreDuplicates.
+
+[x] T57 Retry no saveRefreshToken (CA) — 2026-04-23
+         3 tentativas com backoff (2s, 4s) antes de throw.
+
+[ ] T58 Retry em falhas transientes (429/5xx) — PENDENTE
+         Requer mudanca nos HTTP clients das 3 integracoes.
+
+[x] T59 Checkout abandonado com batching — 2026-04-23
+         Trocado loop N+1 por batches de 100 (mesmo padrao de orders).
+
+[x] T60 Arredondamento de desconto proporcional — 2026-04-23
+         Ultimo item absorve residual de arredondamento em ambos ETLs
+         (CA e NS). sum(items) = grossRevenue exato.
+
+[x] T61 View geografia com filtro IS NOT NULL — 2026-04-23
+         Migration 20260423140000: v_loja_fisica_geografia agora filtra
+         c.state IS NOT NULL (consistencia com v_geografia_consolidada).
+
+[x] T62 Error boundary + loading no dashboard — 2026-04-23
+         Criados app/dashboard/error.tsx e app/dashboard/loading.tsx.
+
+[x] T64 TypeScript errors nos scripts corrigidos — 2026-04-23
+         7 erros em 5 scripts de diagnostico resolvidos. tsc --noEmit
+         agora passa limpo.

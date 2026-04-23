@@ -69,6 +69,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const internalId = cust.customer_id as number;
 
+    // Find this customer's sales to clean raw order payloads
+    const { data: custSales } = await sb
+      .from('sales')
+      .select('source_sale_id')
+      .eq('customer_id', internalId)
+      .eq('source', 'nuvemshop')
+      .limit(100000);
+
     // Anonymize sales (keep financial data, remove customer link)
     await sb
       .from('sales')
@@ -81,6 +89,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       .from('abandoned_checkouts')
       .delete()
       .eq('customer_id', internalId);
+
+    // Delete raw order payloads that contain this customer's PII
+    const saleSourceIds = (custSales ?? [])
+      .map(s => s.source_sale_id as string)
+      .filter(Boolean);
+    for (let i = 0; i < saleSourceIds.length; i += 500) {
+      const batch = saleSourceIds.slice(i, i + 500);
+      await sb.from('raw_nuvemshop_orders').delete().in('source_id', batch);
+    }
 
     // Delete raw customer data
     await sb

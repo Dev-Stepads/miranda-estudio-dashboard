@@ -220,8 +220,11 @@ export async function syncCustomers(ctx: SyncContext): Promise<SyncResult> {
       source_id: String(raw.id),
       payload: raw as unknown as Record<string, unknown>,
     }));
-    const { error: rawErr } = await ctx.supabase.from('raw_nuvemshop_customers').upsert(rawPayloads, { onConflict: 'source_id', ignoreDuplicates: true });
-    if (rawErr) ctx.log(`  ⚠ raw_nuvemshop_customers: ${rawErr.message}`);
+    const { error: rawErr } = await ctx.supabase.from('raw_nuvemshop_customers').upsert(rawPayloads, { onConflict: 'source_id' });
+    if (rawErr) {
+      ctx.log(`  ⚠ raw_nuvemshop_customers: ${rawErr.message}`);
+      errors++;
+    }
   }
 
   const durationMs = Date.now() - start;
@@ -335,17 +338,36 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
         const gross = canonical.total_gross;
         const needsAdjust = rawSum > 0 && Math.abs(rawSum - gross) > 0.01;
 
-        for (const item of validItems) {
-          allItems.push({
-            sale_id: saleId,
-            product_name: item.product_name,
-            sku: item.sku,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: needsAdjust
-              ? Math.round((item.total_price / rawSum) * gross * 100) / 100
-              : item.total_price,
-          });
+        if (needsAdjust) {
+          const adjustedPrices = validItems.map((item) =>
+            Math.round((item.total_price / rawSum) * gross * 100) / 100,
+          );
+          // Last item absorbs rounding residual so sum matches gross exactly
+          const partialSum = adjustedPrices.slice(0, -1).reduce((s, p) => s + p, 0);
+          adjustedPrices[adjustedPrices.length - 1] = Math.round((gross - partialSum) * 100) / 100;
+
+          for (let idx = 0; idx < validItems.length; idx++) {
+            const item = validItems[idx]!;
+            allItems.push({
+              sale_id: saleId,
+              product_name: item.product_name,
+              sku: item.sku,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              total_price: adjustedPrices[idx]!,
+            });
+          }
+        } else {
+          for (const item of validItems) {
+            allItems.push({
+              sale_id: saleId,
+              product_name: item.product_name,
+              sku: item.sku,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              total_price: item.total_price,
+            });
+          }
         }
       }
 
@@ -364,8 +386,11 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
         source_id: String(raw.id),
         payload: raw as unknown as Record<string, unknown>,
       }));
-      const { error: rawOrdErr } = await ctx.supabase.from('raw_nuvemshop_orders').upsert(rawPayloads, { onConflict: 'source_id', ignoreDuplicates: true });
-      if (rawOrdErr) ctx.log(`  ⚠ raw_nuvemshop_orders: ${rawOrdErr.message}`);
+      const { error: rawOrdErr } = await ctx.supabase.from('raw_nuvemshop_orders').upsert(rawPayloads, { onConflict: 'source_id' });
+      if (rawOrdErr) {
+        ctx.log(`  ⚠ raw_nuvemshop_orders: ${rawOrdErr.message}`);
+        errors++;
+      }
 
       inserted += saleIdMap.size;
       ctx.log(`  batch ${batchNum}/${totalBatches}: ${saleIdMap.size} sales + ${allItems.length} items`);
@@ -398,48 +423,63 @@ export async function syncAbandonedCheckouts(ctx: SyncContext): Promise<SyncResu
   );
   ctx.log(`  Total checkouts fetched: ${rawCheckouts.length}`);
 
-  for (const raw of rawCheckouts) {
-    try {
-      const canonical = mapCheckoutToCanonicalAbandoned(raw);
+  // Process in batches of 100 (matching orders/customers pattern)
+  const CHECKOUT_BATCH = 100;
+  for (let i = 0; i < rawCheckouts.length; i += CHECKOUT_BATCH) {
+    const batch = rawCheckouts.slice(i, i + CHECKOUT_BATCH);
 
-      const customerId = canonical.customer_source_id !== null
-        ? ctx.customerLookup.get(canonical.customer_source_id) ?? null
-        : null;
+    const rows: Array<Record<string, unknown>> = [];
+    const rawPayloads: Array<{ source_id: string; payload: Record<string, unknown> }> = [];
 
+    for (const raw of batch) {
+      try {
+        const canonical = mapCheckoutToCanonicalAbandoned(raw);
+        const customerId = canonical.customer_source_id !== null
+          ? ctx.customerLookup.get(canonical.customer_source_id) ?? null
+          : null;
+
+        rows.push({
+          source_checkout_id: canonical.source_id,
+          created_at: canonical.abandoned_at,
+          total_amount: canonical.total_value,
+          customer_id: customerId,
+          contact_name: canonical.contact_name,
+          contact_email: canonical.contact_email,
+          contact_phone: canonical.contact_phone,
+          contact_state: canonical.contact_state,
+          products: canonical.products,
+        });
+
+        rawPayloads.push({
+          source_id: String(raw.id),
+          payload: raw as unknown as Record<string, unknown>,
+        });
+      } catch (err) {
+        ctx.log(`  ❌ Checkout ${raw.id}: ${err instanceof Error ? err.message : String(err)}`);
+        errors++;
+      }
+    }
+
+    if (rows.length > 0) {
       const { error } = await ctx.supabase
         .from('abandoned_checkouts')
-        .upsert(
-          {
-            source_checkout_id: canonical.source_id,
-            created_at: canonical.abandoned_at,
-            total_amount: canonical.total_value,
-            customer_id: customerId,
-            contact_name: canonical.contact_name,
-            contact_email: canonical.contact_email,
-            contact_phone: canonical.contact_phone,
-            contact_state: canonical.contact_state,
-            products: canonical.products,
-          },
-          { onConflict: 'source_checkout_id' },
-        );
-
-      if (error !== null) {
-        ctx.log(`  ❌ Checkout ${raw.id}: ${error.message}`);
-        errors++;
-        continue;
+        .upsert(rows, { onConflict: 'source_checkout_id' });
+      if (error) {
+        ctx.log(`  ❌ Checkout batch ${Math.floor(i / CHECKOUT_BATCH) + 1}: ${error.message}`);
+        errors += rows.length;
+      } else {
+        inserted += rows.length;
       }
+    }
 
-      // Raw payload for history
-      const { error: rawAbErr } = await ctx.supabase.from('raw_nuvemshop_abandoned_checkouts').upsert(
-        { source_id: String(raw.id), payload: raw as unknown as Record<string, unknown> },
-        { onConflict: 'source_id', ignoreDuplicates: true },
-      );
-      if (rawAbErr) ctx.log(`  ⚠ raw_nuvemshop_abandoned_checkouts: ${rawAbErr.message}`);
-
-      inserted++;
-    } catch (err) {
-      ctx.log(`  ❌ Checkout ${raw.id}: ${err instanceof Error ? err.message : String(err)}`);
-      errors++;
+    if (rawPayloads.length > 0) {
+      const { error: rawAbErr } = await ctx.supabase
+        .from('raw_nuvemshop_abandoned_checkouts')
+        .upsert(rawPayloads, { onConflict: 'source_id' });
+      if (rawAbErr) {
+        ctx.log(`  ⚠ raw_nuvemshop_abandoned_checkouts: ${rawAbErr.message}`);
+        errors++;
+      }
     }
   }
 

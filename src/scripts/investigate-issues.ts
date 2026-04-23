@@ -187,11 +187,11 @@ async function main(): Promise<void> {
   console.log('========================================\n');
 
   // CA
-  const { count: caSalesCount } = await sb.from('sales').select('*', { count: 'exact', head: true }).eq('source', 'conta_azul').eq('status', 'paid');
-  const { count: caItemsDistinct } = await sb.from('sale_items').select('sale_id', { count: 'exact', head: true });
+  const { count: _caSalesCount } = await sb.from('sales').select('*', { count: 'exact', head: true }).eq('source', 'conta_azul').eq('status', 'paid');
+  const { count: _caItemsDistinct } = await sb.from('sale_items').select('sale_id', { count: 'exact', head: true });
 
   // Contar sales CA que têm pelo menos 1 item
-  const { data: caWithItems } = await sb.rpc('count_sales_with_items', {});
+  const { data: _caWithItems } = await sb.rpc('count_sales_with_items', {});
   // Fallback: verificar por amostra
   const { data: caSample } = await sb
     .from('sales')

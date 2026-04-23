@@ -258,7 +258,7 @@ async function main(): Promise<void> {
   console.log('========================================\n');
 
   // Sales paid sem nenhum sale_item
-  const { data: salesNoItems } = await sb.rpc('', {}).select('*');
+  const { data: _salesNoItems } = await sb.rpc('', {}).select('*');
   // Vamos fazer via query direta
   const { data: salesPaid } = await sb
     .from('sales')

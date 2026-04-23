@@ -18,9 +18,6 @@ function env(name: string): string {
   return v;
 }
 
-function fmt(n: number): string {
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 async function main(): Promise<void> {
   const sb = createSupabaseAdmin({

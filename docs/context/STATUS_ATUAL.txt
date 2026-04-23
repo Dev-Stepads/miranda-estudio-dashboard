@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-23 (sessao 2026-04-22/23: T52 aplicada + T44 LGPD implementada + T49 resolvida + 152 sales gross=0 limpas + ranking produtos corrigido + login movido pra env)
+Ultima atualizacao: 2026-04-23 (sessao 2026-04-23b: T53-T64 auditoria seguranca + resiliencia ETL + qualidade de codigo — 11 fixes)
 
 --------------------------------------------------------
 ETAPA ATUAL
@@ -128,10 +128,21 @@ INFRAESTRUTURA
 [x] Mobile responsive — 2026-04-12
 [x] Date picker custom + filtro persiste entre abas — 2026-04-12
 [x] Sessao HMAC + rate limiting — 2026-04-23
+[x] SESSION_SECRET separado do password — 2026-04-23 (T53)
+[x] Middleware Web Crypto API (Edge-compatible) — 2026-04-23 (T54)
+[x] LGPD raw tables incluidas na redacao — 2026-04-23 (T55)
+[x] Error handling raw upserts (3 pipelines) — 2026-04-23 (T56)
+[x] Retry saveRefreshToken CA (3 tentativas) — 2026-04-23 (T57)
+[x] Checkout abandonado batching — 2026-04-23 (T59)
+[x] Desconto proporcional sem perda de centavos — 2026-04-23 (T60)
 [x] Indexes: sales.source_sale_id + customers.state — 2026-04-23
 [x] Views quantity ::numeric(12,2) — 2026-04-23
+[x] View geografia IS NOT NULL — 2026-04-23 (T61)
+[x] Error boundary + loading dashboard — 2026-04-23 (T62)
+[x] TypeScript 0 erros — 2026-04-23 (T64)
 [ ] Cofre de senhas Stepads (1P ou Bitwarden) — PENDENTE (task T46)
 [ ] Rotacao de secrets que passaram pelo chat — PENDENTE (task T47)
+[ ] Retry falhas transientes 429/5xx — PENDENTE (task T58)
 
 Links:
 - GitHub:    https://github.com/Dev-Stepads/miranda-estudio-dashboard

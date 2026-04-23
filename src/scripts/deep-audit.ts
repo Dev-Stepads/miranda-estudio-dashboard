@@ -164,7 +164,7 @@ async function main(): Promise<void> {
 
     const itemsSum = items.reduce((s, i) => s + Number(i.total_price), 0);
     const gross = Number(sale.gross_revenue);
-    const diff = Math.abs(gross - itemsSum);
+    void Math.abs(gross - itemsSum);
 
     // Tolerância: gross inclui frete, items não. Então gross >= items normalmente.
     // Flaggar apenas quando items > gross (items não deveriam ser mais que o total)

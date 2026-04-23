@@ -4,26 +4,64 @@ HANDOFF — Dashboard Miranda Studio
 
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-23
-RESPONSAVEL: sessao 2026-04-22/23 — Matheus + Claude
+RESPONSAVEL: sessao 2026-04-23b — Matheus + Claude
 BRANCH: main
 
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-22/23) — RESUMO EXECUTIVO
+0. SESSAO ATUAL (2026-04-23b) — AUDITORIA + 11 FIXES
 --------------------------------------------------------
-Sessao longa focada em integridade de dados e seguranca.
-O dashboard agora esta com dados 100% validados contra a API do
-Conta Azul (42 meses cruzados, R$ 0,00 de diff em TODOS) e com
-todas as dividas tecnicas criticas e altas resolvidas.
+Sessao focada em auditoria profunda de seguranca, resiliencia
+de ETL e qualidade de codigo. Analise automatizada de todo o
+codebase (frontend, backend, infra) identificou 13 issues.
+11 resolvidos nesta sessao, 1 falso positivo, 1 adiado.
 
-ESTADO DO DASHBOARD AGORA:
-  - Dados de faturamento: 100% corretos (42 meses CA validados)
-  - Marco 2026: Loja R$ 82.944,79 = target Miranda EXATO
-  - Nuvemshop: match exato em todos os meses
-  - Meta Ads: funcionando, dados reais fluindo
-  - LGPD: 3 webhooks implementados com validacao HMAC
-  - Autenticacao: sessao assinada com HMAC, rate limiting ativo
-  - Rankings de produtos: corrigidos (desconto proporcional)
-  - Contagem de pedidos: corrigida (152 fantasmas removidos)
+FIXES APLICADOS (11):
+
+  SEGURANCA (3):
+  1. T53 — SESSION_SECRET separado do password
+     Sessao HMAC usava DASHBOARD_PASSWORD como chave. Agora usa
+     SESSION_SECRET (32 bytes random). Se password vaza, sessoes
+     nao sao mais forjaveis.
+  2. T54 — Middleware migrado para Web Crypto API
+     middleware.ts importava `crypto` do Node (incompativel com
+     Edge Runtime). Reescrito com SubtleCrypto + timingSafeEqual
+     manual. Sem dependencia de Node no middleware.
+  3. T55 — LGPD: raw tables incluidas na redacao
+     customers-redact agora deleta raw_nuvemshop_orders do cliente
+     (contém PII no payload JSON).
+
+  RESILIENCIA ETL (4):
+  4. T56 — Error handling em raw payload upserts
+     CA, NS e Meta agora checam e logam erros nos upserts de raws.
+     NS removeu ignoreDuplicates (permite atualizar payloads).
+  5. T57 — Retry no saveRefreshToken (CA)
+     3 tentativas com backoff (2s, 4s) antes de throw. Evita
+     perda permanente do token single-use.
+  6. T59 — Checkout abandonado com batching
+     Loop N+1 trocado por batches de 100 (padrao de orders).
+  7. T60 — Arredondamento de desconto proporcional
+     Ultimo item absorve residual. sum(items) = gross exato.
+
+  QUALIDADE (4):
+  8. T61 — View geografia com filtro IS NOT NULL
+     Migration 20260423140000.
+  9. T62 — Error boundary + loading no dashboard
+     app/dashboard/error.tsx e loading.tsx criados.
+  10. T64 — TypeScript 0 erros (7 corrigidos em scripts)
+  11. .env.example atualizado com SESSION_SECRET
+
+VARIAVEIS DE AMBIENTE NOVAS:
+  SESSION_SECRET — gerar com:
+    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  Adicionar em: .env.local, Vercel (Production + Preview),
+  GitHub Actions secrets (se aplicavel).
+
+MIGRATION NOVA (precisa rodar no Supabase):
+  20260423140000_fix_geografia_null_filter.sql
+
+ADIADO:
+  T58 — Retry em falhas transientes (429/5xx) nas 3 pipelines.
+  Requer mudanca nos HTTP clients. Fazer em sessao dedicada.
 
 --------------------------------------------------------
 0a. O QUE FOI FEITO NESTA SESSAO (14 fixes)

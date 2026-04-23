@@ -12,7 +12,7 @@ async function main() {
     .limit(5);
 
   if (data && data.length > 0) {
-    console.log('Venda #9856 encontrada no raw:', data[0].source_id);
+    console.log('Venda #9856 encontrada no raw:', data[0]!.source_id);
   } else {
     // O numero não é pesquisável assim. Vamos checar se o cron já rodou e recuperou.
     // O cron roda a cada 30 min. Se rodou depois do chunk 2, pode ter pego.

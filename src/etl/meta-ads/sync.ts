@@ -219,7 +219,10 @@ async function syncLevel(
     // Insert in chunks of 500 as well
     for (let i = 0; i < rawPayloads.length; i += BATCH_SIZE) {
       const batch = rawPayloads.slice(i, i + BATCH_SIZE);
-      await ctx.supabase.from(rawTable).insert(batch);
+      const { error: rawInsertErr } = await ctx.supabase.from(rawTable).insert(batch);
+      if (rawInsertErr) {
+        ctx.log(`  ⚠ [${level}] raw insert batch ${Math.floor(i / BATCH_SIZE) + 1}: ${rawInsertErr.message}`);
+      }
     }
   }
 

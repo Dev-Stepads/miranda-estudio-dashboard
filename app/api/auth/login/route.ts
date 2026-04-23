@@ -98,7 +98,14 @@ export async function POST(request: NextRequest) {
     crypto.timingSafeEqual(Buffer.from(password), Buffer.from(creds.password));
 
   if (loginMatch && passMatch) {
-    const token = createSessionToken(creds.password);
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (!sessionSecret) {
+      throw new Error(
+        'Missing SESSION_SECRET in environment. ' +
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+      );
+    }
+    const token = createSessionToken(sessionSecret);
 
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, token, {
