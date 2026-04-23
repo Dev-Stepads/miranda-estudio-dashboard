@@ -123,7 +123,7 @@ export default async function LojaFisicaPage({
           { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
           { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
-        rows={caProducts as unknown as Record<string, unknown>[]}
+        rows={caProducts}
       />
 
       {/* Top Clientes — Pessoas */}
@@ -138,7 +138,7 @@ export default async function LojaFisicaPage({
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
       />
 
       {/* Top Clientes — Empresas */}
@@ -153,7 +153,7 @@ export default async function LojaFisicaPage({
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
       />
     </div>
   );

@@ -11,10 +11,22 @@ on:
   # o mapper (ex: adicao de leads 2026-04-14).
   workflow_dispatch:
     inputs:
+      full_nuvemshop_sync:
+        description: 'Nuvemshop — rodar full sync?'
+        type: boolean
+        default: false
+      full_contaazul_sync:
+        description: 'Conta Azul — rodar full sync (30 dias)?'
+        type: boolean
+        default: false
       full_meta_sync:
         description: 'Meta Ads — rodar full sync (90 dias)?'
         type: boolean
         default: false
+
+concurrency:
+  group: etl-sync
+  cancel-in-progress: false
 
 jobs:
   sync:
@@ -37,16 +49,16 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Sync Nuvemshop (incremental)
+      - name: Sync Nuvemshop
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NUVEMSHOP_ACCESS_TOKEN: ${{ secrets.NUVEMSHOP_ACCESS_TOKEN }}
           NUVEMSHOP_STORE_ID: ${{ secrets.NUVEMSHOP_STORE_ID }}
           NUVEMSHOP_USER_AGENT: 'Miranda Dashboard (dev@stepads.com.br)'
-        run: npx tsx src/etl/nuvemshop/run.ts
+        run: npx tsx src/etl/nuvemshop/run.ts ${{ inputs.full_nuvemshop_sync == true && '--full' || '' }}
 
-      - name: Sync Conta Azul (incremental)
+      - name: Sync Conta Azul
         if: success()
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -56,7 +68,7 @@ jobs:
           # Refresh token is read from Supabase etl_config table (not from secrets).
           # The ETL writes the new rotated token back to the table after each run.
           # CONTA_AZUL_REFRESH_TOKEN env var is only used as fallback on first run.
-        run: npx tsx src/etl/conta-azul/run.ts
+        run: npx tsx src/etl/conta-azul/run.ts ${{ inputs.full_contaazul_sync == true && '--full' || '' }}
 
       - name: Sync Meta Ads (incremental — upsert defensivo dos ultimos 7 dias)
         if: ${{ success() && inputs.full_meta_sync != true }}

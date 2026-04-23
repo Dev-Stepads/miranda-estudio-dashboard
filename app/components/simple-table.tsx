@@ -11,7 +11,7 @@ interface SimpleTableProps {
   title: string;
   subtitle?: string;
   columns: Column[];
-  rows: Record<string, unknown>[];
+  rows: object[];
 }
 
 export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps) {
@@ -54,7 +54,7 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
                       col.align === 'right' ? 'text-right font-mono' : ''
                     } ${col.format === 'currency' ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}
                   >
-                    {formatCell(row[col.key], col.format)}
+                    {formatCell((row as Record<string, unknown>)[col.key], col.format)}
                   </td>
                 ))}
               </tr>

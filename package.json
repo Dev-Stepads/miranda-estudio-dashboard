@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc",
+    "lint": "tsc --noEmit",
     "sync:nuvemshop": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts",
     "sync:nuvemshop:full": "tsx --env-file=.env.local src/etl/nuvemshop/run.ts --full",
     "sync:contaazul": "tsx --env-file=.env.local src/etl/conta-azul/run.ts",

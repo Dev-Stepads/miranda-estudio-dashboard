@@ -53,6 +53,8 @@ import {
   VendaItensResponseSchema,
   VendaBuscaResponseSchema,
 } from '../../integrations/conta-azul/schemas.ts';
+import { withRetry } from '../../lib/http.ts';
+import { HttpError, RateLimitError } from '../../lib/errors.ts';
 
 // ------------------------------------------------------------
 // Types
@@ -128,6 +130,10 @@ const USER_AGENT = 'Miranda Dashboard ETL (dev@stepads.com.br)';
  * longer than that, so we must retry once with a fresh token when
  * the API rejects us. `tokenManager.refresh()` rotates the
  * refresh_token and persists via the onRefresh callback.
+ *
+ * Transient errors (429, 5xx) are retried via the unified `withRetry`
+ * helper from lib/http.ts with the same backoff strategy (3 retries,
+ * exponential backoff for 5xx, rate-limit-aware delay for 429).
  */
 async function fetchAuth(
   url: string,
@@ -139,32 +145,32 @@ async function fetchAuth(
     'User-Agent': USER_AGENT,
   });
 
-  const MAX_RETRIES = 3;
-  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-    const resp = await fetch(url, { headers: makeHeaders(attempt === 1 ? token : await tokenManager.getAccessToken()) });
-
-    // 401 → force refresh and retry (existing logic)
-    if (resp.status === 401 && attempt === 1) {
-      await tokenManager.refresh();
-      continue;
-    }
-
-    // Transient errors (429, 5xx) → retry with backoff
-    if ((resp.status === 429 || resp.status >= 500) && attempt <= MAX_RETRIES) {
-      const delayMs = resp.status === 429 ? 10_000 : 1000 * Math.pow(2, attempt - 1);
-      console.log(
-        `  ⏳ [conta-azul] ${resp.status} on attempt ${attempt}/${MAX_RETRIES + 1}, ` +
-        `retrying in ${Math.round(delayMs / 1000)}s...`,
-      );
-      await sleep(delayMs);
-      continue;
-    }
-
-    return resp;
+  // First attempt with current token — handle 401 refresh separately
+  const firstResp = await fetch(url, { headers: makeHeaders(token) });
+  if (firstResp.status === 401) {
+    await tokenManager.refresh();
+    // Fall through to withRetry below with fresh token
+  } else if (firstResp.status !== 429 && firstResp.status < 500) {
+    // Success or non-transient error — return immediately
+    return firstResp;
   }
 
-  // Shouldn't reach here, but safety fallback
-  return fetch(url, { headers: makeHeaders(await tokenManager.getAccessToken()) });
+  // Use withRetry for transient errors (429, 5xx) and the post-401-refresh retry.
+  // withRetry handles RateLimitError and HttpError (status >= 500 or status === 0).
+  return withRetry(
+    async () => {
+      const currentToken = await tokenManager.getAccessToken();
+      const resp = await fetch(url, { headers: makeHeaders(currentToken) });
+      if (resp.status === 429) {
+        throw new RateLimitError('conta-azul', 10_000);
+      }
+      if (resp.status >= 500) {
+        throw new HttpError(`HTTP ${resp.status}`, 'conta-azul', resp.status);
+      }
+      return resp;
+    },
+    { maxRetries: 3, label: 'conta-azul' },
+  );
 }
 
 // ------------------------------------------------------------
@@ -424,7 +430,7 @@ async function processVenda(
   if (customerSourceId && customerName) {
     const { error: custErr } = await supabase.from('customers').upsert(
       {
-        source: 'conta_azul',
+        source: 'conta-azul',
         source_customer_id: customerSourceId,
         name: customerName,
         gender: 'unknown',
@@ -441,7 +447,7 @@ async function processVenda(
     const { data: custData } = await supabase
       .from('customers')
       .select('customer_id')
-      .eq('source', 'conta_azul')
+      .eq('source', 'conta-azul')
       .eq('source_customer_id', customerSourceId)
       .limit(1);
     customerId = (custData?.[0]?.customer_id as number | null) ?? null;
@@ -452,7 +458,7 @@ async function processVenda(
     .from('sales')
     .upsert(
       {
-        source: 'conta_azul',
+        source: 'conta-azul',
         source_sale_id: sourceSaleId,
         sale_date: saleDate,
         gross_revenue: grossRevenue,
@@ -504,12 +510,29 @@ async function processVenda(
       items = adjusted;
     }
 
-    await supabase.from('sale_items').delete().eq('sale_id', saleId);
-    const { error: itemErr } = await supabase.from('sale_items').insert(items);
-    if (itemErr === null) {
-      result.saleItemsInserted += items.length;
+    // Atomic-ish sale_items replacement: delete old → insert new → verify count.
+    // If delete or insert fails, log for manual recovery but don't delete the
+    // sale itself — it's still valid data, just missing item detail.
+    const { error: delErr } = await supabase.from('sale_items').delete().eq('sale_id', saleId);
+    if (delErr) {
+      log(`  ⚠ Items delete #${v.numero} (sale_id=${saleId}): ${delErr.message} — skipping items insert`);
+      result.errors++;
     } else {
-      log(`  ❌ Items #${v.numero}: ${itemErr.message}`);
+      const { data: insertedData, error: itemErr } = await supabase
+        .from('sale_items')
+        .insert(items)
+        .select('sale_item_id');
+      if (itemErr !== null) {
+        log(`  ❌ Items insert #${v.numero} (sale_id=${saleId}): ${itemErr.message} — sale exists but items are missing, needs manual recovery`);
+        result.errors++;
+      } else {
+        const insertedCount = insertedData?.length ?? 0;
+        result.saleItemsInserted += insertedCount;
+        // Guard: verify inserted count matches expected
+        if (insertedCount !== items.length) {
+          log(`  ⚠ Items count mismatch #${v.numero} (sale_id=${saleId}): expected ${items.length}, inserted ${insertedCount}`);
+        }
+      }
     }
   }
 
@@ -534,7 +557,7 @@ export async function cleanupOldRecords(
     const { data, error } = await supabase
       .from('sales')
       .select('sale_id')
-      .eq('source', 'conta_azul')
+      .eq('source', 'conta-azul')
       .order('sale_id', { ascending: true })
       .range(page * PAGE, (page + 1) * PAGE - 1);
     if (error) throw new Error(`cleanupOldRecords: ${error.message}`);

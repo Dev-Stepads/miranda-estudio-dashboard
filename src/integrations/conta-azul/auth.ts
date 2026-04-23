@@ -192,11 +192,9 @@ export interface ContaAzulTokenManagerConfig extends ContaAzulOAuthCredentials {
  * // Use accessToken for HTTP calls to api-v2.contaazul.com
  * ```
  *
- * Thread-safety note: not safe for concurrent use. If two callers call
- * `getAccessToken()` simultaneously AND the token is expired, they will
- * both trigger a refresh, and the second one will fail because the
- * first refresh_token is already consumed. Callers that parallelize
- * must coordinate at a higher level (e.g., a singleton + mutex).
+ * Thread-safety: uses an internal mutex so concurrent calls to
+ * `getAccessToken()` are safe — only the first caller triggers the
+ * refresh, and subsequent callers wait for the same promise.
  */
 export class ContaAzulTokenManager {
   private readonly credentials: ContaAzulOAuthCredentials;
@@ -204,6 +202,8 @@ export class ContaAzulTokenManager {
   private accessToken: string | null;
   private expiresAt: Date | null;
   private readonly onRefresh: PersistTokensCallback | null;
+  /** Mutex: if a refresh is in flight, other callers await the same promise. */
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(config: ContaAzulTokenManagerConfig) {
     this.credentials = { clientId: config.clientId, clientSecret: config.clientSecret };
@@ -216,12 +216,18 @@ export class ContaAzulTokenManager {
   /**
    * Return a valid access_token, refreshing if necessary. Also
    * rotates and persists the refresh_token when a refresh happens.
+   * Safe for concurrent calls — only one refresh executes at a time.
    */
   async getAccessToken(): Promise<string> {
     if (this.accessToken !== null && this.isFresh()) {
       return this.accessToken;
     }
-    await this.refresh();
+    // If a refresh is already in flight, wait for it instead of starting a second one
+    if (this.refreshPromise) {
+      await this.refreshPromise;
+    } else {
+      await this.refresh();
+    }
     // `refresh()` guarantees accessToken is non-null on success.
     return this.accessToken!;
   }
@@ -240,6 +246,20 @@ export class ContaAzulTokenManager {
    * the API (access_token invalidated early).
    */
   async refresh(): Promise<void> {
+    // Mutex: prevent concurrent refreshes from consuming the single-use token twice
+    if (this.refreshPromise) {
+      await this.refreshPromise;
+      return;
+    }
+    this.refreshPromise = this.doRefresh();
+    try {
+      await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  private async doRefresh(): Promise<void> {
     const response = await refreshAccessToken({
       credentials: this.credentials,
       refreshToken: this.refreshToken,

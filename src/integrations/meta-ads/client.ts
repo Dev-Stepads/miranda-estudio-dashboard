@@ -21,7 +21,8 @@
 
 import { z } from 'zod';
 
-import { ValidationError } from '../../lib/errors.ts';
+import { HttpError, RateLimitError, ValidationError } from '../../lib/errors.ts';
+import { withRetry } from '../../lib/http.ts';
 import {
   MetaInsightsListSchema,
   MetaAdAccountSchema,
@@ -262,42 +263,50 @@ export class MetaAdsClient {
   private async fetchJson(
     url: string,
   ): Promise<{ body: unknown; headers: Headers }> {
-    const MAX_RETRIES = 3;
-    let lastError: unknown;
+    // withRetry handles transient errors (429/5xx) with exponential backoff.
+    // We throw RateLimitError (with Meta's recommended 60s cooldown) or
+    // HttpError so that withRetry's isTransient check recognizes them.
+    return withRetry(
+      async () => {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        });
 
-    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
+        const contentType = response.headers.get('content-type') ?? '';
+        const body: unknown = contentType.includes('application/json')
+          ? await safeJson(response)
+          : await response.text();
 
-      const contentType = response.headers.get('content-type') ?? '';
-      const body: unknown = contentType.includes('application/json')
-        ? await safeJson(response)
-        : await response.text();
+        if (response.ok) {
+          return { body, headers: response.headers };
+        }
 
-      if (response.ok) {
-        return { body, headers: response.headers };
-      }
+        const message = extractMetaError(body) ?? `HTTP ${response.status}`;
 
-      const message = extractMetaError(body) ?? `HTTP ${response.status}`;
-      lastError = new Error(`[meta-ads] ${message} — url: ${url.split('?')[0]}`);
+        if (response.status === 429) {
+          // Meta recommends waiting ~1 min on rate limit
+          throw new RateLimitError(SOURCE, 60_000, body);
+        }
+        if (response.status >= 500) {
+          throw new HttpError(
+            `[meta-ads] ${message} — url: ${url.split('?')[0]}`,
+            SOURCE,
+            response.status,
+            body,
+          );
+        }
 
-      // Retry on transient errors (429, 5xx)
-      const isTransient = response.status === 429 || response.status >= 500;
-      if (!isTransient || attempt > MAX_RETRIES) throw lastError;
-
-      const delayMs = response.status === 429
-        ? 60_000 // Meta recommends waiting ~1 min on rate limit
-        : 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-      console.log(
-        `  ⏳ [meta-ads] ${response.status} on attempt ${attempt}/${MAX_RETRIES + 1}, ` +
-        `retrying in ${Math.round(delayMs / 1000)}s...`,
-      );
-      await sleep(delayMs);
-    }
-
-    throw lastError;
+        // Non-transient error (4xx other than 429) — throw plain error, won't be retried
+        throw new HttpError(
+          `[meta-ads] ${message} — url: ${url.split('?')[0]}`,
+          SOURCE,
+          response.status,
+          body,
+        );
+      },
+      { maxRetries: 3, label: 'meta-ads' },
+    );
   }
 }
 

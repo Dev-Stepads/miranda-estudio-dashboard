@@ -234,7 +234,7 @@ export default async function VisaoGeralPage({
             { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
             { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
           ]}
-          rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+          rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
         />
         <SimpleTable
           title="Top Clientes — Empresas"
@@ -248,7 +248,7 @@ export default async function VisaoGeralPage({
             { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
             { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
           ]}
-          rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+          rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
         />
 
       {/* Pedidos Recentes abaixo */}
@@ -266,7 +266,7 @@ export default async function VisaoGeralPage({
           sale_date_fmt: new Date(o.sale_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
           source_label: o.source === 'nuvemshop' ? 'E-commerce' : 'Loja',
           customer_name: o.customer_name ?? '—',
-        })) as unknown as Record<string, unknown>[]}
+        }))}
       />
     </div>
   );

@@ -8,14 +8,27 @@ import { getSupabase } from './supabase-server';
 const PAGE_SIZE = 1000;
 
 /**
- * Convert a YYYY-MM-DD date string to a timestamptz at midnight São Paulo
- * (UTC-3). Used when filtering sale_date (timestamptz) to match the same
- * day boundaries as the views, which use `at time zone 'America/Sao_Paulo'`.
- * Without this, sales between 00:00-03:00 UTC fall on different days in
- * the view vs the direct query, causing revenue diffs on long periods.
+ * Convert a YYYY-MM-DD date string to a timestamptz at midnight São Paulo.
+ * São Paulo is UTC-3 (standard) or UTC-2 (daylight saving, ~Oct–Feb).
+ * We construct a Date at noon UTC on that day and use Intl to find the
+ * actual SP offset, then compute midnight SP in UTC. This handles DST
+ * correctly — the old hardcoded `T03:00:00Z` was off by 1 hour during
+ * summer time, which could misattribute boundary-day sales.
  */
 function toSPTimestamp(dateStr: string): string {
-  return `${dateStr}T03:00:00Z`;
+  // Parse components to avoid Date constructor timezone ambiguity
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // Use noon UTC to safely determine which SP offset applies to this date
+  const noonUTC = new Date(Date.UTC(y!, m! - 1, d!, 12, 0, 0));
+  // Get the SP local hour at noon UTC — the difference tells us the offset
+  const spHour = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hour12: false }).format(noonUTC)
+  );
+  // offset in hours: e.g. spHour=9 when noonUTC=12 → offset=-3; spHour=10 → offset=-2 (DST)
+  const offsetHours = spHour - 12;
+  // Midnight SP in UTC = 00:00 SP = -offsetHours in UTC
+  const midnightUTCHour = -offsetHours;
+  return `${dateStr}T${String(midnightUTCHour).padStart(2, '0')}:00:00Z`;
 }
 
 export interface DailyRevenue {
@@ -73,6 +86,13 @@ function toSaoPauloDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Compute a YYYY-MM-DD string N days ago in São Paulo timezone. */
+function daysAgoSP(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return toSaoPauloDateStr(d);
+}
+
 /** Parse period from searchParams: supports { days } or { from, to } */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 1825; // 5 years
@@ -126,15 +146,15 @@ export function getPreviousPeriod(since: string, until: string): {
   const prevUntilDate = new Date(sinceDate.getTime() - 24 * 60 * 60 * 1000);
   const prevSinceDate = new Date(prevUntilDate.getTime() - lengthMs);
   return {
-    prevSince: prevSinceDate.toISOString().split('T')[0]!,
-    prevUntil: prevUntilDate.toISOString().split('T')[0]!,
+    prevSince: toSaoPauloDateStr(prevSinceDate),
+    prevUntil: toSaoPauloDateStr(prevUntilDate),
   };
 }
 
 /** Visão Geral: revenue by day and source */
 export async function fetchDailyRevenue(days: number = 30, from?: string, to?: string): Promise<DailyRevenue[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
   const all: DailyRevenue[] = [];
   let page = 0;
@@ -167,11 +187,20 @@ export async function fetchDailyRevenue(days: number = 30, from?: string, to?: s
  */
 export async function fetchTopProducts(limit: number = 20, days: number = 30, from?: string, to?: string): Promise<TopProduct[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
   const untilStr = to;
 
+  // Row type for sale_items joined with sales
+  interface SaleItemRow {
+    product_name: string;
+    sku: string | null;
+    quantity: number;
+    total_price: number;
+    sales: { source: string } | Array<{ source: string }>;
+  }
+
   // Paginate past PostgREST 1000-row default limit
-  const allItems: Array<Record<string, unknown>> = [];
+  const allItems: SaleItemRow[] = [];
   let page = 0;
   while (true) {
     let q = supabase
@@ -186,17 +215,14 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
     const { data, error } = await q;
     if (error) throw new Error(`fetchTopProducts: ${error.message}`);
     if (!data || data.length === 0) break;
-    allItems.push(...data);
+    allItems.push(...(data as SaleItemRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
   }
 
   // Aggregate by product_name
   const byProduct = new Map<string, TopProduct>();
-  for (const row of allItems as unknown as Array<{
-    product_name: string; sku: string | null; quantity: number; total_price: number;
-    sales: { source: string } | Array<{ source: string }>;
-  }>) {
+  for (const row of allItems) {
     const salesObj = Array.isArray(row.sales) ? row.sales[0] : row.sales;
     const source = salesObj?.source ?? 'unknown';
     const key = row.product_name;
@@ -233,7 +259,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
 /** Nuvemshop daily for the Nuvemshop tab */
 export async function fetchNuvemshopDaily(days: number = 30, from?: string, to?: string): Promise<NuvemshopDaily[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
   const all: NuvemshopDaily[] = [];
   let page = 0;
@@ -297,9 +323,17 @@ function classifyCustomer(name: string, source: string, sourceCustomerId?: strin
  */
 export async function fetchTopCustomers(limit: number = 15, source?: string, days: number = 30, from?: string, to?: string): Promise<TopCustomer[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
-  const allRows: Array<Record<string, unknown>> = [];
+  interface CustomerJoinRow {
+    customer_id: number;
+    source: string;
+    gross_revenue: number;
+    customers: { name: string; state: string | null; source_customer_id: string; email: string | null; phone: string | null }
+      | Array<{ name: string; state: string | null; source_customer_id: string; email: string | null; phone: string | null }>;
+  }
+
+  const allRows: CustomerJoinRow[] = [];
   let page = 0;
   while (true) {
     let q = supabase
@@ -315,16 +349,13 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
     const { data, error } = await q;
     if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
     if (!data || data.length === 0) break;
-    allRows.push(...data);
+    allRows.push(...(data as CustomerJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
   }
 
   const byCustomer = new Map<number, TopCustomer>();
-  for (const row of allRows as unknown as Array<{
-    customer_id: number; source: string; gross_revenue: number;
-    customers: { name: string; state: string | null; source_customer_id: string; email: string | null; phone: string | null } | Array<{ name: string; state: string | null; source_customer_id: string; email: string | null; phone: string | null }>;
-  }>) {
+  for (const row of allRows) {
     const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     if (!cust) continue;
     const existing = byCustomer.get(row.customer_id) ?? {
@@ -353,9 +384,14 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
 /** Geography (Nuvemshop), filtered by period */
 export async function fetchGeography(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoData[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
-  const allRows: Array<Record<string, unknown>> = [];
+  interface GeoJoinRow {
+    gross_revenue: number;
+    customers: { state: string; city: string } | Array<{ state: string; city: string }>;
+  }
+
+  const allRows: GeoJoinRow[] = [];
   let page = 0;
   while (true) {
     let q = supabase
@@ -370,13 +406,13 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeography: ${error.message}`);
     if (!data || data.length === 0) break;
-    allRows.push(...data);
+    allRows.push(...(data as GeoJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
   }
 
   const byState = new Map<string, GeoData>();
-  for (const row of allRows as unknown as Array<{ gross_revenue: number; customers: { state: string; city: string } | Array<{ state: string; city: string }> }>) {
+  for (const row of allRows) {
     const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     const state = c?.state;
     if (!state) continue;
@@ -394,9 +430,14 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
 /** Geography (Conta Azul — Loja Física), filtered by period. Excludes nstag-. */
 export async function fetchGeographyCA(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoData[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
-  const allRows: Array<Record<string, unknown>> = [];
+  interface GeoCAJoinRow {
+    gross_revenue: number;
+    customers: { state: string; city: string } | Array<{ state: string; city: string }>;
+  }
+
+  const allRows: GeoCAJoinRow[] = [];
   let page = 0;
   while (true) {
     let q = supabase
@@ -412,13 +453,13 @@ export async function fetchGeographyCA(limit: number = 15, days: number = 30, fr
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
     if (!data || data.length === 0) break;
-    allRows.push(...data);
+    allRows.push(...(data as GeoCAJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
   }
 
   const byState = new Map<string, GeoData>();
-  for (const row of allRows as unknown as Array<{ gross_revenue: number; customers: { state: string; city: string } | Array<{ state: string; city: string }> }>) {
+  for (const row of allRows) {
     const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     const state = c?.state;
     if (!state) continue;
@@ -444,9 +485,15 @@ export interface GeoConsolidated {
 /** Geography consolidated (both sources), filtered by period. Excludes nstag-. */
 export async function fetchGeographyConsolidated(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoConsolidated[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
-  const allRows: Array<Record<string, unknown>> = [];
+  interface GeoConsolidatedJoinRow {
+    source: string;
+    gross_revenue: number;
+    customers: { state: string } | Array<{ state: string }>;
+  }
+
+  const allRows: GeoConsolidatedJoinRow[] = [];
   let page = 0;
   while (true) {
     let q = supabase
@@ -461,13 +508,13 @@ export async function fetchGeographyConsolidated(limit: number = 15, days: numbe
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeographyConsolidated: ${error.message}`);
     if (!data || data.length === 0) break;
-    allRows.push(...data);
+    allRows.push(...(data as GeoConsolidatedJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
   }
 
   const byState = new Map<string, GeoConsolidated>();
-  for (const row of allRows as unknown as Array<{ source: string; gross_revenue: number; customers: { state: string } | Array<{ state: string }> }>) {
+  for (const row of allRows) {
     const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     const state = c?.state;
     if (!state) continue;
@@ -631,24 +678,35 @@ export async function fetchRecentOrders(limit: number = 10, days: number = 30, f
   if (from && to) {
     query = query.gte('sale_date', toSPTimestamp(from)).lte('sale_date', toSPTimestamp(to));
   } else {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    query = query.gte('sale_date', toSPTimestamp(since.toISOString().split('T')[0]!));
+    query = query.gte('sale_date', toSPTimestamp(daysAgoSP(days)));
   }
 
   const { data, error } = await query;
 
   if (error) throw new Error(`fetchRecentOrders: ${error.message}`);
 
-  return (data ?? []).map((row: Record<string, unknown>) => ({
-    sale_id: row.sale_id as number,
-    source: row.source as string,
-    sale_date: row.sale_date as string,
-    gross_revenue: row.gross_revenue as number,
-    status: row.status as string,
-    payment_method: row.payment_method as string | null,
-    customer_name: (row.customers as Record<string, unknown> | null)?.name as string | null ?? null,
-  }));
+  interface RecentOrderRow {
+    sale_id: number;
+    source: string;
+    sale_date: string;
+    gross_revenue: number;
+    status: string;
+    payment_method: string | null;
+    customers: { name: string | null } | Array<{ name: string | null }> | null;
+  }
+
+  return ((data ?? []) as RecentOrderRow[]).map((row) => {
+    const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+    return {
+      sale_id: row.sale_id,
+      source: row.source,
+      sale_date: row.sale_date,
+      gross_revenue: row.gross_revenue,
+      status: row.status,
+      payment_method: row.payment_method,
+      customer_name: cust?.name ?? null,
+    };
+  });
 }
 
 export interface CustomerRecurrence {
@@ -662,7 +720,7 @@ export interface CustomerRecurrence {
 /** Customer recurrence (repeat vs first-time buyers), filtered by period */
 export async function fetchCustomerRecurrence(days: number = 30, from?: string, to?: string): Promise<CustomerRecurrence[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
   // Query sales with customer_id, filtered by period. Excludes nstag-.
   const allRows = await (async () => {
@@ -764,7 +822,7 @@ export async function fetchMetaDaily(
   to?: string,
 ): Promise<MetaDailyRow[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
   const all: MetaDailyRow[] = [];
   let page = 0;
@@ -799,9 +857,20 @@ export async function fetchMetaCampaignRanking(
 ): Promise<MetaRankingRow[]> {
   const supabase = getSupabase();
 
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
-  const allRows: Array<Record<string, unknown>> = [];
+  interface CampaignInsightRow {
+    campaign_id: string;
+    campaign_name: string | null;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    purchases: number;
+    purchase_value: number;
+    leads: number | null;
+  }
+
+  const allRows: CampaignInsightRow[] = [];
   let page = 0;
   while (true) {
     let q = supabase
@@ -814,22 +883,13 @@ export async function fetchMetaCampaignRanking(
     const { data, error } = await q;
     if (error) throw new Error(`fetchMetaCampaignRanking: ${error.message}`);
     if (!data || data.length === 0) break;
-    allRows.push(...data);
+    allRows.push(...(data as CampaignInsightRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
   }
 
   const byCampaign = new Map<string, MetaRankingRow>();
-  for (const row of allRows as Array<{
-    campaign_id: string;
-    campaign_name: string | null;
-    spend: number;
-    impressions: number;
-    clicks: number;
-    purchases: number;
-    purchase_value: number;
-    leads: number | null;
-  }>) {
+  for (const row of allRows) {
     const key = row.campaign_id;
     const existing = byCampaign.get(key) ?? {
       campaign_id: key,
@@ -873,28 +933,9 @@ export async function fetchMetaAdRanking(
 ): Promise<MetaAdRankingRow[]> {
   const supabase = getSupabase();
 
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
-  const allRows: Array<Record<string, unknown>> = [];
-  let page = 0;
-  while (true) {
-    let q = supabase
-      .from('meta_ads_insights')
-      .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, leads, date')
-      .eq('level', 'ad')
-      .gte('date', sinceStr)
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('date', to);
-    const { data, error } = await q;
-    if (error) throw new Error(`fetchMetaAdRanking: ${error.message}`);
-    if (!data || data.length === 0) break;
-    allRows.push(...data);
-    if (data.length < PAGE_SIZE) break;
-    page++;
-  }
-
-  const byAd = new Map<string, MetaAdRankingRow>();
-  for (const row of allRows as Array<{
+  interface AdInsightRow {
     ad_id: string | null;
     ad_name: string | null;
     adset_id: string | null;
@@ -907,7 +948,28 @@ export async function fetchMetaAdRanking(
     purchases: number;
     purchase_value: number;
     leads: number | null;
-  }>) {
+  }
+
+  const allRows: AdInsightRow[] = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('meta_ads_insights')
+      .select('ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, spend, impressions, clicks, purchases, purchase_value, leads, date')
+      .eq('level', 'ad')
+      .gte('date', sinceStr)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (to) q = q.lte('date', to);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchMetaAdRanking: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allRows.push(...(data as AdInsightRow[]));
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
+
+  const byAd = new Map<string, MetaAdRankingRow>();
+  for (const row of allRows) {
     if (row.ad_id === null) continue;
     const key = row.ad_id;
     const existing = byAd.get(key) ?? {
@@ -982,7 +1044,7 @@ export async function fetchMetaAdRanking(
 /** Abandoned checkouts (Nuvemshop), filtered by period */
 export async function fetchAbandoned(days: number = 30, from?: string, to?: string): Promise<AbandonedData[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
   const all: AbandonedData[] = [];
   let page = 0;
@@ -1019,7 +1081,7 @@ export interface AbandonedCheckoutDetail {
 /** Individual abandoned checkouts with contact details, filtered by period */
 export async function fetchAbandonedDetails(days: number = 30, from?: string, to?: string, limit: number = 20): Promise<AbandonedCheckoutDetail[]> {
   const supabase = getSupabase();
-  const sinceStr = from ?? (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0]!; })();
+  const sinceStr = from ?? daysAgoSP(days);
 
   let query = supabase
     .from('abandoned_checkouts')

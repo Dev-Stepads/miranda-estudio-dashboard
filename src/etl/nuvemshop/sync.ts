@@ -31,6 +31,7 @@ import {
 import type { RawNuvemshopOrder, RawNuvemshopCustomer, RawNuvemshopProduct, RawNuvemshopCheckout } from '../../integrations/nuvemshop/types.ts';
 import type { Gender } from '../../canonical/types.ts';
 import { extractLocalized } from '../../lib/i18n.ts';
+import { withRetry } from '../../lib/http.ts';
 
 // ------------------------------------------------------------
 // Types
@@ -95,39 +96,21 @@ async function paginateAll<T>(
   const allItems: T[] = [];
   let page = 1;
 
-  const MAX_RETRIES = 3;
-
   while (true) {
-    let result: { items: T[]; pagination: { nextUrl: string | null }; rateLimit: { remaining: number } };
+    // withRetry handles transient errors (429, 5xx, network/timeout)
+    // with exponential backoff. The NuvemshopClient uses fetchJson from
+    // lib/http.ts which throws RateLimitError/HttpError — both recognized
+    // by withRetry's isTransient check.
+    const result = await withRetry(
+      () => fetcher(page),
+      { maxRetries: 3, label: `nuvemshop-page-${page}` },
+    );
 
-    // Retry transient errors (429, 5xx, network) with backoff
-    let lastErr: unknown;
-    let fetched = false;
-    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-      try {
-        result = await fetcher(page);
-        fetched = true;
-        break;
-      } catch (err) {
-        lastErr = err;
-        const isTransient = err instanceof Error && (
-          err.message.includes('429') || err.message.includes('5') ||
-          err.constructor.name === 'RateLimitError' ||
-          (err.constructor.name === 'HttpError' && 'status' in err && ((err as { status: number }).status === 0 || (err as { status: number }).status >= 500))
-        );
-        if (!isTransient || attempt > MAX_RETRIES) throw err;
-        const delayMs = 1000 * Math.pow(2, attempt - 1);
-        log(`  ⏳ page ${page} attempt ${attempt}/${MAX_RETRIES + 1} failed, retrying in ${Math.round(delayMs / 1000)}s...`);
-        await sleep(delayMs);
-      }
-    }
-    if (!fetched) throw lastErr;
+    allItems.push(...result.items);
 
-    allItems.push(...result!.items);
+    log(`  page ${page}: ${result.items.length} items (total so far: ${allItems.length}, rate remaining: ${result.rateLimit.remaining})`);
 
-    log(`  page ${page}: ${result!.items.length} items (total so far: ${allItems.length}, rate remaining: ${result!.rateLimit.remaining})`);
-
-    if (result!.pagination.nextUrl === null || result!.items.length === 0) {
+    if (result.pagination.nextUrl === null || result.items.length === 0) {
       break;
     }
 
@@ -136,8 +119,8 @@ async function paginateAll<T>(
       break;
     }
 
-    if (result!.rateLimit.remaining <= RATE_LIMIT_THRESHOLD) {
-      log(`  ⏸ rate limit low (${result!.rateLimit.remaining}), cooling down ${RATE_LIMIT_COOLDOWN_MS}ms...`);
+    if (result.rateLimit.remaining <= RATE_LIMIT_THRESHOLD) {
+      log(`  ⏸ rate limit low (${result.rateLimit.remaining}), cooling down ${RATE_LIMIT_COOLDOWN_MS}ms...`);
       await sleep(RATE_LIMIT_COOLDOWN_MS);
     }
 
@@ -333,15 +316,24 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
       }
 
       // 3b. Delete old sale_items for all sales in this batch
+      // Atomic-ish replacement: delete old → insert new → verify count.
+      // If delete fails, skip the insert to avoid duplicates. If insert fails,
+      // sales remain valid but with missing item detail — logged for recovery.
       const saleIds = Array.from(saleIdMap.values());
+      let itemsDeleteOk = true;
       if (saleIds.length > 0) {
-        await ctx.supabase
+        const { error: delErr } = await ctx.supabase
           .from('sale_items')
           .delete()
           .in('sale_id', saleIds);
+        if (delErr) {
+          ctx.log(`  ⚠ Batch ${batchNum}/${totalBatches} sale_items delete failed: ${delErr.message} — skipping items insert for this batch`);
+          errors++;
+          itemsDeleteOk = false;
+        }
       }
 
-      // 3c. Batch insert new sale_items
+      // 3c. Batch insert new sale_items (only if delete succeeded)
       const allItems: Array<{
         sale_id: number;
         product_name: string;
@@ -351,59 +343,69 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
         total_price: number;
       }> = [];
 
-      for (const { canonical } of batch) {
-        const saleId = saleIdMap.get(canonical.source_id);
-        if (saleId === undefined) continue;
-        const validItems = canonical.items.filter((item) => item.quantity > 0);
-        if (validItems.length === 0) continue;
+      if (itemsDeleteOk) {
+        for (const { canonical } of batch) {
+          const saleId = saleIdMap.get(canonical.source_id);
+          if (saleId === undefined) continue;
+          const validItems = canonical.items.filter((item) => item.quantity > 0);
+          if (validItems.length === 0) continue;
 
-        // Distribute order-level discounts proportionally across items so that
-        // sum(item.total_price) = gross_revenue. Without this, product rankings
-        // show pre-discount revenue (inflated). See audit 2026-04-22.
-        const rawSum = validItems.reduce((s, i) => s + i.total_price, 0);
-        const gross = canonical.total_gross;
-        const needsAdjust = rawSum > 0 && Math.abs(rawSum - gross) > 0.01;
+          // Distribute order-level discounts proportionally across items so that
+          // sum(item.total_price) = gross_revenue. Without this, product rankings
+          // show pre-discount revenue (inflated). See audit 2026-04-22.
+          const rawSum = validItems.reduce((s, i) => s + i.total_price, 0);
+          const gross = canonical.total_gross;
+          const needsAdjust = rawSum > 0 && Math.abs(rawSum - gross) > 0.01;
 
-        if (needsAdjust) {
-          const adjustedPrices = validItems.map((item) =>
-            Math.round((item.total_price / rawSum) * gross * 100) / 100,
-          );
-          // Last item absorbs rounding residual so sum matches gross exactly
-          const partialSum = adjustedPrices.slice(0, -1).reduce((s, p) => s + p, 0);
-          adjustedPrices[adjustedPrices.length - 1] = Math.round((gross - partialSum) * 100) / 100;
+          if (needsAdjust) {
+            const adjustedPrices = validItems.map((item) =>
+              Math.round((item.total_price / rawSum) * gross * 100) / 100,
+            );
+            // Last item absorbs rounding residual so sum matches gross exactly
+            const partialSum = adjustedPrices.slice(0, -1).reduce((s, p) => s + p, 0);
+            adjustedPrices[adjustedPrices.length - 1] = Math.round((gross - partialSum) * 100) / 100;
 
-          for (let idx = 0; idx < validItems.length; idx++) {
-            const item = validItems[idx]!;
-            allItems.push({
-              sale_id: saleId,
-              product_name: item.product_name,
-              sku: item.sku,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              total_price: adjustedPrices[idx]!,
-            });
-          }
-        } else {
-          for (const item of validItems) {
-            allItems.push({
-              sale_id: saleId,
-              product_name: item.product_name,
-              sku: item.sku,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              total_price: item.total_price,
-            });
+            for (let idx = 0; idx < validItems.length; idx++) {
+              const item = validItems[idx]!;
+              allItems.push({
+                sale_id: saleId,
+                product_name: item.product_name,
+                sku: item.sku,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                total_price: adjustedPrices[idx]!,
+              });
+            }
+          } else {
+            for (const item of validItems) {
+              allItems.push({
+                sale_id: saleId,
+                product_name: item.product_name,
+                sku: item.sku,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                total_price: item.total_price,
+              });
+            }
           }
         }
-      }
 
-      if (allItems.length > 0) {
-        const { error: itemsError } = await ctx.supabase
-          .from('sale_items')
-          .insert(allItems);
+        if (allItems.length > 0) {
+          const { data: insertedData, error: itemsError } = await ctx.supabase
+            .from('sale_items')
+            .insert(allItems)
+            .select('sale_item_id');
 
-        if (itemsError !== null) {
-          ctx.log(`  ❌ Batch ${batchNum}/${totalBatches} sale_items insert: ${itemsError.message}`);
+          if (itemsError !== null) {
+            ctx.log(`  ❌ Batch ${batchNum}/${totalBatches} sale_items insert: ${itemsError.message} — ${saleIds.length} sales exist but items are missing, needs manual recovery (sale_ids: ${saleIds.slice(0, 5).join(',')}${saleIds.length > 5 ? '...' : ''})`);
+            errors++;
+          } else {
+            // Guard: verify inserted count matches expected
+            const insertedCount = insertedData?.length ?? 0;
+            if (insertedCount !== allItems.length) {
+              ctx.log(`  ⚠ Batch ${batchNum}/${totalBatches} items count mismatch: expected ${allItems.length}, inserted ${insertedCount}`);
+            }
+          }
         }
       }
 

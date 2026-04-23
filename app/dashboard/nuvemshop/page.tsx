@@ -126,7 +126,7 @@ export default async function NuvemshopPage({
             { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
             { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
           ]}
-          rows={geography.slice(0, 15) as unknown as Record<string, unknown>[]}
+          rows={geography.slice(0, 15)}
         />
       </div>
 
@@ -149,7 +149,7 @@ export default async function NuvemshopPage({
           contact_phone: c.contact_phone ?? '—',
           total_display: c.total_amount,
           products_display: (c.products ?? []).map((p) => `${p.name} (${p.quantity}x)`).join(', ') || '—',
-        })) as unknown as Record<string, unknown>[]}
+        }))}
       />
 
       {/* Top Produtos */}
@@ -161,7 +161,7 @@ export default async function NuvemshopPage({
           { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
           { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
-        rows={nsProducts.slice(0, 15) as unknown as Record<string, unknown>[]}
+        rows={nsProducts.slice(0, 15)}
       />
 
       {/* Top Clientes — Pessoas */}
@@ -176,7 +176,7 @@ export default async function NuvemshopPage({
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
       />
 
       {/* Top Clientes — Empresas */}
@@ -191,7 +191,7 @@ export default async function NuvemshopPage({
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' })) as unknown as Record<string, unknown>[]}
+        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
       />
     </div>
   );

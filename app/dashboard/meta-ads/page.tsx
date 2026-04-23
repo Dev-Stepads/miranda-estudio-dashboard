@@ -132,7 +132,7 @@ export default async function MetaAdsPage({
             campaign_name: displayName,
             roas_str: `${c.roas.toFixed(2)}x`,
           };
-        }) as unknown as Record<string, unknown>[]}
+        })}
       />
 
       {/* Ranking de criativos com thumbnail */}

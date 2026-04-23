@@ -79,10 +79,15 @@ export function normalizeState(province: string | null | undefined): string | nu
   const upper = trimmed.toUpperCase();
   if (upper.length === 2 && VALID_UF.has(upper)) return upper;
 
-  // Try full name lookup (case-insensitive)
+  // Try full name lookup (case-insensitive, accent-insensitive)
   const lower = trimmed.toLowerCase();
   const mapped = STATE_NAME_TO_UF[lower];
   if (mapped !== undefined) return mapped;
+
+  // Strip diacritics and try again (handles "SÃO PAULO" → "sao paulo")
+  const stripped = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const mappedStripped = STATE_NAME_TO_UF[stripped];
+  if (mappedStripped !== undefined) return mappedStripped;
 
   // Not a recognized Brazilian state — likely international
   return null;

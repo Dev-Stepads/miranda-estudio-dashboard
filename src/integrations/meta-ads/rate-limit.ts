@@ -47,6 +47,8 @@ export interface RateLimitDecision {
 const BACKOFF_THRESHOLD_PERCENT = 80;
 /** Default pause when we're near the threshold but not yet throttled. */
 const PRECAUTIONARY_SLEEP_MS = 2000;
+/** Cap the maximum sleep to 5 minutes — prevents runaway waits from bad API values. */
+const MAX_SLEEP_MS = 5 * 60 * 1000;
 
 export function parseRateLimitHeaders(headers: Headers): RateLimitDecision {
   const buc = safeParseHeader(headers.get('x-business-use-case-usage'));
@@ -59,7 +61,7 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitDecision {
     return {
       usage,
       shouldBackoff: true,
-      sleepMs: usage.estimatedRegainMinutes * 60 * 1000,
+      sleepMs: Math.min(usage.estimatedRegainMinutes * 60 * 1000, MAX_SLEEP_MS),
     };
   }
 

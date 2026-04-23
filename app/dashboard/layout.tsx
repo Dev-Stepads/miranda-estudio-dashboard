@@ -9,15 +9,21 @@ import { getSupabase } from '../lib/supabase-server';
 export const dynamic = 'force-dynamic';
 
 async function getLastSyncTime(): Promise<string> {
-  const supabase = getSupabase();
-  // raw_meta_insights_campaign receives rows EVERY cron run (append-only),
-  // so its most recent ingested_at reflects the actual last sync time.
-  const { data } = await supabase
-    .from('raw_meta_insights_campaign')
-    .select('ingested_at')
-    .order('ingested_at', { ascending: false })
-    .limit(1);
-  return (data?.[0]?.ingested_at as string) ?? new Date().toISOString();
+  try {
+    const supabase = getSupabase();
+    // raw_meta_insights_campaign receives rows EVERY cron run (append-only),
+    // so its most recent ingested_at reflects the actual last sync time.
+    const { data } = await supabase
+      .from('raw_meta_insights_campaign')
+      .select('ingested_at')
+      .order('ingested_at', { ascending: false })
+      .limit(1);
+    return (data?.[0]?.ingested_at as string) ?? new Date().toISOString();
+  } catch {
+    // If the query fails (e.g. table doesn't exist yet), degrade gracefully
+    // instead of crashing the entire dashboard layout.
+    return new Date().toISOString();
+  }
 }
 
 export default async function DashboardLayout({
