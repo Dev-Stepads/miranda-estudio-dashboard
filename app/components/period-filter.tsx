@@ -29,8 +29,10 @@ function PeriodButtons() {
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  const isValidRange = fromDate !== '' && toDate !== '' && fromDate <= toDate;
+
   function applyCustomRange() {
-    if (!fromDate || !toDate) return;
+    if (!isValidRange) return;
     const params = new URLSearchParams();
     params.set('from', fromDate);
     params.set('to', toDate);
@@ -84,6 +86,7 @@ function PeriodButtons() {
           type="date"
           value={fromDate}
           onChange={(e) => setFromDate(e.target.value)}
+          aria-label="Data de início"
           className="text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-2 py-1"
         />
         <span className="text-xs text-gray-400">→</span>
@@ -91,11 +94,13 @@ function PeriodButtons() {
           type="date"
           value={toDate}
           onChange={(e) => setToDate(e.target.value)}
+          aria-label="Data de fim"
           className="text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-2 py-1"
         />
         <button
           onClick={applyCustomRange}
-          className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 cursor-pointer"
+          disabled={!isValidRange}
+          className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Aplicar
         </button>

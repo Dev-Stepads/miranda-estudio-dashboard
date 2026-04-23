@@ -26,6 +26,28 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
 
   // Filter by selected year
   const filtered = data.filter(d => d.month.startsWith(selectedYear));
+  if (filtered.length === 0) {
+    return (
+      <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div className="p-4 sm:p-6 pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Comparativo Mensal</h3>
+              <p className="text-xs sm:text-sm text-gray-400 mt-0.5">Faturamento total (Loja Física + E-commerce)</p>
+            </div>
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+              {years.map((year) => (
+                <button key={year} onClick={() => setSelectedYear(year)} className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${selectedYear === year ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}>{year}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="px-4 sm:px-6 py-8 text-center text-gray-400">
+          Sem dados para {selectedYear}
+        </div>
+      </div>
+    );
+  }
   const maxRevenue = Math.max(...filtered.map(d => d.revenue), 1);
 
   // Totals for the year

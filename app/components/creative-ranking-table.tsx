@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { formatBRL, formatNumber } from './kpi-cards';
 
 /**
@@ -123,7 +126,9 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
 }
 
 function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
-  if (!url) {
+  const [failed, setFailed] = useState(false);
+
+  if (!url || failed) {
     return (
       <div className="w-10 h-10 rounded-md bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs">
         —
@@ -138,6 +143,7 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
       className="w-10 h-10 rounded-md object-cover bg-gray-100 dark:bg-gray-900"
       loading="lazy"
       referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
     />
   );
 }
