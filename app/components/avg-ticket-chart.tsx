@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { useDarkMode } from './use-dark-mode';
 
 interface AvgTicketChartProps {
   data: Array<{
@@ -33,6 +34,8 @@ function formatCurrency(value: number) {
 }
 
 export function AvgTicketChart({ data, color = '#10b981' }: AvgTicketChartProps) {
+  const dark = useDarkMode();
+  const gridColor = dark ? '#374151' : '#e5e7eb';
   const hasSplit = data.some(d => d.avg_ticket_nuvemshop !== undefined || d.avg_ticket_conta_azul !== undefined);
 
   return (
@@ -43,7 +46,7 @@ export function AvgTicketChart({ data, color = '#10b981' }: AvgTicketChartProps)
       <div className="h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis
               dataKey="day"
               tickFormatter={formatDay}

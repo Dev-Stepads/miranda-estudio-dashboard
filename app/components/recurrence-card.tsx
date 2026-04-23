@@ -57,7 +57,7 @@ export function RecurrenceCard({ sources, totalFirstTime, totalRepeat, totalRepe
 
         {/* Stats à direita */}
         <div className="text-center sm:text-left">
-          <p className="text-4xl sm:text-5xl font-bold text-emerald-600">{totalRepeatRate}%</p>
+          <p className="text-4xl sm:text-5xl font-bold text-emerald-600 dark:text-emerald-400">{totalRepeatRate}%</p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">taxa de recompra geral</p>
           <div className="flex gap-4 mt-3 text-xs justify-center sm:justify-start">
             <span className="flex items-center gap-1.5">
@@ -86,7 +86,7 @@ export function RecurrenceCard({ sources, totalFirstTime, totalRepeat, totalRepe
               </div>
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-emerald-600">{src.repeatRate}%</p>
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{src.repeatRate}%</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">recompra</p>
                 </div>
                 <div className="text-right text-xs text-gray-600 dark:text-gray-300 space-y-0.5">

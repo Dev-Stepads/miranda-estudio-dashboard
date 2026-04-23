@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { useDarkMode } from './use-dark-mode';
 
 interface ChartData {
   day: string;
@@ -45,6 +46,8 @@ const SOURCE_COLORS: Record<string, string> = {
 };
 
 export function RevenueChart({ data, sources }: RevenueChartProps) {
+  const dark = useDarkMode();
+  const gridColor = dark ? '#374151' : '#e5e7eb';
   const activeSources = sources ?? ['nuvemshop', 'conta_azul'];
   const showLegend = activeSources.length > 1;
 
@@ -56,7 +59,7 @@ export function RevenueChart({ data, sources }: RevenueChartProps) {
       <div className="h-56 sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis
               dataKey="day"
               tickFormatter={formatDay}

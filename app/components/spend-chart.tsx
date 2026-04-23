@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { useDarkMode } from './use-dark-mode';
 
 interface SpendChartRow {
   date: string;
@@ -34,6 +35,8 @@ function formatDay(date: string) {
 }
 
 export function SpendChart({ data }: SpendChartProps) {
+  const dark = useDarkMode();
+  const gridColor = dark ? '#374151' : '#e5e7eb';
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
@@ -45,7 +48,7 @@ export function SpendChart({ data }: SpendChartProps) {
       <div className="h-56 sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis
               dataKey="date"
               tickFormatter={formatDay}

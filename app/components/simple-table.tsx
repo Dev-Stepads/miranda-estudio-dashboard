@@ -35,7 +35,7 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-6 py-3 font-medium text-gray-500 dark:text-gray-400 ${
+                  className={`px-3 sm:px-6 py-2 sm:py-3 font-medium text-gray-500 dark:text-gray-400 ${
                     col.align === 'right' ? 'text-right' : 'text-left'
                   }`}
                 >
@@ -50,7 +50,7 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-6 py-3 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 ${
                       col.align === 'right' ? 'text-right font-mono' : ''
                     } ${col.format === 'currency' ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}
                   >
@@ -61,7 +61,7 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={columns.length} className="px-3 sm:px-6 py-8 text-center text-gray-400">
                   Sem dados disponíveis
                 </td>
               </tr>
