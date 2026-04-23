@@ -238,28 +238,23 @@ QA
 --------------------------------------------------------
 BLOQUEIOS ATIVOS
 --------------------------------------------------------
-- T49 ETL CONTA AZUL — RESOLVIDO (2026-04-23). Auditoria completa
-  cruzou 42 meses com API CA: R$ 0,00 diff em TODOS. Marco 2026
-  bate exato com Miranda (Loja R$ 82.944,79). Gap anterior era do
-  ETL de recebiveis (substituido pelo ETL de vendas API em 2026-04-14).
-  152 sales com gross=0 limpas + ETL filtro adicionado. Ranking de
-  produtos corrigido (desconto proporcional em 15.868 items).
-- META ADS: RESOLVIDO.
-- COFRE DE SENHAS STEPADS (bloqueio operacional): task T46 pendente.
-- LGPD WEBHOOKS: RESOLVIDO (T44, 2026-04-23). 3 rotas implementadas
-  com validacao HMAC + logica real.
-- OWNERSHIP DA APP META (divida tecnica): a app Marketing esta sob
-  conta FB "Angelo Meirelles". Mitigacao pendente.
+- TODOS OS BLOQUEIOS TECNICOS RESOLVIDOS.
+- COFRE DE SENHAS STEPADS (bloqueio operacional): T46 pendente.
+  Impede revezamento seguro — proximo dev nao tem credenciais.
+- OWNERSHIP DA APP META (divida tecnica menor): a app Marketing
+  esta sob conta FB "Angelo Meirelles". Mitigacao pendente
+  (adicionar 2o admin). Nao bloqueia nada — token funciona.
 
 --------------------------------------------------------
 PROXIMO MARCO
 --------------------------------------------------------
-Frentes abertas, por prioridade:
+Dashboard esta 100% funcional e em producao. Proximas acoes:
 
-1. Cofre de senhas (T46) — resolver antes da proxima pessoa do
-   revezamento
+1. T46 — Cofre de senhas (~15 min, humano)
+   Bloqueia revezamento. Fazer ANTES de passar o projeto.
 
-2. Rotacao de secrets (T47) — META + SUPABASE service_role passaram
-   pelo chat
+2. T47 — Rotacao de secrets (~30 min, humano)
+   META_APP_SECRET + META_SYSTEM_USER_TOKEN + GitHub PAT.
 
-3. git push + deploy Vercel (todos os fixes da sessao 2026-04-22/23)
+3. Deploy ja esta live. Nao ha push pendente.
+   Ultimo commit: f35da8b (2026-04-23)

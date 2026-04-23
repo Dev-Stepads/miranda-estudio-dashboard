@@ -7,61 +7,79 @@ DATA: 2026-04-23
 RESPONSAVEL: sessao 2026-04-23b — Matheus + Claude
 BRANCH: main
 
+========================================================
+LEIA ISTO PRIMEIRO — RESUMO PRA QUEM ESTA ASSUMINDO
+========================================================
+
+O DASHBOARD ESTA PRONTO E EM PRODUCAO.
+URL: https://miranda-estudio-dashboard.vercel.app
+Login: mirandaestudio / (senha no .env.local ou cofre Stepads)
+
+NAO HA CODIGO PENDENTE. Todas as tasks de codigo estao concluidas.
+O que falta sao 2 acoes operacionais que um humano precisa fazer
+(detalhes na secao 2 abaixo):
+  1. T46 — Criar cofre de senhas (1Password ou Bitwarden)
+  2. T47 — Rotacionar secrets que passaram pelo chat
+
+DADOS: 100% validados. 42 meses de Conta Azul cruzados com a API
+(R$ 0,00 de diferenca em TODOS). Nuvemshop match exato nos centavos.
+Meta Ads match exato com a API.
+
+SE VOCE PRECISA RODAR LOCAL:
+  1. git pull origin main
+  2. npm install
+  3. Pegar .env.local do Matheus (ou do cofre quando T46 estiver feita)
+  4. npm run dev → localhost:3000
+  5. Login com as credenciais do DASHBOARD_LOGIN/DASHBOARD_PASSWORD
+
 --------------------------------------------------------
-0. SESSAO ATUAL (2026-04-23b) — AUDITORIA + 11 FIXES
+0. ULTIMAS 2 SESSOES (2026-04-22/23) — O QUE FOI FEITO
 --------------------------------------------------------
-Sessao focada em auditoria profunda de seguranca, resiliencia
-de ETL e qualidade de codigo. Analise automatizada de todo o
-codebase (frontend, backend, infra) identificou 13 issues.
-11 resolvidos nesta sessao, 1 falso positivo, 1 adiado.
 
-FIXES APLICADOS (11):
+SESSAO 2026-04-22/23 (14 fixes — dados + seguranca):
+  Auditoria completa de integridade de dados. Destaques:
+  - T49 RESOLVIDO: gap de R$ 3.010 em marco era do ETL antigo
+  - T52: sale_items.quantity INT → NUMERIC (items fracionarios)
+  - T44: 3 webhooks LGPD implementados com validacao HMAC
+  - 152 sales fantasma (gross=0) removidas do banco
+  - Ranking de produtos corrigido (desconto proporcional)
+  - Login movido para env vars (SESSION_HMAC + rate limiting)
+  - Sessao HMAC com assinatura criptografica
+  Commit: 4aba806
 
-  SEGURANCA (3):
-  1. T53 — SESSION_SECRET separado do password
-     Sessao HMAC usava DASHBOARD_PASSWORD como chave. Agora usa
-     SESSION_SECRET (32 bytes random). Se password vaza, sessoes
-     nao sao mais forjaveis.
-  2. T54 — Middleware migrado para Web Crypto API
-     middleware.ts importava `crypto` do Node (incompativel com
-     Edge Runtime). Reescrito com SubtleCrypto + timingSafeEqual
-     manual. Sem dependencia de Node no middleware.
-  3. T55 — LGPD: raw tables incluidas na redacao
-     customers-redact agora deleta raw_nuvemshop_orders do cliente
-     (contém PII no payload JSON).
+SESSAO 2026-04-23b (12 fixes — seguranca + resiliencia + qualidade):
+  Auditoria automatizada de todo o codebase. Destaques:
 
-  RESILIENCIA ETL (4):
-  4. T56 — Error handling em raw payload upserts
-     CA, NS e Meta agora checam e logam erros nos upserts de raws.
-     NS removeu ignoreDuplicates (permite atualizar payloads).
-  5. T57 — Retry no saveRefreshToken (CA)
-     3 tentativas com backoff (2s, 4s) antes de throw. Evita
-     perda permanente do token single-use.
-  6. T59 — Checkout abandonado com batching
-     Loop N+1 trocado por batches de 100 (padrao de orders).
-  7. T60 — Arredondamento de desconto proporcional
-     Ultimo item absorve residual. sum(items) = gross exato.
+  SEGURANCA:
+  - T53: SESSION_SECRET separado do password (antes usava a senha
+    do dashboard como chave HMAC — se vazasse, sessoes forjaveis)
+  - T54: Middleware migrado para Web Crypto API (era Node crypto,
+    incompativel com Edge Runtime do Vercel)
+  - T55: LGPD webhooks agora limpam raw tables (antes deletavam
+    customer mas deixavam PII nos payloads JSON brutos)
 
-  QUALIDADE (4):
-  8. T61 — View geografia com filtro IS NOT NULL
-     Migration 20260423140000.
-  9. T62 — Error boundary + loading no dashboard
-     app/dashboard/error.tsx e loading.tsx criados.
-  10. T64 — TypeScript 0 erros (7 corrigidos em scripts)
-  11. .env.example atualizado com SESSION_SECRET
+  RESILIENCIA DO ETL:
+  - T56: Error handling em upserts de raw payloads (antes engoliam
+    erros silenciosamente nas 3 pipelines)
+  - T57: Retry com backoff no save do refresh token CA (token
+    single-use — se salvar falhava, perdia o token pra sempre)
+  - T58: Retry com backoff exponencial em falhas transientes
+    (429/5xx/timeout) nas 3 pipelines (CA, NS, Meta)
+  - T59: Checkout abandonado com batching (era N+1, agora batches)
 
-VARIAVEIS DE AMBIENTE NOVAS:
-  SESSION_SECRET — gerar com:
-    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  Adicionar em: .env.local, Vercel (Production + Preview),
-  GitHub Actions secrets (se aplicavel).
+  QUALIDADE:
+  - T60: Arredondamento de desconto sem perda de centavos
+  - T61: View de geografia com filtro IS NOT NULL
+  - T62: Error boundary + loading skeleton no dashboard
+  - T64: TypeScript zero erros (7 corrigidos em scripts)
+  Commits: ab7f68b + f35da8b
 
-MIGRATION NOVA (precisa rodar no Supabase):
-  20260423140000_fix_geografia_null_filter.sql
+  VARIAVEIS DE AMBIENTE ADICIONADAS NESTA SESSAO:
+    SESSION_SECRET (ja na Vercel Production + Preview)
+    Gerar com: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-ADIADO:
-  T58 — Retry em falhas transientes (429/5xx) nas 3 pipelines.
-  Requer mudanca nos HTTP clients. Fazer em sessao dedicada.
+  MIGRATIONS APLICADAS NESTA SESSAO:
+    20260423140000_fix_geografia_null_filter.sql (ja rodada no Supabase)
 
 --------------------------------------------------------
 0a. O QUE FOI FEITO NESTA SESSAO (14 fixes)
@@ -135,56 +153,95 @@ MIGRATIONS APLICADAS NO SUPABASE NESTA SESSAO:
   Todas ja rodadas — nao precisa rodar de novo.
 
 --------------------------------------------------------
-1. O que esta funcionando
+1. O que esta funcionando (TUDO)
 --------------------------------------------------------
+- Dashboard em PRODUCAO: https://miranda-estudio-dashboard.vercel.app
 - ETL Nuvemshop: full + incremental, cron 30 min. ~6000 orders.
 - ETL Conta Azul: full + incremental, cron 30 min. ~12000+ sales
-  (historico 2023-2026). Dados validados centavo a centavo.
+  (historico 2023-2026). 42 meses validados centavo a centavo.
 - ETL Meta Ads: incremental 7 dias, cron 30 min. ~600+ insights.
 - Frontend Next.js 16: 4 abas completas + login + dark mode.
-- LGPD webhooks: 3 rotas implementadas com HMAC.
-- Autenticacao: sessao HMAC + rate limiting.
-- Deploy Vercel: miranda-estudio-dashboard.vercel.app
+- LGPD webhooks: 3 rotas com HMAC + redacao de raw tables.
+- Autenticacao: SESSION_SECRET + HMAC + rate limiting (5/15min).
+- Middleware Edge-compatible (Web Crypto API).
+- Retry com backoff em todas as 3 pipelines (429/5xx/timeout).
+- TypeScript: 0 erros. 134 testes passando.
+- Error boundary + loading skeleton no dashboard.
 
 --------------------------------------------------------
-2. O que falta fazer
+2. O que falta fazer (SEM CODIGO — acao humana)
 --------------------------------------------------------
-Apenas 2 tasks operacionais (nao sao codigo):
 
   [ ] T46 — Cofre de senhas Stepads (~15 min)
-      Criar item no 1Password ou Bitwarden com conteudo do .env.local.
-      Sem isso, proximo dev do revezamento nao consegue credenciais.
-      COMO FAZER:
-        1. Decidir: Bitwarden (free) ou 1Password (pago)
-        2. Criar item "Miranda Dashboard — .env.local"
-        3. Colar conteudo COMPLETO do .env.local
-        4. Compartilhar acesso com a equipe
+      URGENCIA: ALTA (bloqueia revezamento seguro)
+      O QUE: Criar item no 1Password ou Bitwarden com conteudo
+      completo do .env.local. Sem isso, quem assumir nao tem
+      credenciais pra rodar o projeto.
+      PASSO A PASSO:
+        1. Decidir ferramenta: Bitwarden (free) ou 1Password (pago)
+        2. Criar conta Stepads se nao existir
+        3. Criar item "Miranda Dashboard — .env.local"
+        4. Colar conteudo COMPLETO do .env.local (todas as vars)
+        5. Compartilhar acesso com a equipe (invite por email)
+        6. Testar: a outra pessoa consegue ver e copiar?
 
   [ ] T47 — Rotacao de secrets (~30 min)
-      Secrets que passaram pelo chat e devem ser rotacionados:
-        - META_APP_SECRET: rotacionar em developers.facebook.com >
-          Miranda Dashboard ETL > Configuracoes > Basico > Redefinir
-        - META_SYSTEM_USER_TOKEN: regar no BM da Miranda >
-          Configuracoes > Usuarios do sistema > StepadsDashboard >
-          Gerar novo token (ads_read + business_management, nunca expira)
-        - GitHub PAT: revogar em github.com/settings/tokens
-      Apos rotacionar:
-        1. Atualizar cofre de senhas
-        2. Atualizar .env.local na maquina local
+      URGENCIA: MEDIA (secrets passaram pelo chat mas sao
+      funcionais; rotacionar quando possivel)
+      O QUE: Secrets que passaram pelo chat Claude e devem ser
+      trocados por questao de higiene de seguranca:
+
+      SECRET 1 — META_APP_SECRET:
+        1. Ir em developers.facebook.com
+        2. Selecionar app "Miranda Dashboard ETL"
+        3. Configuracoes > Basico > App Secret > Redefinir
+        4. Copiar o novo secret
+
+      SECRET 2 — META_SYSTEM_USER_TOKEN:
+        1. Ir em business.facebook.com > BM da Miranda
+        2. Configuracoes > Usuarios do sistema > StepadsDashboard
+        3. Gerar novo token (scopes: ads_read + business_management,
+           "Nunca expira")
+        4. COPIAR IMEDIATAMENTE (Meta nao mostra de novo)
+
+      SECRET 3 — GitHub PAT:
+        1. Ir em github.com/settings/tokens
+        2. Revogar o PAT usado na sessao de 2026-04-16
+        3. Se precisar de novo, criar com escopo minimo
+
+      APOS ROTACIONAR CADA UM:
+        1. Atualizar .env.local na maquina local
+        2. Atualizar cofre de senhas (T46)
         3. Atualizar GitHub Secrets (Settings > Secrets > Actions)
-        4. Atualizar Vercel env vars se aplicavel
+        4. Atualizar Vercel env vars (se a var estiver la)
+        5. Testar: npm run sync:meta-ads (confirmar que funciona)
 
 --------------------------------------------------------
 3. Proximo passo exato para quem assumir
 --------------------------------------------------------
-ANTES DE COMECAR:
-  - git pull (puxar os commits desta sessao)
-  - npm install
-  - Verificar .env.local (pegar do cofre ou pedir ao Matheus)
-  - npm run dev (frontend em localhost:3000)
-  - Conferir se o login funciona (credenciais no .env.local)
 
-O DASHBOARD JA ESTA EM PRODUCAO E COM DADOS CORRETOS.
+  SETUP NA MAQUINA (primeira vez):
+    1. git clone https://github.com/Dev-Stepads/miranda-estudio-dashboard.git
+    2. cd miranda-estudio-dashboard
+    3. cp .env.example .env.local
+    4. Preencher .env.local com credenciais do cofre Stepads (T46)
+       OU pedir ao Matheus que mande o conteudo do .env.local dele
+    5. npm install
+    6. npm run dev → localhost:3000
+    7. Login: mirandaestudio / senha no .env.local (DASHBOARD_PASSWORD)
+
+  JA TEM O REPO CLONADO:
+    1. git pull origin main
+    2. npm install
+    3. Verificar .env.local esta atualizado (SESSION_SECRET precisa
+       existir — se nao tiver, gerar com:
+       node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+       e adicionar como SESSION_SECRET=<valor>)
+    4. npm run dev → localhost:3000
+
+  O DASHBOARD JA ESTA EM PRODUCAO E COM DADOS CORRETOS.
+  Nao ha migracao pendente. Nao ha codigo pendente.
+  O cron de 30 min roda automaticamente via GitHub Actions.
 Nao ha codigo pendente. As 2 tasks restantes (T46/T47) sao
 acoes operacionais que o dev humano precisa fazer.
 
