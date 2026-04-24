@@ -43,6 +43,8 @@ export interface CanonicalSaleItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  /** Source product ID (e.g. Nuvemshop product_id). Used for category lookup. */
+  source_product_id?: number | null;
 }
 
 /**

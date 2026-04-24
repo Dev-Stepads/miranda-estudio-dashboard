@@ -261,25 +261,27 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
   );
   ctx.log(`  Total orders fetched: ${rawOrders.length}`);
 
-  // Pre-load product categories from DB for enriching sale_items
-  const categoryByName = new Map<string, string>();
+  // Build product_id → category lookup from Nuvemshop API.
+  // We can't rely on the products table (Miranda doesn't fill SKUs, so
+  // products table is mostly empty). Instead, paginate /products from the
+  // API and extract the root category for each product_id.
+  const categoryByProductId = new Map<number, string>();
   {
-    let catPage = 0;
-    const CAT_PAGE = 1000;
-    while (true) {
-      const { data: catRows } = await ctx.supabase
-        .from('products')
-        .select('canonical_name, category')
-        .not('category', 'is', null)
-        .range(catPage * CAT_PAGE, (catPage + 1) * CAT_PAGE - 1);
-      if (!catRows || catRows.length === 0) break;
-      for (const r of catRows) {
-        categoryByName.set(r.canonical_name as string, r.category as string);
+    ctx.log('  Loading product categories from Nuvemshop API...');
+    const allProducts = await paginateAll<RawNuvemshopProduct>(
+      (page) => ctx.nuvemshop.listProducts({ page, perPage: PAGE_SIZE }),
+      ctx.log,
+    );
+    for (const prod of allProducts) {
+      const firstCat = prod.categories?.[0];
+      if (firstCat) {
+        const catName = extractLocalized(firstCat.name, 'pt') || null;
+        if (catName) {
+          categoryByProductId.set(prod.id, catName);
+        }
       }
-      if (catRows.length < CAT_PAGE) break;
-      catPage++;
     }
-    ctx.log(`  Product categories loaded: ${categoryByName.size} products with category`);
+    ctx.log(`  Product categories loaded: ${categoryByProductId.size} products with category`);
   }
 
   // 2. Map all orders to canonical shapes + resolve customer FKs
@@ -394,7 +396,7 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
                 quantity: item.quantity,
                 unit_price: item.quantity > 0 ? Math.round((adjTotal / item.quantity) * 100) / 100 : item.unit_price,
                 total_price: adjTotal,
-                category: categoryByName.get(item.product_name) ?? null,
+                category: (item.source_product_id ? categoryByProductId.get(item.source_product_id) : null) ?? null,
               });
             }
           } else {
@@ -406,7 +408,7 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 total_price: item.total_price,
-                category: categoryByName.get(item.product_name) ?? null,
+                category: (item.source_product_id ? categoryByProductId.get(item.source_product_id) : null) ?? null,
               });
             }
           }

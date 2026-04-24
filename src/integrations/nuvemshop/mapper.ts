@@ -57,6 +57,7 @@ export function mapOrderToCanonicalSale(raw: RawNuvemshopOrder): CanonicalSale {
       quantity: p.quantity,
       unit_price: unitPrice,
       total_price: totalPrice,
+      source_product_id: p.product_id ?? null,
     };
   });
 
