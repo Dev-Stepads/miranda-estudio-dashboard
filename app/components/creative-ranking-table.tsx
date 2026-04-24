@@ -32,12 +32,13 @@ interface Props {
   title: string;
   subtitle?: string;
   rows: CreativeRankingRow[];
+  showPurchases?: boolean;
 }
 
 const SORTABLE_TH =
   'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200';
 
-export function CreativeRankingTable({ title, subtitle, rows }: Props) {
+export function CreativeRankingTable({ title, subtitle, rows, showPurchases = true }: Props) {
   const { sortedRows, requestSort, getSortIndicator } = useSortableTable(
     rows,
     { key: 'total_spend', direction: 'desc' },
@@ -87,30 +88,36 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
                 Cliques
                 <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_clicks')}</span>
               </th>
-              <th
-                scope="col"
-                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
-                onClick={() => requestSort('total_purchases')}
-              >
-                Compras
-                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_purchases')}</span>
-              </th>
-              <th
-                scope="col"
-                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
-                onClick={() => requestSort('total_purchase_value')}
-              >
-                Receita
-                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_purchase_value')}</span>
-              </th>
-              <th
-                scope="col"
-                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
-                onClick={() => requestSort('roas')}
-              >
-                ROAS
-                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('roas')}</span>
-              </th>
+              {showPurchases && (
+                <th
+                  scope="col"
+                  className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                  onClick={() => requestSort('total_purchases')}
+                >
+                  Compras
+                  <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_purchases')}</span>
+                </th>
+              )}
+              {showPurchases && (
+                <th
+                  scope="col"
+                  className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                  onClick={() => requestSort('total_purchase_value')}
+                >
+                  Receita
+                  <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_purchase_value')}</span>
+                </th>
+              )}
+              {showPurchases && (
+                <th
+                  scope="col"
+                  className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                  onClick={() => requestSort('roas')}
+                >
+                  ROAS
+                  <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('roas')}</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -139,20 +146,26 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
                 <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
                   {formatNumber(row.total_clicks)}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
-                  {row.total_purchases > 0 ? formatNumber(row.total_purchases) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">
-                  {row.total_purchase_value > 0 ? formatBRL(row.total_purchase_value) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
-                  {row.roas > 0 ? `${row.roas.toFixed(2)}x` : '—'}
-                </td>
+                {showPurchases && (
+                  <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                    {row.total_purchases > 0 ? formatNumber(row.total_purchases) : '—'}
+                  </td>
+                )}
+                {showPurchases && (
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">
+                    {row.total_purchase_value > 0 ? formatBRL(row.total_purchase_value) : '—'}
+                  </td>
+                )}
+                {showPurchases && (
+                  <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                    {row.roas > 0 ? `${row.roas.toFixed(2)}x` : '—'}
+                  </td>
+                )}
               </tr>
             ))}
             {sortedRows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={showPurchases ? 8 : 5} className="px-6 py-8 text-center text-gray-400">
                   Sem dados disponíveis
                 </td>
               </tr>
@@ -166,6 +179,7 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
 
 function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
   const [failed, setFailed] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
 
   if (!url || failed) {
     return (
@@ -174,17 +188,40 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
       </div>
     );
   }
-  // eslint-disable-next-line @next/next/no-img-element
   return (
-    <img
-      src={url}
-      alt={alt}
-      width={40}
-      height={40}
-      className="w-10 h-10 rounded-md object-cover bg-gray-100 dark:bg-gray-900"
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-    />
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={alt}
+        width={40}
+        height={40}
+        className="w-10 h-10 rounded-md object-cover bg-gray-100 dark:bg-gray-900 cursor-pointer hover:ring-2 hover:ring-indigo-400 transition-all"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        onClick={() => setZoomed(true)}
+      />
+      {zoomed && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setZoomed(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={alt}
+            className="max-w-full max-h-[80vh] rounded-lg shadow-2xl"
+            referrerPolicy="no-referrer"
+          />
+          <button
+            className="absolute top-4 right-4 text-white text-3xl font-bold hover:text-gray-300"
+            onClick={() => setZoomed(false)}
+          >
+            &times;
+          </button>
+        </div>
+      )}
+    </>
   );
 }

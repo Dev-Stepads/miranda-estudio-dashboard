@@ -5,6 +5,7 @@ import {
   fetchMetaCampaignRanking,
   fetchMetaAdRanking,
   parsePeriod,
+  classifyCampaign,
 } from '../../lib/queries';
 import { KpiCard, formatBRL, formatNumber } from '../../components/kpi-cards';
 import { SimpleTable } from '../../components/simple-table';
@@ -21,149 +22,227 @@ export default async function MetaAdsPage({
 
   const [daily, campaignRanking, adRanking] = await Promise.all([
     fetchMetaDaily(period.days, params.from, params.to),
-    fetchMetaCampaignRanking(period.days, params.from, params.to, 15),
-    fetchMetaAdRanking(period.days, params.from, params.to, 15),
+    fetchMetaCampaignRanking(period.days, params.from, params.to, 30),
+    fetchMetaAdRanking(period.days, params.from, params.to, 30),
   ]);
 
-  // Empty-state: ETL ainda não rodou nenhuma vez com o token novo
+  // Empty-state: ETL ainda não rodou
   if (daily.length === 0 && campaignRanking.length === 0) {
     return <EmptyState />;
   }
 
-  // ---- KPIs atual ----
+  // Separate campaigns by type
+  const vendasCampaigns = campaignRanking.filter(c => c.campaign_type === 'vendas');
+  const lojaCampaigns = campaignRanking.filter(c => c.campaign_type === 'loja');
+
+  // Separate ads by campaign type
+  const vendasAdIds = new Set(vendasCampaigns.map(c => c.campaign_id));
+  const vendasAds = adRanking.filter(a => {
+    const campId = campaignRanking.find(c => c.campaign_name === a.campaign_name)?.campaign_id;
+    return campId ? vendasAdIds.has(campId) : classifyCampaign(a.campaign_name) === 'vendas';
+  });
+  const lojaAds = adRanking.filter(a => !vendasAds.includes(a));
+
+  // ---- KPIs Vendas ----
+  const vendasSpend = vendasCampaigns.reduce((s, c) => s + c.total_spend, 0);
+  const vendasPurchases = vendasCampaigns.reduce((s, c) => s + c.total_purchases, 0);
+  const vendasPurchaseValue = vendasCampaigns.reduce((s, c) => s + c.total_purchase_value, 0);
+  const vendasClicks = vendasCampaigns.reduce((s, c) => s + c.total_clicks, 0);
+  const vendasImpressions = vendasCampaigns.reduce((s, c) => s + c.total_impressions, 0);
+  const vendasRoas = vendasSpend > 0 ? vendasPurchaseValue / vendasSpend : 0;
+  const vendasCpa = vendasPurchases > 0 ? vendasSpend / vendasPurchases : 0;
+  const vendasCtr = vendasImpressions > 0 ? (vendasClicks / vendasImpressions) * 100 : 0;
+  const vendasCpc = vendasClicks > 0 ? vendasSpend / vendasClicks : 0;
+
+  // ---- KPIs Loja ----
+  const lojaSpend = lojaCampaigns.reduce((s, c) => s + c.total_spend, 0);
+  const lojaImpressions = lojaCampaigns.reduce((s, c) => s + c.total_impressions, 0);
+  const lojaClicks = lojaCampaigns.reduce((s, c) => s + c.total_clicks, 0);
+  const lojaCtr = lojaImpressions > 0 ? (lojaClicks / lojaImpressions) * 100 : 0;
+  const lojaCpc = lojaClicks > 0 ? lojaSpend / lojaClicks : 0;
+  const lojaCpm = lojaImpressions > 0 ? (lojaSpend / lojaImpressions) * 1000 : 0;
+
+  // ---- KPIs Totais ----
   const totalSpend = daily.reduce((s, r) => s + r.spend, 0);
-  const totalImpressions = daily.reduce((s, r) => s + r.impressions, 0);
-  const cpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0;
-  const totalClicks = daily.reduce((s, r) => s + r.clicks, 0);
   const totalPurchases = daily.reduce((s, r) => s + r.purchases, 0);
   const totalPurchaseValue = daily.reduce((s, r) => s + r.purchase_value, 0);
-
-  const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-  const cpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
-  const cpa = totalPurchases > 0 ? totalSpend / totalPurchases : 0;
-  const roas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
-
+  const totalRoas = totalSpend > 0 ? totalPurchaseValue / totalSpend : 0;
 
   return (
     <div className="space-y-4 sm:space-y-8">
-      {/* Disclaimer: Meta Ads não soma no faturamento da Visão Geral */}
+      {/* Disclaimer */}
       <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300">
-        <strong>Nota:</strong> métricas de tráfego pago são atribuição de mídia,
-        não vendas. O valor de compras do Meta <em>não</em> é somado ao faturamento
-        da aba Visão Geral — ele vive aqui, isolado. Venda real vem da Loja Física
-        (Conta Azul) + Nuvemshop.
+        <strong>Nota:</strong> metricas de trafego pago sao atribuicao de midia,
+        nao vendas. O valor de compras do Meta <em>nao</em> e somado ao faturamento
+        da aba Visao Geral.
       </div>
 
-      {/* KPI row 1 — investimento + conversão */}
+      {/* KPIs Gerais */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
-          title="Investimento"
+          title="Investimento Total"
           value={formatBRL(totalSpend)}
           subtitle={period.label}
         />
         <KpiCard
-          title="Compras atribuídas"
+          title="Compras Atribuidas"
           value={formatNumber(totalPurchases)}
           subtitle={`${formatBRL(totalPurchaseValue)} em valor`}
         />
         <KpiCard
-          title="ROAS (retorno sobre investimento)"
-          value={`${roas.toFixed(2)}x`}
-          subtitle={roas > 1 ? 'retorno positivo' : 'retorno abaixo do investido'}
+          title="ROAS Geral"
+          value={`${totalRoas.toFixed(2)}x`}
+          subtitle={totalRoas > 1 ? 'retorno positivo' : 'retorno abaixo do investido'}
         />
         <KpiCard
-          title="CPA (custo por compra)"
-          value={formatBRL(cpa)}
-          subtitle={`Ticket médio atribuído ${formatBRL(totalPurchases > 0 ? totalPurchaseValue / totalPurchases : 0)}`}
+          title="Split Investimento"
+          value={`${vendasSpend > 0 && totalSpend > 0 ? ((vendasSpend / totalSpend) * 100).toFixed(0) : 0}% vendas`}
+          subtitle={`${lojaSpend > 0 && totalSpend > 0 ? ((lojaSpend / totalSpend) * 100).toFixed(0) : 0}% loja/branding`}
         />
       </section>
 
-      {/* KPI row 2 — entrega */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard
-          title="Impressões"
-          value={formatNumber(totalImpressions)}
-          subtitle={period.label}
-        />
-        <KpiCard
-          title="Cliques"
-          value={formatNumber(totalClicks)}
-          subtitle={`CTR (taxa de clique) ${ctr.toFixed(2)}%`}
-        />
-        <KpiCard
-          title="CPC (custo por clique)"
-          value={formatBRL(cpc)}
-          subtitle="clique de link"
-        />
-        <KpiCard
-          title="CPM (custo por mil impressões)"
-          value={formatBRL(cpm)}
-          subtitle={period.label}
-        />
-      </section>
-
-      {/* Gráfico spend vs purchase_value — usa SpendChart custom */}
+      {/* Grafico */}
       <SpendChart data={daily} />
 
-      {/* Ranking de campanhas */}
-      <SimpleTable
-        title="Ranking de Campanhas"
-        subtitle="Ordenado por investimento no período"
-        columns={[
-          { key: 'campaign_name', label: 'Campanha' },
-          { key: 'total_spend', label: 'Investimento', align: 'right', format: 'currency', sortable: true },
-          { key: 'total_impressions', label: 'Impressões', align: 'right', format: 'number', sortable: true },
-          { key: 'total_clicks', label: 'Cliques', align: 'right', format: 'number', sortable: true },
-          { key: 'total_purchases', label: 'Compras', align: 'right', format: 'number', sortable: true },
-          { key: 'total_purchase_value', label: 'Valor compras', align: 'right', format: 'currency', sortable: true },
-          { key: 'roas_str', label: 'ROAS', align: 'right', sortable: true, sortValue: 'roas' },
-        ]}
-        rows={campaignRanking.map((c) => {
-          // Append short ID suffix when multiple campaigns share the same name
-          const sameNameCount = campaignRanking.filter(
-            (o) => o.campaign_name === c.campaign_name,
-          ).length;
-          const displayName =
-            sameNameCount > 1
-              ? `${c.campaign_name ?? '(sem nome)'} (#…${c.campaign_id.slice(-4)})`
-              : (c.campaign_name ?? '(sem nome)');
-          return {
-            ...c,
-            campaign_name: displayName,
-            roas_str: `${c.roas.toFixed(2)}x`,
-          };
-        })}
-        defaultSort={{ key: 'total_spend', direction: 'desc' }}
-      />
+      {/* ============================================ */}
+      {/* BLOCO 1: CAMPANHAS DE VENDAS */}
+      {/* ============================================ */}
+      <div className="border-t-2 border-indigo-200 dark:border-indigo-800 pt-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+          Campanhas de Vendas
+        </h2>
 
-      {/* Ranking de criativos com thumbnail */}
-      {/* Leads/CPL omitidos — o Pixel da Miranda nao emite eventos de Lead
-          (so Purchase), entao essas colunas seriam 100% vazias. O mapper
-          ainda extrai leads caso um dia seja configurado. */}
-      <CreativeRankingTable
-        title="Ranking de Criativos"
-        subtitle="Anúncios (nível ad) — ordenado por investimento"
-        rows={adRanking.map((a) => ({
-          ad_id: a.ad_id,
-          ad_name: a.ad_name,
-          campaign_name: a.campaign_name,
-          thumbnail_url: a.thumbnail_url,
-          total_spend: a.total_spend,
-          total_impressions: a.total_impressions,
-          total_clicks: a.total_clicks,
-          total_purchases: a.total_purchases,
-          total_purchase_value: a.total_purchase_value,
-          roas: a.roas,
-        }))}
-      />
+        {vendasCampaigns.length > 0 ? (
+          <>
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              <KpiCard title="Investimento" value={formatBRL(vendasSpend)} subtitle="campanhas de vendas" />
+              <KpiCard title="Compras" value={formatNumber(vendasPurchases)} subtitle={`${formatBRL(vendasPurchaseValue)} em valor`} />
+              <KpiCard title="ROAS" value={`${vendasRoas.toFixed(2)}x`} subtitle={vendasRoas > 1 ? 'retorno positivo' : 'abaixo do investido'} />
+              <KpiCard title="CPA" value={formatBRL(vendasCpa)} subtitle={`CTR ${vendasCtr.toFixed(2)}% | CPC ${formatBRL(vendasCpc)}`} />
+            </section>
+
+            <SimpleTable
+              title="Ranking — Vendas"
+              subtitle="Campanhas com objetivo de conversao"
+              columns={[
+                { key: 'display_name', label: 'Campanha' },
+                { key: 'total_spend', label: 'Investimento', align: 'right', format: 'currency', sortable: true },
+                { key: 'total_purchases', label: 'Compras', align: 'right', format: 'number', sortable: true },
+                { key: 'total_purchase_value', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
+                { key: 'roas_str', label: 'ROAS', align: 'right', sortable: true, sortValue: 'roas' },
+                { key: 'cpa_str', label: 'CPA', align: 'right', sortable: true, sortValue: 'cpa' },
+                { key: 'ctr_str', label: 'CTR', align: 'right', sortable: true, sortValue: 'ctr' },
+                { key: 'cpc_str', label: 'CPC', align: 'right', sortable: true, sortValue: 'cpc' },
+              ]}
+              rows={vendasCampaigns.map(c => ({
+                ...c,
+                roas_str: c.roas > 0 ? `${c.roas.toFixed(2)}x` : '—',
+                cpa: c.total_purchases > 0 ? c.total_spend / c.total_purchases : 0,
+                cpa_str: c.total_purchases > 0 ? formatBRL(c.total_spend / c.total_purchases) : '—',
+                ctr_str: `${c.ctr.toFixed(2)}%`,
+                cpc_str: formatBRL(c.cpc),
+              }))}
+              defaultSort={{ key: 'total_spend', direction: 'desc' }}
+            />
+
+            {vendasAds.length > 0 && (
+              <div className="mt-4">
+                <CreativeRankingTable
+                  title="Criativos — Vendas"
+                  subtitle="Anuncios das campanhas de conversao"
+                  rows={vendasAds.map(a => ({
+                    ad_id: a.ad_id,
+                    ad_name: a.ad_name,
+                    campaign_name: a.campaign_name,
+                    thumbnail_url: a.thumbnail_url,
+                    total_spend: a.total_spend,
+                    total_impressions: a.total_impressions,
+                    total_clicks: a.total_clicks,
+                    total_purchases: a.total_purchases,
+                    total_purchase_value: a.total_purchase_value,
+                    roas: a.roas,
+                  }))}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-gray-400 py-4">Nenhuma campanha de vendas no periodo</p>
+        )}
+      </div>
+
+      {/* ============================================ */}
+      {/* BLOCO 2: CAMPANHAS DE LOJA / BRANDING */}
+      {/* ============================================ */}
+      <div className="border-t-2 border-emerald-200 dark:border-emerald-800 pt-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+          Campanhas de Loja / Branding
+        </h2>
+
+        {lojaCampaigns.length > 0 ? (
+          <>
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              <KpiCard title="Investimento" value={formatBRL(lojaSpend)} subtitle="campanhas de loja" />
+              <KpiCard title="Impressoes" value={formatNumber(lojaImpressions)} subtitle={`CPM ${formatBRL(lojaCpm)}`} />
+              <KpiCard title="Cliques" value={formatNumber(lojaClicks)} subtitle={`CTR ${lojaCtr.toFixed(2)}%`} />
+              <KpiCard title="CPC" value={formatBRL(lojaCpc)} subtitle="custo por clique" />
+            </section>
+
+            <SimpleTable
+              title="Ranking — Loja / Branding"
+              subtitle="Campanhas de engajamento, alcance e mensagens"
+              columns={[
+                { key: 'display_name', label: 'Campanha' },
+                { key: 'total_spend', label: 'Investimento', align: 'right', format: 'currency', sortable: true },
+                { key: 'total_impressions', label: 'Impressoes', align: 'right', format: 'number', sortable: true },
+                { key: 'total_clicks', label: 'Cliques', align: 'right', format: 'number', sortable: true },
+                { key: 'ctr_str', label: 'CTR', align: 'right', sortable: true, sortValue: 'ctr' },
+                { key: 'cpc_str', label: 'CPC', align: 'right', sortable: true, sortValue: 'cpc' },
+                { key: 'cpm_str', label: 'CPM', align: 'right', sortable: true, sortValue: 'cpm' },
+              ]}
+              rows={lojaCampaigns.map(c => ({
+                ...c,
+                ctr_str: `${c.ctr.toFixed(2)}%`,
+                cpc_str: c.cpc > 0 ? formatBRL(c.cpc) : '—',
+                cpm: c.total_impressions > 0 ? (c.total_spend / c.total_impressions) * 1000 : 0,
+                cpm_str: c.total_impressions > 0 ? formatBRL((c.total_spend / c.total_impressions) * 1000) : '—',
+              }))}
+              defaultSort={{ key: 'total_spend', direction: 'desc' }}
+            />
+
+            {lojaAds.length > 0 && (
+              <div className="mt-4">
+                <CreativeRankingTable
+                  title="Criativos — Loja / Branding"
+                  subtitle="Anuncios das campanhas de engajamento"
+                  showPurchases={false}
+                  rows={lojaAds.map(a => ({
+                    ad_id: a.ad_id,
+                    ad_name: a.ad_name,
+                    campaign_name: a.campaign_name,
+                    thumbnail_url: a.thumbnail_url,
+                    total_spend: a.total_spend,
+                    total_impressions: a.total_impressions,
+                    total_clicks: a.total_clicks,
+                    total_purchases: a.total_purchases,
+                    total_purchase_value: a.total_purchase_value,
+                    roas: a.roas,
+                  }))}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-gray-400 py-4">Nenhuma campanha de loja/branding no periodo</p>
+        )}
+      </div>
     </div>
   );
 }
 
 // ------------------------------------------------------------
-// Empty state — shown when ETL hasn't run yet
+// Empty state
 // ------------------------------------------------------------
-
 function EmptyState() {
   return (
     <div className="space-y-4 sm:space-y-8">
@@ -179,33 +258,9 @@ function EmptyState() {
             </p>
             <p className="text-xs opacity-70 mt-3">
               Rode <code className="bg-white/20 px-1 rounded">npm run sync:meta-ads:full</code> pra
-              trazer os últimos 90 dias, ou espere o cron de 30 min rodar sozinho.
+              trazer os ultimos 90 dias, ou espere o cron de 30 min rodar sozinho.
             </p>
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-        <h3 className="text-base sm:text-lg font-semibold mb-4">
-          O que vai aparecer aqui depois do primeiro sync
-        </h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { icon: '💰', label: 'Investimento', desc: 'Spend total no período' },
-            { icon: '📈', label: 'ROAS', desc: 'Retorno sobre investimento' },
-            { icon: '🛒', label: 'Compras', desc: 'Conversões atribuídas' },
-            { icon: '🎯', label: 'Ranking Campanhas', desc: 'Por spend e ROAS' },
-            { icon: '🎨', label: 'Ranking Criativos', desc: 'Por anúncio individual' },
-            { icon: '🖱️', label: 'CPC / CTR', desc: 'Custo e taxa de clique' },
-            { icon: '👥', label: 'Alcance', desc: 'Impressões + reach' },
-            { icon: '📊', label: 'Série diária', desc: 'Spend vs compras' },
-          ].map((item) => (
-            <div key={item.label} className="rounded-lg bg-gray-50 dark:bg-gray-900 p-3 text-center">
-              <span className="text-2xl">{item.icon}</span>
-              <p className="text-sm font-medium mt-1">{item.label}</p>
-              <p className="text-xs text-gray-400">{item.desc}</p>
-            </div>
-          ))}
         </div>
       </div>
     </div>

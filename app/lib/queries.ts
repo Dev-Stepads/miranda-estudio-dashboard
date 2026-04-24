@@ -904,9 +904,36 @@ export interface MetaDailyRow {
   roas: number;
 }
 
+export type CampaignType = 'vendas' | 'loja';
+
+/** Classify campaign by name pattern. Campaigns with purchase intent = vendas, rest = loja */
+export function classifyCampaign(name: string | null): CampaignType {
+  if (!name) return 'loja';
+  const lower = name.toLowerCase();
+  if (lower.includes('compras') || lower.includes('advantage+') || lower.includes('conversao') || lower.includes('conversion') || lower.includes('catalog') || lower.includes('catalogo')) {
+    return 'vendas';
+  }
+  return 'loja';
+}
+
+/** Clean campaign name for display */
+export function formatCampaignName(name: string | null): string {
+  if (!name) return '(sem nome)';
+  let clean = name
+    .replace(/^\[STEP\]\s*/i, '')
+    .replace(/^\[ENGAJAMENTO\]\s*/i, '')
+    .replace(/^Post do Instagram:\s*/i, '')
+    .trim();
+  // Truncate long post descriptions
+  if (clean.length > 60) clean = clean.substring(0, 57) + '...';
+  return clean;
+}
+
 export interface MetaRankingRow {
   campaign_id: string;
   campaign_name: string | null;
+  campaign_type: CampaignType;
+  display_name: string;
   total_spend: number;
   total_impressions: number;
   total_clicks: number;
@@ -914,6 +941,8 @@ export interface MetaRankingRow {
   total_purchase_value: number;
   total_leads: number;
   roas: number;
+  ctr: number;
+  cpc: number;
   cpl: number;
 }
 
@@ -1008,6 +1037,8 @@ export async function fetchMetaCampaignRanking(
     const existing = byCampaign.get(key) ?? {
       campaign_id: key,
       campaign_name: row.campaign_name,
+      campaign_type: classifyCampaign(row.campaign_name),
+      display_name: formatCampaignName(row.campaign_name),
       total_spend: 0,
       total_impressions: 0,
       total_clicks: 0,
@@ -1015,6 +1046,8 @@ export async function fetchMetaCampaignRanking(
       total_purchase_value: 0,
       total_leads: 0,
       roas: 0,
+      ctr: 0,
+      cpc: 0,
       cpl: 0,
     };
     existing.total_spend += row.spend ?? 0;
@@ -1030,6 +1063,8 @@ export async function fetchMetaCampaignRanking(
     .map((c) => ({
       ...c,
       roas: c.total_spend > 0 ? c.total_purchase_value / c.total_spend : 0,
+      ctr: c.total_impressions > 0 ? (c.total_clicks / c.total_impressions) * 100 : 0,
+      cpc: c.total_clicks > 0 ? c.total_spend / c.total_clicks : 0,
       cpl: c.total_leads > 0 ? c.total_spend / c.total_leads : 0,
     }))
     .sort((a, b) => b.total_spend - a.total_spend)
@@ -1093,6 +1128,8 @@ export async function fetchMetaAdRanking(
       adset_name: row.adset_name,
       campaign_id: row.campaign_id,
       campaign_name: row.campaign_name,
+      campaign_type: classifyCampaign(row.campaign_name),
+      display_name: formatCampaignName(row.campaign_name),
       total_spend: 0,
       total_impressions: 0,
       total_clicks: 0,
@@ -1100,6 +1137,8 @@ export async function fetchMetaAdRanking(
       total_purchase_value: 0,
       total_leads: 0,
       roas: 0,
+      ctr: 0,
+      cpc: 0,
       cpl: 0,
       thumbnail_url: null,
       image_url: null,
@@ -1117,6 +1156,8 @@ export async function fetchMetaAdRanking(
     .map((a) => ({
       ...a,
       roas: a.total_spend > 0 ? a.total_purchase_value / a.total_spend : 0,
+      ctr: a.total_impressions > 0 ? (a.total_clicks / a.total_impressions) * 100 : 0,
+      cpc: a.total_clicks > 0 ? a.total_spend / a.total_clicks : 0,
       cpl: a.total_leads > 0 ? a.total_spend / a.total_leads : 0,
     }))
     .sort((a, b) => b.total_spend - a.total_spend)
