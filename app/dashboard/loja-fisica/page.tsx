@@ -22,7 +22,7 @@ export default async function LojaFisicaPage({
   const [dailyRevenue, prevDailyRevenue, topProducts, topCustomers] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days, prevSince, prevUntil),
-    fetchTopProducts(20, period.days, params.from, params.to),
+    fetchTopProducts(50, period.days, params.from, params.to),
     fetchTopCustomers(30, 'conta_azul', period.days, params.from, params.to),
   ]);
 
@@ -115,15 +115,17 @@ export default async function LojaFisicaPage({
 
       {/* Top Produtos */}
       <SimpleTable
-        title="Top Produtos"
+        title="Vendas de Produtos"
         subtitle="Ranking por faturamento"
         columns={[
           { key: 'product_name', label: 'Produto' },
           { key: 'sku', label: 'SKU' },
-          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
-          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number', sortable: true },
+          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
         rows={caProducts}
+        defaultSort={{ key: 'revenue', direction: 'desc' }}
+        pageSize={15}
       />
 
       {/* Top Clientes — Pessoas */}
@@ -135,10 +137,11 @@ export default async function LojaFisicaPage({
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
 
-          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
         rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        defaultSort={{ key: 'total_revenue', direction: 'desc' }}
       />
 
       {/* Top Clientes — Empresas */}
@@ -150,10 +153,11 @@ export default async function LojaFisicaPage({
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
 
-          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
         rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        defaultSort={{ key: 'total_revenue', direction: 'desc' }}
       />
     </div>
   );

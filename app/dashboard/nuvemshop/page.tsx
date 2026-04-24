@@ -30,7 +30,7 @@ export default async function NuvemshopPage({
   const [daily, prevDaily, topProducts, geography, abandoned, abandonedDetails, topCustomers] = await Promise.all([
     fetchNuvemshopDaily(period.days, params.from, params.to),
     fetchNuvemshopDaily(period.days, prevSince, prevUntil),
-    fetchTopProducts(20, period.days, params.from, params.to),
+    fetchTopProducts(50, period.days, params.from, params.to),
     fetchGeography(15, period.days, params.from, params.to),
     fetchAbandoned(period.days, params.from, params.to),
     fetchAbandonedDetails(period.days, params.from, params.to, 20),
@@ -123,10 +123,11 @@ export default async function NuvemshopPage({
           columns={[
             { key: 'city', label: 'Cidade' },
             { key: 'state', label: 'UF' },
-            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+            { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
           ]}
           rows={geography.slice(0, 15)}
+          defaultSort={{ key: 'revenue', direction: 'desc' }}
         />
       </div>
 
@@ -135,14 +136,15 @@ export default async function NuvemshopPage({
         title="Carrinhos Abandonados"
         subtitle="Contato e produtos — para recuperação"
         columns={[
-          { key: 'date', label: 'Data' },
+          { key: 'date', label: 'Data', sortable: true, sortValue: 'created_at_raw' },
           { key: 'contact_name', label: 'Nome' },
           { key: 'contact_email', label: 'Email' },
           { key: 'contact_phone', label: 'Telefone' },
-          { key: 'total_display', label: 'Valor', align: 'right', format: 'currency' },
+          { key: 'total_display', label: 'Valor', align: 'right', format: 'currency', sortable: true },
           { key: 'products_display', label: 'Produtos' },
         ]}
         rows={abandonedDetails.map((c) => ({
+          created_at_raw: c.created_at ?? '',
           date: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—',
           contact_name: c.contact_name ?? '—',
           contact_email: c.contact_email ?? '—',
@@ -150,18 +152,21 @@ export default async function NuvemshopPage({
           total_display: c.total_amount,
           products_display: (c.products ?? []).map((p) => `${p.name} (${p.quantity}x)`).join(', ') || '—',
         }))}
+        defaultSort={{ key: 'created_at_raw', direction: 'desc' }}
       />
 
       {/* Top Produtos */}
       <SimpleTable
-        title="Top Produtos"
+        title="Vendas de Produtos"
         subtitle="Ranking por faturamento (e-commerce)"
         columns={[
           { key: 'product_name', label: 'Produto' },
-          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number' },
-          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'quantity', label: 'Qtd', align: 'right', format: 'number', sortable: true },
+          { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
-        rows={nsProducts.slice(0, 15)}
+        rows={nsProducts}
+        defaultSort={{ key: 'revenue', direction: 'desc' }}
+        pageSize={15}
       />
 
       {/* Top Clientes — Pessoas */}
@@ -173,10 +178,11 @@ export default async function NuvemshopPage({
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
           { key: 'state', label: 'UF' },
-          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
         rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        defaultSort={{ key: 'total_revenue', direction: 'desc' }}
       />
 
       {/* Top Clientes — Empresas */}
@@ -188,10 +194,11 @@ export default async function NuvemshopPage({
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
           { key: 'state', label: 'UF' },
-          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
+          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
         rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        defaultSort={{ key: 'total_revenue', direction: 'desc' }}
       />
     </div>
   );

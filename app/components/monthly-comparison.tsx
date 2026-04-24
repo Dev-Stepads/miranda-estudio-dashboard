@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { MonthlyData } from '../lib/queries';
+import { useSortableTable } from './use-sortable-table';
 
 interface MonthlyComparisonProps {
   data: MonthlyData[];
@@ -19,6 +20,9 @@ function formatMonth(month: string): string {
   return months[idx] ?? m;
 }
 
+const SORTABLE_TH =
+  'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200';
+
 export function MonthlyComparison({ data }: MonthlyComparisonProps) {
   // Extract available years from data
   const years = [...new Set(data.map(d => d.month.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
@@ -26,6 +30,13 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
 
   // Filter by selected year
   const filtered = data.filter(d => d.month.startsWith(selectedYear));
+
+  // Sort the filtered data (only after year filter)
+  const { sortedRows, requestSort, getSortIndicator } = useSortableTable(
+    filtered,
+    { key: 'month', direction: 'desc' },
+  );
+
   if (filtered.length === 0) {
     return (
       <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -50,10 +61,13 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
   }
   const maxRevenue = Math.max(...filtered.map(d => d.revenue), 1);
 
-  // Totals for the year
+  // Totals for the year (unaffected by sort)
   const totalRevenue = filtered.reduce((s, r) => s + r.revenue, 0);
   const totalOrders = filtered.reduce((s, r) => s + r.orders, 0);
   const totalAvgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  // Determine the most recent month for highlight (based on data, not position)
+  const mostRecentMonth = [...filtered].sort((a, b) => b.month.localeCompare(a.month))[0]?.month;
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -88,19 +102,47 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <th scope="col" className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Mês</th>
-              <th scope="col" className="px-4 sm:px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
-              <th scope="col" className="px-4 sm:px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
-              <th scope="col" className="px-4 sm:px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Ticket</th>
+              <th
+                scope="col"
+                className={`px-4 sm:px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('month')}
+              >
+                Mês
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('month')}</span>
+              </th>
+              <th
+                scope="col"
+                className={`px-4 sm:px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('revenue')}
+              >
+                Faturamento
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('revenue')}</span>
+              </th>
+              <th
+                scope="col"
+                className={`px-4 sm:px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('orders')}
+              >
+                Pedidos
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('orders')}</span>
+              </th>
+              <th
+                scope="col"
+                className={`px-4 sm:px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('avgTicket')}
+              >
+                Ticket
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('avgTicket')}</span>
+              </th>
               <th scope="col" className="px-4 sm:px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">vs anterior</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row, i) => (
+            {sortedRows.map((row) => (
               <tr
                 key={row.month}
                 className={`border-t border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                  i === 0 ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''
+                  row.month === mostRecentMonth ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''
                 }`}
               >
                 <td className="px-4 sm:px-6 py-2.5 font-medium text-gray-800 dark:text-gray-200 text-xs sm:text-sm">
@@ -146,7 +188,7 @@ export function MonthlyComparison({ data }: MonthlyComparisonProps) {
               </tr>
             ))}
           </tbody>
-          {/* Year total footer */}
+          {/* Year total footer — unaffected by sort */}
           <tfoot>
             <tr className="border-t-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900">
               <td className="px-4 sm:px-6 py-3 font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm">

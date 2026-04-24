@@ -1,7 +1,8 @@
 'use client';
 
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simple-maps';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useSortableTable } from './use-sortable-table';
 
 interface StateData {
   state: string;
@@ -39,12 +40,23 @@ function formatBRL(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+const SORTABLE_TH =
+  'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200';
+
 export function BrazilMap({ data }: BrazilMapProps) {
   const [tooltip, setTooltip] = useState<{ name: string; revenue: number; orders: number } | null>(null);
 
   const dataMap = new Map(data.map(d => [d.state, d]));
   const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
-  const ranked = [...data].sort((a, b) => b.revenue - a.revenue).slice(0, 15);
+  const ranked = useMemo(
+    () => [...data].sort((a, b) => b.revenue - a.revenue).slice(0, 15),
+    [data],
+  );
+
+  const { sortedRows, requestSort, getSortIndicator } = useSortableTable(
+    ranked,
+    { key: 'revenue', direction: 'desc' },
+  );
 
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
@@ -124,12 +136,26 @@ export function BrazilMap({ data }: BrazilMapProps) {
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th scope="col" className="py-2 text-left font-medium text-gray-500 dark:text-gray-400">Estado</th>
-              <th scope="col" className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
-              <th scope="col" className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
+              <th
+                scope="col"
+                className={`py-2 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('orders_count')}
+              >
+                Pedidos
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('orders_count')}</span>
+              </th>
+              <th
+                scope="col"
+                className={`py-2 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('revenue')}
+              >
+                Faturamento
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('revenue')}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {ranked.map((s) => (
+            {sortedRows.map((s) => (
               <tr key={s.state} className="border-b border-gray-50 dark:border-gray-700/50">
                 <td className="py-2.5">
                   <span className="inline-block w-3 h-3 rounded-sm mr-2 align-middle" style={{ background: getColor(s.revenue, maxRevenue) }} />

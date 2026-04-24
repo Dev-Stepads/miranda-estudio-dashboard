@@ -53,7 +53,7 @@ export default async function VisaoGeralPage({
   const [currentRevenue, prevPeriodRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence, monthly] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days, prevSince, prevUntil),
-    fetchTopProducts(15, period.days, params.from, params.to),
+    fetchTopProducts(50, period.days, params.from, params.to),
     fetchGeographyConsolidated(10, period.days, params.from, params.to),
     fetchTopCustomers(30, undefined, period.days, params.from, params.to),
     fetchRecentOrders(10, period.days, params.from, params.to),
@@ -213,7 +213,7 @@ export default async function VisaoGeralPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
         <BrazilMap data={geoData} />
         <div className="lg:col-span-2">
-          <TopProductsTable products={topProducts} />
+          <TopProductsTable products={topProducts} pageSize={15} />
         </div>
       </div>
 
@@ -230,11 +230,12 @@ export default async function VisaoGeralPage({
             { key: 'email', label: 'Email' },
             { key: 'phone', label: 'Telefone' },
             { key: 'state', label: 'UF' },
-            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-            { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
+            { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
           ]}
           rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+          defaultSort={{ key: 'total_revenue', direction: 'desc' }}
         />
         <SimpleTable
           title="Top Clientes — Empresas"
@@ -244,11 +245,12 @@ export default async function VisaoGeralPage({
             { key: 'email', label: 'Email' },
             { key: 'phone', label: 'Telefone' },
             { key: 'state', label: 'UF' },
-            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number' },
-            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency' },
-            { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency' },
+            { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
+            { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
+            { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
           ]}
           rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+          defaultSort={{ key: 'total_revenue', direction: 'desc' }}
         />
 
       {/* Pedidos Recentes abaixo */}
@@ -256,10 +258,10 @@ export default async function VisaoGeralPage({
         title="Pedidos Recentes"
         subtitle="Últimos 10 pedidos (todas as fontes)"
         columns={[
-          { key: 'sale_date_fmt', label: 'Data' },
+          { key: 'sale_date_fmt', label: 'Data', sortable: true, sortValue: 'sale_date' },
           { key: 'customer_name', label: 'Cliente' },
           { key: 'source_label', label: 'Canal' },
-          { key: 'gross_revenue', label: 'Valor', align: 'right', format: 'currency' },
+          { key: 'gross_revenue', label: 'Valor', align: 'right', format: 'currency', sortable: true },
         ]}
         rows={recentOrders.map(o => ({
           ...o,
@@ -267,6 +269,7 @@ export default async function VisaoGeralPage({
           source_label: o.source === 'nuvemshop' ? 'E-commerce' : 'Loja',
           customer_name: o.customer_name ?? '—',
         }))}
+        defaultSort={{ key: 'sale_date', direction: 'desc' }}
       />
     </div>
   );

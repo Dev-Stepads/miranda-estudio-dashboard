@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { formatBRL, formatNumber } from './kpi-cards';
+import { useSortableTable } from './use-sortable-table';
 
 /**
  * Ranking de criativos (nivel ad) com thumbnail da imagem do criativo.
@@ -33,7 +34,15 @@ interface Props {
   rows: CreativeRankingRow[];
 }
 
+const SORTABLE_TH =
+  'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200';
+
 export function CreativeRankingTable({ title, subtitle, rows }: Props) {
+  const { sortedRows, requestSort, getSortIndicator } = useSortableTable(
+    rows,
+    { key: 'total_spend', direction: 'desc' },
+  );
+
   return (
     <div className="rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
       <div className="p-4 sm:p-6 pb-3">
@@ -54,28 +63,58 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
               <th scope="col" className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
                 Criativo
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th
+                scope="col"
+                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('total_spend')}
+              >
                 Investimento
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_spend')}</span>
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th
+                scope="col"
+                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('total_impressions')}
+              >
                 Impressões
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_impressions')}</span>
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th
+                scope="col"
+                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('total_clicks')}
+              >
                 Cliques
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_clicks')}</span>
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th
+                scope="col"
+                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('total_purchases')}
+              >
                 Compras
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_purchases')}</span>
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th
+                scope="col"
+                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('total_purchase_value')}
+              >
                 Receita
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('total_purchase_value')}</span>
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th
+                scope="col"
+                className={`px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${SORTABLE_TH}`}
+                onClick={() => requestSort('roas')}
+              >
                 ROAS
+                <span className="ml-1 text-[10px] opacity-60">{getSortIndicator('roas')}</span>
               </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {sortedRows.map((row) => (
               <tr
                 key={row.ad_id}
                 className="border-t border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -111,7 +150,7 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
+            {sortedRows.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
                   Sem dados disponíveis

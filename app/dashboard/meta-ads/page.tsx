@@ -111,12 +111,12 @@ export default async function MetaAdsPage({
         subtitle="Ordenado por investimento no período"
         columns={[
           { key: 'campaign_name', label: 'Campanha' },
-          { key: 'total_spend', label: 'Investimento', align: 'right', format: 'currency' },
-          { key: 'total_impressions', label: 'Impressões', align: 'right', format: 'number' },
-          { key: 'total_clicks', label: 'Cliques', align: 'right', format: 'number' },
-          { key: 'total_purchases', label: 'Compras', align: 'right', format: 'number' },
-          { key: 'total_purchase_value', label: 'Valor compras', align: 'right', format: 'currency' },
-          { key: 'roas_str', label: 'ROAS', align: 'right' },
+          { key: 'total_spend', label: 'Investimento', align: 'right', format: 'currency', sortable: true },
+          { key: 'total_impressions', label: 'Impressões', align: 'right', format: 'number', sortable: true },
+          { key: 'total_clicks', label: 'Cliques', align: 'right', format: 'number', sortable: true },
+          { key: 'total_purchases', label: 'Compras', align: 'right', format: 'number', sortable: true },
+          { key: 'total_purchase_value', label: 'Valor compras', align: 'right', format: 'currency', sortable: true },
+          { key: 'roas_str', label: 'ROAS', align: 'right', sortable: true, sortValue: 'roas' },
         ]}
         rows={campaignRanking.map((c) => {
           // Append short ID suffix when multiple campaigns share the same name
@@ -133,6 +133,7 @@ export default async function MetaAdsPage({
             roas_str: `${c.roas.toFixed(2)}x`,
           };
         })}
+        defaultSort={{ key: 'total_spend', direction: 'desc' }}
       />
 
       {/* Ranking de criativos com thumbnail */}
