@@ -3,29 +3,36 @@ HANDOFF — Dashboard Miranda Studio
 ========================================================
 
 PROJETO: Dashboard Miranda Studio
-DATA: 2026-04-23
-RESPONSAVEL: sessao 2026-04-23c — Matheus + Claude (handoff pro socio)
+DATA: 2026-04-24
+RESPONSAVEL: sessao 2026-04-23/24 — Angelo + Claude
 BRANCH: main
 
 ========================================================
 LEIA ISTO PRIMEIRO — RESUMO PRA QUEM ESTA ASSUMINDO
 ========================================================
 
-O DASHBOARD ESTA PRONTO E EM PRODUCAO.
+O DASHBOARD ESTA EM PRODUCAO E PASSOU POR AUDITORIA COMPLETA.
 URL: https://miranda-estudio-dashboard.vercel.app
-Login: mirandaestudio / (senha no .env.local — pedir ao Matheus)
+Login: mirandaestudio / DashMiranda@14
 
-TODO O CODIGO ESTA CONCLUIDO. 6 rodadas de auditoria foram feitas
-nesta sessao, resultando em 31 fixes (T53-T80). O codebase esta com:
+SESSAO 2026-04-23/24 (Angelo):
+  - Auditoria completa do codebase: 41 problemas encontrados, 39 corrigidos
+  - 2 bugs criticos de dados corrigidos (filtro de data + DST no ETL CA)
+  - Fase 2: ordenacao interativa em TODAS as tabelas + paginacao + rename
+  - Fase 3: ticket medio por canal na Visao Geral + remoção Pedidos Recentes
+  - Fase 4 (parcial): categorias Casa/Corpo/Papelaria da Nuvemshop
+
+ESTADO DO CODEBASE:
   - TypeScript: 0 erros
-  - Testes: 134 passando
+  - Testes: 184 passando (11 arquivos)
   - Build: limpo
-  - Dados: 42 meses validados contra API Conta Azul (R$ 0,00 diff)
+  - Dados: 42 meses validados + 9.343 sale_items categorizados
+  - Categorias NS: CASA (7.770), CORPO (1.143), PAPELARIA (430)
 
-O QUE VOCE (SOCIO) PRECISA FAZER:
+O QUE FALTA (operacional, nao eh codigo):
   1. T46 — Criar cofre de senhas (ver secao 2 abaixo)
-  2. T47 — Rotacionar secrets que passaram pelo chat (ver secao 2)
-  3. Rodar 1 migration no Supabase (ver secao 3)
+  2. T47 — Rotacionar secrets que passaram pelo chat
+  3. Pendencias Fase 4 — ver docs/producao/PENDENCIAS_FASE4.txt
 
 SE VOCE PRECISA RODAR LOCAL:
   1. git clone https://github.com/Dev-Stepads/miranda-estudio-dashboard.git
@@ -45,62 +52,56 @@ LINKS IMPORTANTES:
   - Vercel:     https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
 
 --------------------------------------------------------
-0. O QUE FOI FEITO NESTA SESSAO (2026-04-23, 31 fixes)
+0. SESSAO 2026-04-23/24 (Angelo + Claude) — RESUMO
 --------------------------------------------------------
 
-Esta sessao fez 6 rodadas de auditoria automatizada de todo o
-codebase (frontend, ETL, infra, seguranca). 31 issues encontrados
-e resolvidos, organizados por categoria:
+AUDITORIA COMPLETA (41 problemas, 39 corrigidos):
+  CRITICOS: credenciais protegidas no .gitignore, source CA normalizado
+    (conta-azul → conta_azul), Meta token movido de URL para header,
+    NUVEMSHOP_CLIENT_SECRET no .env.example, valores reais removidos
+  ALTOS: HMAC length check, LGPD redact por email, dark mode fixes,
+    HSTS header, playwright removido, seed corrigido, composite index,
+    NS gross/net validado, accessibility (ARIA + keyboard)
+  MEDIOS: CSP header, session TTL, dead code removido, deps limpas,
+    CI hardened (Node pin, mask secrets, notify failure), sleep()
+    compartilhado, empty states, login a11y, fetchAuth stream fix
+  BAIXOS: sync tick 15s, logout try-catch, img dimensions, coverage
 
-SEGURANCA (5 fixes):
-  T53 — SESSION_SECRET separado do password
-        Sessao HMAC usava DASHBOARD_PASSWORD como chave. Se a senha
-        vazasse, todas as sessoes ficavam forjaveis. Agora usa secret
-        criptografico separado (SESSION_SECRET).
-  T54 — Middleware migrado para Web Crypto API
-        Era Node crypto, incompativel com Edge Runtime do Vercel.
-  T55 — LGPD: raw tables incluidas na redacao
-        Webhook customers-redact agora deleta raw_nuvemshop_orders
-        do cliente (antes ficava PII no payload JSON).
-  T79 — Rate limiter: cleanup de IPs expirados
-        Map crescia infinitamente. Agora limpa entries expiradas.
-  T80 — Flash de tema branco prevenido
-        Script inline no <head> aplica dark mode antes do body.
+BUGS DE DADOS CORRIGIDOS:
+  - Filtro upper-bound cortava ultimo dia do periodo em rankings
+    (lte midnight → lt midnight_dia_seguinte)
+  - ETL CA usava T03:00:00Z fixo, queries usavam DST-aware
+    (toSPMidnight agora DST-aware no ETL tambem)
+  - source 'conta-azul' → 'conta_azul' normalizado no DB + ETL
 
-RESILIENCIA DO ETL (6 fixes):
-  T56 — Error handling em raw payload upserts (3 pipelines)
-  T57 — Retry com backoff no save do refresh token CA
-  T58 — Retry com backoff em falhas transientes (429/5xx/timeout)
-        nas 3 pipelines (CA, NS, Meta Ads)
-  T59 — Checkout abandonado com batching (era N+1)
-  T76 — Meta Ads rate-limit: era 60x curto demais
-        estimated_time_to_regain_access e em MINUTOS, codigo tratava
-        como segundos. Podia causar ban da conta Meta.
-  T77 — Checkout schema: .nullable() nos contact fields
+FASE 2 — Tabelas e Ordenacao:
+  - "Top Produtos" renomeado para "Vendas de Produtos"
+  - Fetch limit de produtos: 15/20 → 50
+  - Paginacao "Ver todos / Ver menos" nas tabelas de produtos
+  - Ordenacao clicavel (▲▼) em TODAS as tabelas (hook useSortableTable)
+  - Metricas sortaveis: qty, faturamento, pedidos, ROAS, investimento
 
-FRONTEND / UX (7 fixes):
-  T60 — Desconto proporcional sem perda de centavos
-  T62 — Error boundary + loading skeleton no dashboard
-  T66 — Gridlines dos graficos adaptam a dark/light mode
-  T70 — SimpleTable com padding responsivo (mobile)
-  T71 — Dark mode variants em KPI badges e recurrence card
-  T72 — Period filter valida from <= to + botao disabled
-  T74 — Empty state no comparativo mensal quando ano sem dados
+FASE 3 — Visao Geral:
+  - 3 KPI cards de Ticket Medio (Geral, Loja, E-commerce)
+  - Removido box "Pedidos Recentes" da Visao Geral
+  - Calculos validados contra abas especificas (mesmas formulas)
 
-QUALIDADE (5 fixes):
-  T61 — View geografia com filtro IS NOT NULL
-  T64 — TypeScript zero erros (7 corrigidos em scripts)
-  T68 — Index em sales.source (performance de queries)
-  T75 — Aria-labels nos inputs de data (acessibilidade)
-  T78 — Fallback de nome de produto em checkouts abandonados
-  T73 — Thumbnail de criativo com fallback React state
+FASE 4 (parcial) — Categorias Nuvemshop:
+  - Categorias CASA/CORPO/PAPELARIA extraidas da API Nuvemshop
+  - Coluna category em products e sale_items
+  - ETL sincroniza via lookup product_id → category
+  - KPI cards por categoria na aba Nuvemshop
+  - Badges coloridos na tabela de produtos
+  - 9.343 sale_items categorizados no banco
+  - PENDENCIAS: ver docs/producao/PENDENCIAS_FASE4.txt
 
-VARIAVEIS DE AMBIENTE NOVAS (ja na Vercel):
-  SESSION_SECRET — chave HMAC para sessoes (separada do password)
-
-MIGRATIONS DESTA SESSAO (AMBAS JA RODADAS NO SUPABASE):
-  20260423140000_fix_geografia_null_filter.sql
-  20260423150000_add_sales_source_index.sql
+MIGRATIONS DESTA SESSAO (TODAS JA RODADAS NO SUPABASE):
+  20260423160000_fix_quantity_precision_in_views.sql
+  20260423180000_composite_index_source_status_date.sql
+  20260423190000_update_meta_ranking_views_leads.sql
+  20260423200000_add_check_constraints.sql
+  20260423210000_normalize_conta_azul_source.sql
+  20260424120000_add_product_category.sql
 
 --------------------------------------------------------
 0a. O QUE FOI FEITO NESTA SESSAO (14 fixes)
