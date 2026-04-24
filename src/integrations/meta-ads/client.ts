@@ -266,7 +266,10 @@ export class MetaAdsClient {
     // HttpError so that withRetry's isTransient check recognizes them.
     return withRetry(
       async () => {
-        const response = await fetch(url, {
+        // Strip access_token from pagination URLs (Meta embeds it in paging.next)
+        // — we send the token via Authorization header instead.
+        const cleanUrl = stripAccessToken(url);
+        const response = await fetch(cleanUrl, {
           method: 'GET',
           headers: {
             Accept: 'application/json',
@@ -314,6 +317,17 @@ export class MetaAdsClient {
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
+
+/** Remove access_token from URL query params (Meta embeds it in pagination URLs). */
+function stripAccessToken(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete('access_token');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
 
 async function safeJson(response: Response): Promise<unknown> {
   try {

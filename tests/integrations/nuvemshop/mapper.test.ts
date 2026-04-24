@@ -283,9 +283,9 @@ describe('mapOrderToCanonicalSale', () => {
   it('parses money fields as numbers (not strings)', () => {
     const result = mapOrderToCanonicalSale(makeOrder());
     expect(typeof result.total_gross).toBe('number');
-    // subtotal (sum of items) = gross, total (after discounts+shipping) = net
-    expect(result.total_gross).toBe(250);
-    expect(result.total_net).toBe(259.7);
+    // total = what customer pays (gross revenue for Miranda), subtotal = sum of items
+    expect(result.total_gross).toBe(259.7);
+    expect(result.total_net).toBe(250);
   });
 
   it('prefers gateway_name over gateway for payment_method', () => {
