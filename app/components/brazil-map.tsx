@@ -53,7 +53,7 @@ export function BrazilMap({ data }: BrazilMapProps) {
       </h3>
 
       {/* Map */}
-      <div className="relative h-56 sm:h-72">
+      <div className="relative h-56 sm:h-72" role="img" aria-label="Mapa do Brasil com distribuição de vendas por estado">
         <ComposableMap
           projection="geoMercator"
           projectionConfig={{ scale: 550, center: [-54, -15] }}
@@ -85,6 +85,11 @@ export function BrazilMap({ data }: BrazilMapProps) {
                       }}
                       onMouseEnter={() => setTooltip({ name: `${stateName} (${uf})`, revenue, orders })}
                       onMouseLeave={() => setTooltip(null)}
+                      {...{
+                        tabIndex: 0,
+                        onFocus: () => setTooltip({ name: `${stateName} (${uf})`, revenue, orders }),
+                        onBlur: () => setTooltip(null),
+                      } as Record<string, unknown>}
                     />
                   );
                 })
@@ -118,9 +123,9 @@ export function BrazilMap({ data }: BrazilMapProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="py-2 text-left font-medium text-gray-500 dark:text-gray-400">Estado</th>
-              <th className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
-              <th className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
+              <th scope="col" className="py-2 text-left font-medium text-gray-500 dark:text-gray-400">Estado</th>
+              <th scope="col" className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Pedidos</th>
+              <th scope="col" className="py-2 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
             </tr>
           </thead>
           <tbody>

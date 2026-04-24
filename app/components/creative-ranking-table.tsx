@@ -48,28 +48,28 @@ export function CreativeRankingTable({ title, subtitle, rows }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <th className="w-14 px-3 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="w-14 px-3 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
 
               </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
                 Criativo
               </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Investimento
               </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Impressões
               </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Cliques
               </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Compras
               </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 Receita
               </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
+              <th scope="col" className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
                 ROAS
               </th>
             </tr>

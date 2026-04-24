@@ -38,7 +38,7 @@ export function SpendChart({ data }: SpendChartProps) {
   const dark = useDarkMode();
   const gridColor = dark ? '#374151' : '#e5e7eb';
   return (
-    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700" role="img" aria-label="Gráfico de investimento vs receita Meta Ads">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
         Investimento vs Valor Atribuído
       </h3>

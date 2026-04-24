@@ -17,6 +17,7 @@ function verifyHmac(rawBody: string, signature: string | null): boolean {
   const secret = process.env.NUVEMSHOP_CLIENT_SECRET;
   if (!secret || !signature) return false;
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  if (expected.length !== signature.length) return false;
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 
@@ -85,10 +86,26 @@ export async function POST(request: Request): Promise<NextResponse> {
       .eq('source', 'nuvemshop');
 
     // Delete abandoned checkouts (contains PII: name, email, phone)
+    // By customer_id (linked checkouts)
     await sb
       .from('abandoned_checkouts')
       .delete()
       .eq('customer_id', internalId);
+
+    // Also by contact_email (unlinked checkouts where customer_id is null)
+    const { data: custRecord } = await sb
+      .from('customers')
+      .select('email')
+      .eq('customer_id', internalId)
+      .limit(1);
+    const custEmail = custRecord?.[0]?.email as string | null;
+    if (custEmail) {
+      await sb
+        .from('abandoned_checkouts')
+        .delete()
+        .is('customer_id', null)
+        .eq('contact_email', custEmail);
+    }
 
     // Delete raw order payloads that contain this customer's PII
     const saleSourceIds = (custSales ?? [])

@@ -55,6 +55,7 @@ import {
 } from '../../integrations/conta-azul/schemas.ts';
 import { withRetry } from '../../lib/http.ts';
 import { HttpError, RateLimitError } from '../../lib/errors.ts';
+import { sleep } from '../../lib/sleep.ts';
 
 // ------------------------------------------------------------
 // Types
@@ -117,10 +118,6 @@ function mapPaymentForDb(tipo: string | undefined | null): string {
   return PAYMENT_NAMES[tipo] ?? 'outros';
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 const USER_AGENT = 'Miranda Dashboard ETL (dev@stepads.com.br)';
 
 /**
@@ -154,6 +151,9 @@ async function fetchAuth(
     // Success or non-transient error — return immediately
     return firstResp;
   }
+
+  // Consume the first response body to release the TCP connection before retrying.
+  await firstResp.text().catch(() => {});
 
   // Use withRetry for transient errors (429, 5xx) and the post-401-refresh retry.
   // withRetry handles RateLimitError and HttpError (status >= 500 or status === 0).
@@ -430,7 +430,7 @@ async function processVenda(
   if (customerSourceId && customerName) {
     const { error: custErr } = await supabase.from('customers').upsert(
       {
-        source: 'conta-azul',
+        source: 'conta_azul',
         source_customer_id: customerSourceId,
         name: customerName,
         gender: 'unknown',
@@ -447,7 +447,7 @@ async function processVenda(
     const { data: custData } = await supabase
       .from('customers')
       .select('customer_id')
-      .eq('source', 'conta-azul')
+      .eq('source', 'conta_azul')
       .eq('source_customer_id', customerSourceId)
       .limit(1);
     customerId = (custData?.[0]?.customer_id as number | null) ?? null;
@@ -458,7 +458,7 @@ async function processVenda(
     .from('sales')
     .upsert(
       {
-        source: 'conta-azul',
+        source: 'conta_azul',
         source_sale_id: sourceSaleId,
         sale_date: saleDate,
         gross_revenue: grossRevenue,
@@ -557,7 +557,7 @@ export async function cleanupOldRecords(
     const { data, error } = await supabase
       .from('sales')
       .select('sale_id')
-      .eq('source', 'conta-azul')
+      .eq('source', 'conta_azul')
       .order('sale_id', { ascending: true })
       .range(page * PAGE, (page + 1) * PAGE - 1);
     if (error) throw new Error(`cleanupOldRecords: ${error.message}`);

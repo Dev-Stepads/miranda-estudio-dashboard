@@ -20,12 +20,9 @@
 import type {
   RawContaAzulCategoria,
   RawContaAzulPessoa,
-  RawContaAzulProduto,
-  RawContaAzulNotaFiscal,
 } from './types.ts';
 import type {
   CanonicalCustomer,
-  CanonicalProduct,
   SaleStatus,
 } from '../../canonical/types.ts';
 
@@ -80,97 +77,8 @@ export function mapPessoaToCanonicalCustomer(raw: RawContaAzulPessoa): Canonical
 }
 
 // ------------------------------------------------------------
-// Produto → Product
+// Nota Fiscal status mapper (kept — used by mapNotaFiscalStatus tests and future NF-e ETL)
 // ------------------------------------------------------------
-
-/**
- * Map a Conta Azul produto to the canonical product shape.
- *
- * Uses `codigo` as SKU (internal inventory code). `ean` (barcode) is
- * available but we don't canonicalize on it — two different products
- * can share an EAN through variation SKUs.
- *
- * For products with variations (`tipo === 'PRODUCT_VARIATION'`), this
- * maps the PARENT. Use `mapContaAzulProdutoVariacoes()` to map the
- * children separately.
- */
-export function mapProdutoToCanonicalProduct(
-  raw: RawContaAzulProduto,
-): CanonicalProduct {
-  return {
-    source: 'conta_azul',
-    source_id: raw.id,
-    name: raw.nome,
-    sku: nullIfEmpty(raw.codigo),
-    price: raw.valor_venda,
-  };
-}
-
-/**
- * Map each product variation (child) to its own canonical product.
- * Useful for stores where each variation is a distinct SKU (typical
- * for apparel: size × color).
- */
-export function mapContaAzulProdutoVariacoes(
-  raw: RawContaAzulProduto,
-): CanonicalProduct[] {
-  if (!raw.produtos_variacao || raw.produtos_variacao.length === 0) {
-    return [];
-  }
-  return raw.produtos_variacao.map((v) => ({
-    source: 'conta_azul',
-    source_id: v.id,
-    name: v.nome,
-    sku: nullIfEmpty(v.codigo),
-    price: v.valor_venda,
-  }));
-}
-
-// ------------------------------------------------------------
-// Nota Fiscal → Partial Sale
-// ------------------------------------------------------------
-
-/**
- * A partial sale built from a NF-e list entry. Money fields are
- * absent because the list endpoint doesn't return them. Merge with
- * the detail endpoint (TBD) to produce a complete `CanonicalSale`.
- *
- * The `__partial: true` discriminator makes it impossible to
- * accidentally insert this into the `sales` table — the ETL can
- * check the flag and refuse.
- */
-export interface PartialContaAzulSale {
-  __partial: true;
-  source: 'conta_azul';
-  source_id: string;
-  /** ISO 8601 or null if API sent the "0001-01-01" placeholder. */
-  sale_date: string | null;
-  status: SaleStatus;
-  /** Customer name from the NF-e header. PII. */
-  customer_name: string;
-  /** NF-e sequential number. */
-  numero_nota: number;
-  /** 44-char access key — stable unique ID, use as source_id. */
-  chave_acesso: string;
-}
-
-/** Recognized "not a real date" placeholder Conta Azul sends. */
-const PLACEHOLDER_DATE = '0001-01-01T00:00:00Z';
-
-export function mapNotaFiscalToPartialSale(
-  raw: RawContaAzulNotaFiscal,
-): PartialContaAzulSale {
-  return {
-    __partial: true,
-    source: 'conta_azul',
-    source_id: raw.chave_acesso,
-    sale_date: raw.data_emissao === PLACEHOLDER_DATE ? null : raw.data_emissao,
-    status: mapNotaFiscalStatus(raw.status),
-    customer_name: raw.nome_destinatario,
-    numero_nota: raw.numero_nota,
-    chave_acesso: raw.chave_acesso,
-  };
-}
 
 /**
  * Map Conta Azul NF-e status to canonical SaleStatus.

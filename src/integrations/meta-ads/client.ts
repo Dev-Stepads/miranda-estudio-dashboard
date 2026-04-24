@@ -35,6 +35,7 @@ import type {
   MetaAdWithCreative,
 } from './types.ts';
 import { parseRateLimitHeaders, type RateLimitUsage } from './rate-limit.ts';
+import { sleep } from '../../lib/sleep.ts';
 
 const SOURCE = 'meta-ads' as const;
 const DEFAULT_API_VERSION = 'v25.0';
@@ -131,7 +132,6 @@ export class MetaAdsClient {
   async getAdAccount(): Promise<MetaAdAccount> {
     const url = new URL(`${this.baseUrl}/${this.adAccountId}`);
     url.searchParams.set('fields', 'id,name,account_status,currency,timezone_name,business');
-    url.searchParams.set('access_token', this.accessToken);
 
     const { body } = await this.fetchJson(url.toString());
     return parseWithSchema(MetaAdAccountSchema, body);
@@ -193,7 +193,6 @@ export class MetaAdsClient {
     log: (msg: string) => void = () => {},
   ): Promise<MetaListResult<MetaAdWithCreative>> {
     const url = new URL(`${this.baseUrl}/${this.adAccountId}/ads`);
-    url.searchParams.set('access_token', this.accessToken);
     url.searchParams.set(
       'fields',
       'id,name,creative{id,name,thumbnail_url,image_url}',
@@ -241,7 +240,6 @@ export class MetaAdsClient {
 
   private buildInsightsUrl(options: MetaInsightsOptions): string {
     const url = new URL(`${this.baseUrl}/${this.adAccountId}/insights`);
-    url.searchParams.set('access_token', this.accessToken);
     url.searchParams.set('level', options.level);
     url.searchParams.set('fields', INSIGHTS_FIELDS.join(','));
     url.searchParams.set(
@@ -270,7 +268,10 @@ export class MetaAdsClient {
       async () => {
         const response = await fetch(url, {
           method: 'GET',
-          headers: { Accept: 'application/json' },
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${this.accessToken}`,
+          },
         });
 
         const contentType = response.headers.get('content-type') ?? '';
@@ -327,10 +328,6 @@ function extractMetaError(body: unknown): string | null {
   const err = (body as { error?: { message?: string; code?: number } }).error;
   if (err === undefined) return null;
   return `${err.message ?? 'unknown error'} (code ${err.code ?? '?'})`;
-}
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseWithSchema<S extends z.ZodTypeAny>(

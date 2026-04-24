@@ -1,5 +1,5 @@
 -- Geografia Loja Física (Conta Azul — UF do destinatário da NF-e)
-CREATE VIEW public.v_loja_fisica_geografia AS
+CREATE OR REPLACE VIEW public.v_loja_fisica_geografia AS
 SELECT
   c.state,
   c.city,
@@ -11,7 +11,7 @@ WHERE s.status = 'paid' AND s.source = 'conta_azul'
 GROUP BY c.state, c.city;
 
 -- Geografia consolidada (ambas fontes)
-CREATE VIEW public.v_geografia_consolidada AS
+CREATE OR REPLACE VIEW public.v_geografia_consolidada AS
 SELECT
   c.state,
   COUNT(s.sale_id)::int AS orders_count,

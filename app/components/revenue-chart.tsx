@@ -52,7 +52,7 @@ export function RevenueChart({ data, sources }: RevenueChartProps) {
   const showLegend = activeSources.length > 1;
 
   return (
-    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700" role="img" aria-label="Gráfico de faturamento diário">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
         Faturamento Diário
       </h3>

@@ -63,9 +63,9 @@ export function mapOrderToCanonicalSale(raw: RawNuvemshopOrder): CanonicalSale {
   return {
     source: 'nuvemshop',
     source_id: String(raw.id),
-    sale_date: raw.paid_at ?? raw.created_at,
-    total_gross: safeParseMoney(raw.total),
-    total_net: safeParseMoney(raw.subtotal),
+    sale_date: raw.paid_at || raw.created_at,
+    total_gross: safeParseMoney(raw.subtotal),  // subtotal = sum(items) before discounts/shipping
+    total_net: safeParseMoney(raw.total),       // total = final amount after discounts + shipping
     status: mapPaymentStatus(raw.payment_status),
     // Nuvemshop v2025-03 sends `customer: { id }` object, not `customer_id` number.
     // Support both for backwards compatibility with older API versions/fixtures.

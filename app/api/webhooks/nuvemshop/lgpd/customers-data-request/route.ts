@@ -16,6 +16,7 @@ function verifyHmac(rawBody: string, signature: string | null): boolean {
   const secret = process.env.NUVEMSHOP_CLIENT_SECRET;
   if (!secret || !signature) return false;
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  if (expected.length !== signature.length) return false;
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 

@@ -43,11 +43,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.14'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      - name: Mask sensitive values
+        run: |
+          echo "::add-mask::${{ secrets.META_SYSTEM_USER_TOKEN }}"
+          echo "::add-mask::${{ secrets.NUVEMSHOP_ACCESS_TOKEN }}"
+          echo "::add-mask::${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          echo "::add-mask::${{ secrets.CONTA_AZUL_CLIENT_SECRET }}"
 
       - name: Sync Nuvemshop
         env:
@@ -89,3 +96,7 @@ jobs:
           META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
           META_API_VERSION: 'v25.0'
         run: npx tsx src/etl/meta-ads/run.ts --full
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::error::ETL sync failed. Check logs above for details."

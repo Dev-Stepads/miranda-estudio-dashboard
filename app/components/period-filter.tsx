@@ -47,15 +47,15 @@ function PeriodButtons() {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
         {presets.map((p) => (
           <button
             key={p.value}
             onClick={() => setDays(p.value)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               !isCustom && currentDays === p.value
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
             {p.label}
@@ -64,7 +64,7 @@ function PeriodButtons() {
 
         {/* Custom active label */}
         {isCustom && (
-          <span className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-900 shadow-sm">
+          <span className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm">
             {currentFrom} → {currentTo}
             <button
               onClick={clearCustom}

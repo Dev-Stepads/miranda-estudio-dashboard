@@ -75,6 +75,12 @@ screenshots*/
 **/Captura de tela*.jpeg
 **/Captura de tela*.png
 
+# Arquivos .ini — credenciais (ex: chaves conta azul.ini)
+*.ini
+
+# Debug scripts locais
+browser_debug.js
+
 # Imagens soltas no root — defensivo.
 # Bloqueia qualquer .jpg/.jpeg/.png/.gif no diretório raiz do projeto pra
 # evitar que prints de portais (Conta Azul, Nuvemshop, Meta) com credenciais,

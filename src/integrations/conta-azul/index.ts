@@ -30,9 +30,5 @@ export type {
 export {
   isContaAzulCustomer,
   mapPessoaToCanonicalCustomer,
-  mapProdutoToCanonicalProduct,
-  mapContaAzulProdutoVariacoes,
-  mapNotaFiscalToPartialSale,
   mapNotaFiscalStatus,
 } from './mapper.ts';
-export type { PartialContaAzulSale } from './mapper.ts';

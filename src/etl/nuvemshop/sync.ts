@@ -32,6 +32,7 @@ import type { RawNuvemshopOrder, RawNuvemshopCustomer, RawNuvemshopProduct, RawN
 import type { Gender } from '../../canonical/types.ts';
 import { extractLocalized } from '../../lib/i18n.ts';
 import { withRetry } from '../../lib/http.ts';
+import { sleep } from '../../lib/sleep.ts';
 
 // ------------------------------------------------------------
 // Types
@@ -78,10 +79,6 @@ function genderToDb(gender: Gender): string {
 const PAGE_SIZE = 200;
 const RATE_LIMIT_THRESHOLD = 5;
 const RATE_LIMIT_COOLDOWN_MS = 2000;
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Paginate through ALL pages of a Nuvemshop list endpoint.

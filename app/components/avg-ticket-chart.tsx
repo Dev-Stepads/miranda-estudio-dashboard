@@ -39,7 +39,7 @@ export function AvgTicketChart({ data, color = '#10b981' }: AvgTicketChartProps)
   const hasSplit = data.some(d => d.avg_ticket_nuvemshop !== undefined || d.avg_ticket_conta_azul !== undefined);
 
   return (
-    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700" role="img" aria-label="Gráfico de ticket médio diário">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">
         Ticket Médio por Dia
       </h3>

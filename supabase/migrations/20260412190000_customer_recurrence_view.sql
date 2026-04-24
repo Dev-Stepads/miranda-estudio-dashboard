@@ -1,4 +1,4 @@
-CREATE VIEW public.v_customer_recurrence AS
+CREATE OR REPLACE VIEW public.v_customer_recurrence AS
 SELECT
   c.source,
   COUNT(*) FILTER (WHERE order_count = 1)::int AS first_time_buyers,

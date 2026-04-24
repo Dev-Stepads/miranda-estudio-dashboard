@@ -18,11 +18,11 @@ export function TopProductsTable({ products }: TopProductsTableProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
-              <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Produto</th>
-              <th className="px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Qtd</th>
-              <th className="px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
-              <th className="px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">%</th>
+              <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
+              <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Produto</th>
+              <th scope="col" className="px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Qtd</th>
+              <th scope="col" className="px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Faturamento</th>
+              <th scope="col" className="px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400">%</th>
             </tr>
           </thead>
           <tbody>

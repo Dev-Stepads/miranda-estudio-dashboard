@@ -94,6 +94,7 @@ export interface ContaAzulListResult<T> {
 // The client
 // ------------------------------------------------------------
 
+/** @deprecated Unused since v3 ETL rewrite (2026-04-14). Kept for potential future use. */
 export class ContaAzulClient {
   private readonly baseUrl: string;
   private readonly authHeaders: Record<string, string>;

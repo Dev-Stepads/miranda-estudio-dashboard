@@ -11,7 +11,16 @@ const COLORS = ['#6366f1', '#f59e0b'];
 
 export function ChannelDonut({ nuvemshop, contaAzul }: ChannelDonutProps) {
   const total = nuvemshop + contaAzul;
-  if (total === 0) return null;
+  if (total === 0) {
+    return (
+      <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700" role="img" aria-label="Gráfico de distribuição por canal de venda">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
+          Split por Canal
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-12">Sem dados para o periodo</p>
+      </div>
+    );
+  }
 
   const data = [
     { name: 'E-commerce', value: nuvemshop },
@@ -19,7 +28,7 @@ export function ChannelDonut({ nuvemshop, contaAzul }: ChannelDonutProps) {
   ];
 
   return (
-    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+    <div className="rounded-xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700" role="img" aria-label="Gráfico de distribuição por canal de venda">
       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
         Split por Canal
       </h3>

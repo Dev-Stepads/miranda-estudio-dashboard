@@ -33,7 +33,7 @@ export default async function DashboardLayout({
 }) {
   const lastSyncISO = await getLastSyncTime();
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 sm:py-4">
         <div className="max-w-7xl mx-auto">

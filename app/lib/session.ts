@@ -8,7 +8,7 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
  * The middleware can verify this without a database round-trip.
  */
 export function createSessionToken(secret: string): string {
-  const payload = crypto.randomBytes(32).toString('hex');
+  const payload = crypto.randomBytes(32).toString('hex') + '.' + Date.now();
   const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   return `${payload}.${signature}`;
 }
@@ -17,14 +17,25 @@ export function createSessionToken(secret: string): string {
  * Verify a session token's HMAC signature (Node.js crypto version).
  */
 export function verifySessionToken(token: string, secret: string): boolean {
-  const parts = token.split('.');
-  if (parts.length !== 2) return false;
-  const [payload, signature] = parts;
+  const lastDot = token.lastIndexOf('.');
+  if (lastDot === -1) return false;
+  const payload = token.slice(0, lastDot);
+  const signature = token.slice(lastDot + 1);
   if (!payload || !signature) return false;
   const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+    const valid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+    if (!valid) return false;
   } catch {
     return false;
   }
+
+  // Check TTL: timestamp is the last segment of the payload (after the last dot)
+  const payloadLastDot = payload.lastIndexOf('.');
+  if (payloadLastDot === -1) return false;
+  const timestamp = Number(payload.slice(payloadLastDot + 1));
+  if (!Number.isFinite(timestamp)) return false;
+  if (Date.now() - timestamp > SESSION_MAX_AGE * 1000) return false;
+
+  return true;
 }

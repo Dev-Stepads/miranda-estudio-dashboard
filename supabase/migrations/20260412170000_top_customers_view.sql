@@ -1,4 +1,4 @@
-CREATE VIEW public.v_top_customers AS
+CREATE OR REPLACE VIEW public.v_top_customers AS
 SELECT
   c.customer_id,
   c.name,

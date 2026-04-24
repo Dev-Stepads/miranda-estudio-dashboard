@@ -35,6 +35,7 @@ export function SimpleTable({ title, subtitle, columns, rows }: SimpleTableProps
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
                   className={`px-3 sm:px-6 py-2 sm:py-3 font-medium text-gray-500 dark:text-gray-400 ${
                     col.align === 'right' ? 'text-right' : 'text-left'
                   }`}

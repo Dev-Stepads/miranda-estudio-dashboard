@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const SESSION_COOKIE = 'miranda_session';
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days — must match app/lib/session.ts
 
 /** Hex-encode an ArrayBuffer. */
 function toHex(buf: ArrayBuffer): string {
@@ -21,9 +22,10 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 /** Verify session token HMAC using Web Crypto API (Edge-compatible). */
 async function verifySessionToken(token: string, secret: string): Promise<boolean> {
-  const parts = token.split('.');
-  if (parts.length !== 2) return false;
-  const [payload, signature] = parts;
+  const lastDot = token.lastIndexOf('.');
+  if (lastDot === -1) return false;
+  const payload = token.slice(0, lastDot);
+  const signature = token.slice(lastDot + 1);
   if (!payload || !signature) return false;
 
   const encoder = new TextEncoder();
@@ -37,7 +39,16 @@ async function verifySessionToken(token: string, secret: string): Promise<boolea
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
   const expected = toHex(sig);
 
-  return timingSafeEqual(expected, signature);
+  if (!timingSafeEqual(expected, signature)) return false;
+
+  // Check TTL: timestamp is the last segment of the payload (after the last dot)
+  const payloadLastDot = payload.lastIndexOf('.');
+  if (payloadLastDot === -1) return false;
+  const timestamp = Number(payload.slice(payloadLastDot + 1));
+  if (!Number.isFinite(timestamp)) return false;
+  if (Date.now() - timestamp > SESSION_MAX_AGE * 1000) return false;
+
+  return true;
 }
 
 export async function middleware(request: NextRequest) {
