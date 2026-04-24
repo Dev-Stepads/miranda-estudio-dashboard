@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchRecentOrders, fetchCustomerRecurrence, fetchMonthlyComparison, parsePeriod, getPreviousPeriod } from '../lib/queries';
+import { fetchDailyRevenue, fetchTopProducts, fetchGeographyConsolidated, fetchTopCustomers, fetchCustomerRecurrence, fetchMonthlyComparison, parsePeriod, getPreviousPeriod } from '../lib/queries';
 import { KpiCard, formatBRL, formatNumber, percentChange } from '../components/kpi-cards';
 import { RevenueChart } from '../components/revenue-chart';
 import { TopProductsTable } from '../components/top-products-table';
@@ -50,13 +50,12 @@ export default async function VisaoGeralPage({
   // Computed explicitly so custom date ranges (e.g. "March 2026") and long
   // periods (e.g. "1 ano") compare fairly instead of getting truncated.
   const { prevSince, prevUntil } = getPreviousPeriod(period.since, period.until);
-  const [currentRevenue, prevPeriodRevenue, topProducts, geoConsolidated, topCustomers, recentOrders, recurrence, monthly] = await Promise.all([
+  const [currentRevenue, prevPeriodRevenue, topProducts, geoConsolidated, topCustomers, recurrence, monthly] = await Promise.all([
     fetchDailyRevenue(period.days, params.from, params.to),
     fetchDailyRevenue(period.days, prevSince, prevUntil),
     fetchTopProducts(50, period.days, params.from, params.to),
     fetchGeographyConsolidated(10, period.days, params.from, params.to),
     fetchTopCustomers(30, undefined, period.days, params.from, params.to),
-    fetchRecentOrders(10, period.days, params.from, params.to),
     fetchCustomerRecurrence(period.days, params.from, params.to),
     fetchMonthlyComparison(36),
   ]);
@@ -78,13 +77,16 @@ export default async function VisaoGeralPage({
   const totalOrders = caRows.reduce((sum, r) => sum + r.orders_count, 0);
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
+  // Per-channel orders and ticket médio
+  const nsOrders = nsRows.reduce((sum, r) => sum + r.orders_count, 0);
+  const lojaOrders = Math.max(0, totalOrders - nsOrders);
+  const avgTicketNs = nsOrders > 0 ? nuvemshopRevenue / nsOrders : 0;
+  const avgTicketLoja = lojaOrders > 0 ? contaAzulRevenue / lojaOrders : 0;
+
   // Previous period KPIs — same pattern
   const prevCaRows = prevPeriodRevenue.filter((r) => r.source === 'conta_azul');
-  const prevNsRows = prevPeriodRevenue.filter((r) => r.source === 'nuvemshop');
   const prevTotalRevenue = prevCaRows.reduce((sum, r) => sum + r.gross_revenue, 0);
   const prevTotalOrders = prevCaRows.reduce((sum, r) => sum + r.orders_count, 0);
-  // Keep prevNsRows referenced (used only if we later want split prev KPIs)
-  void prevNsRows;
 
   const chartData = buildChartData(currentRevenue);
 
@@ -131,7 +133,7 @@ export default async function VisaoGeralPage({
         <KpiCard
           title="Pedidos"
           value={formatNumber(totalOrders)}
-          subtitle={`Ticket médio ${formatBRL(avgTicket)}`}
+          subtitle={period.label}
           change={percentChange(totalOrders, prevTotalOrders)}
         />
         <KpiCard
@@ -143,6 +145,25 @@ export default async function VisaoGeralPage({
           title="Loja Física"
           value={formatBRL(contaAzulRevenue)}
           subtitle={`${totalRevenue > 0 ? ((contaAzulRevenue / totalRevenue) * 100).toFixed(1) : '0'}% do total`}
+        />
+      </section>
+
+      {/* Ticket Médio Cards */}
+      <section className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <KpiCard
+          title="Ticket Médio Geral"
+          value={formatBRL(avgTicket)}
+          subtitle={`${formatNumber(totalOrders)} pedidos no período`}
+        />
+        <KpiCard
+          title="Ticket Médio Loja"
+          value={formatBRL(avgTicketLoja)}
+          subtitle={`${formatNumber(lojaOrders)} pedidos loja física`}
+        />
+        <KpiCard
+          title="Ticket Médio E-commerce"
+          value={formatBRL(avgTicketNs)}
+          subtitle={`${formatNumber(nsOrders)} pedidos e-commerce`}
         />
       </section>
 
@@ -253,24 +274,6 @@ export default async function VisaoGeralPage({
           defaultSort={{ key: 'total_revenue', direction: 'desc' }}
         />
 
-      {/* Pedidos Recentes abaixo */}
-      <SimpleTable
-        title="Pedidos Recentes"
-        subtitle="Últimos 10 pedidos (todas as fontes)"
-        columns={[
-          { key: 'sale_date_fmt', label: 'Data', sortable: true, sortValue: 'sale_date' },
-          { key: 'customer_name', label: 'Cliente' },
-          { key: 'source_label', label: 'Canal' },
-          { key: 'gross_revenue', label: 'Valor', align: 'right', format: 'currency', sortable: true },
-        ]}
-        rows={recentOrders.map(o => ({
-          ...o,
-          sale_date_fmt: new Date(o.sale_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-          source_label: o.source === 'nuvemshop' ? 'E-commerce' : 'Loja',
-          customer_name: o.customer_name ?? '—',
-        }))}
-        defaultSort={{ key: 'sale_date', direction: 'desc' }}
-      />
     </div>
   );
 }
