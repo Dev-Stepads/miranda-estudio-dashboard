@@ -34,7 +34,7 @@
  * differences (NS includes frete in gross, CA records product subtotal),
  * not duplicate sales. The dashboard subtraction pattern handles it.
  *
- * sale_date = `${venda.data}T03:00:00Z` (SP midnight). Writing the bare
+ * sale_date uses DST-aware SP midnight via toSPMidnight(). Writing the bare
  * YYYY-MM-DD string makes Supabase store it as UTC midnight, which the
  * dashboard view then shifts 3h back into the previous day. See DECISOES
  * 2026-04-15.
@@ -116,6 +116,20 @@ const PAYMENT_NAMES: Record<string, string> = {
 function mapPaymentForDb(tipo: string | undefined | null): string {
   if (!tipo) return 'outros';
   return PAYMENT_NAMES[tipo] ?? 'outros';
+}
+
+/**
+ * Convert YYYY-MM-DD to timestamptz at midnight São Paulo (DST-aware).
+ * Same logic as toSPTimestamp in app/lib/queries.ts — must stay in sync.
+ */
+function toSPMidnight(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const noonUTC = new Date(Date.UTC(y!, m! - 1, d!, 12, 0, 0));
+  const spHour = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hour12: false }).format(noonUTC)
+  );
+  const midnightUTCHour = -(spHour - 12);
+  return `${dateStr}T${String(midnightUTCHour).padStart(2, '0')}:00:00Z`;
 }
 
 const USER_AGENT = 'Miranda Dashboard ETL (dev@stepads.com.br)';
@@ -406,8 +420,8 @@ async function processVenda(
   const paymentType = detail.venda?.condicao_pagamento?.tipo_pagamento;
   const customerDoc = detail.cliente?.documento ?? null;
   const customerName = detail.cliente?.nome ?? v.cliente?.nome ?? null;
-  // SP midnight — see DECISOES 2026-04-15 about TZ bug
-  const saleDate = `${v.data.slice(0, 10)}T03:00:00Z`;
+  // SP midnight — DST-aware (UTC-3 standard, UTC-2 during DST ~Oct-Feb)
+  const saleDate = toSPMidnight(v.data.slice(0, 10));
 
   // `nstag-` prefix marks NS-tagged vendas so dashboard queries can
   // filter them out of loja-física rankings while still including them

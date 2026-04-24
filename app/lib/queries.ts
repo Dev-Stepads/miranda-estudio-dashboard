@@ -31,6 +31,20 @@ function toSPTimestamp(dateStr: string): string {
   return `${dateStr}T${String(midnightUTCHour).padStart(2, '0')}:00:00Z`;
 }
 
+/**
+ * Upper-bound timestamp for date range queries: midnight SP of the NEXT day.
+ * Using `lt` (strictly less than) with this value includes all sales that
+ * happen during `dateStr` regardless of their time. Without this, sales
+ * after midnight SP on the last day of a range are excluded from direct
+ * queries (product rankings, customer rankings, geography).
+ */
+function toSPTimestampNextDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(y!, m! - 1, d! + 1, 12, 0, 0));
+  const nd = toSaoPauloDateStr(nextDay);
+  return toSPTimestamp(nd);
+}
+
 export interface DailyRevenue {
   day: string;
   source: string;
@@ -211,7 +225,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
       .not('sales.source_sale_id', 'ilike', 'nstag-%')
       .gte('sales.sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (untilStr) q = q.lte('sales.sale_date', toSPTimestamp(untilStr));
+    if (untilStr) q = q.lt('sales.sale_date', toSPTimestampNextDay(untilStr));
     const { data, error } = await q;
     if (error) throw new Error(`fetchTopProducts: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -345,7 +359,7 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (source !== undefined) q = q.eq('source', source);
-    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
+    if (to) q = q.lt('sale_date', toSPTimestampNextDay(to));
     const { data, error } = await q;
     if (error) throw new Error(`fetchTopCustomers: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -402,7 +416,7 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
       .not('customers.state', 'is', null)
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
+    if (to) q = q.lt('sale_date', toSPTimestampNextDay(to));
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeography: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -449,7 +463,7 @@ export async function fetchGeographyCA(limit: number = 15, days: number = 30, fr
       .not('customers.state', 'is', null)
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
+    if (to) q = q.lt('sale_date', toSPTimestampNextDay(to));
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -504,7 +518,7 @@ export async function fetchGeographyConsolidated(limit: number = 15, days: numbe
       .not('customers.state', 'is', null)
       .gte('sale_date', toSPTimestamp(sinceStr))
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lte('sale_date', toSPTimestamp(to) );
+    if (to) q = q.lt('sale_date', toSPTimestampNextDay(to));
     const { data, error } = await q;
     if (error) throw new Error(`fetchGeographyConsolidated: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -676,7 +690,7 @@ export async function fetchRecentOrders(limit: number = 10, days: number = 30, f
     .limit(limit);
 
   if (from && to) {
-    query = query.gte('sale_date', toSPTimestamp(from)).lte('sale_date', toSPTimestamp(to));
+    query = query.gte('sale_date', toSPTimestamp(from)).lt('sale_date', toSPTimestampNextDay(to));
   } else {
     query = query.gte('sale_date', toSPTimestamp(daysAgoSP(days)));
   }
@@ -735,7 +749,7 @@ export async function fetchCustomerRecurrence(days: number = 30, from?: string, 
         .not('source_sale_id', 'ilike', 'nstag-%')
         .gte('sale_date', toSPTimestamp(sinceStr))
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-      if (to) q = q.lte('sale_date', toSPTimestamp(to));
+      if (to) q = q.lt('sale_date', toSPTimestampNextDay(to));
       const { data, error } = await q;
       if (error) throw new Error(`fetchCustomerRecurrence: ${error.message}`);
       if (!data || data.length === 0) break;
@@ -1091,7 +1105,7 @@ export async function fetchAbandonedDetails(days: number = 30, from?: string, to
     .limit(limit);
 
   if (to) {
-    query = query.lte('created_at', toSPTimestamp(to));
+    query = query.lt('created_at', toSPTimestampNextDay(to));
   }
 
   const { data, error } = await query;
