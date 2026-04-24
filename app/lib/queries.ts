@@ -6,6 +6,7 @@
 import { getSupabase } from './supabase-server';
 
 const PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // safety: prevent unbounded memory (100k rows max)
 
 /**
  * Convert a YYYY-MM-DD date string to a timestamptz at midnight São Paulo.
@@ -187,6 +188,7 @@ export async function fetchDailyRevenue(days: number = 30, from?: string, to?: s
     all.push(...(data as DailyRevenue[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
   return all;
 }
@@ -234,6 +236,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
     allItems.push(...(data as SaleItemRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   // Aggregate by product_name
@@ -326,6 +329,7 @@ export async function fetchRevenueByCategory(
     allItems.push(...(data as CategoryRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   // Aggregate by category
@@ -371,6 +375,7 @@ export async function fetchNuvemshopDaily(days: number = 30, from?: string, to?:
     all.push(...(data as NuvemshopDaily[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
   return all;
 }
@@ -448,6 +453,7 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
     allRows.push(...(data as CustomerJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   const GENERIC_NAMES = /consumidor\s*final|nota\s*fiscal\s*de\s*consumidor|sem\s*nome|cliente\s*avulso|balcao|nao\s*identificado|pdv/i;
@@ -521,6 +527,7 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
     allRows.push(...(data as GeoJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   const byCity = new Map<string, GeoData>();
@@ -570,6 +577,7 @@ export async function fetchGeographyCA(limit: number = 15, days: number = 30, fr
     allRows.push(...(data as GeoCAJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   const byState = new Map<string, GeoData>();
@@ -625,6 +633,7 @@ export async function fetchGeographyConsolidated(limit: number = 15, days: numbe
     allRows.push(...(data as GeoConsolidatedJoinRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   const byState = new Map<string, GeoConsolidated>();
@@ -702,6 +711,7 @@ export async function fetchMonthlyComparison(months: number = 12): Promise<Month
     allRows.push(...(batch as typeof allRows));
     if (batch.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   // Aggregate by month with per-day detail (needed for partial comparisons)
@@ -856,6 +866,7 @@ export async function fetchCustomerRecurrence(days: number = 30, from?: string, 
       rows.push(...(data as typeof rows));
       if (data.length < PAGE_SIZE) break;
       page++;
+      if (page >= MAX_PAGES) break;
     }
     return rows;
   })();
@@ -983,6 +994,7 @@ export async function fetchMetaDaily(
     all.push(...(data as MetaDailyRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
   return all;
 }
@@ -1029,6 +1041,7 @@ export async function fetchMetaCampaignRanking(
     allRows.push(...(data as CampaignInsightRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   const byCampaign = new Map<string, MetaRankingRow>();
@@ -1115,6 +1128,7 @@ export async function fetchMetaAdRanking(
     allRows.push(...(data as AdInsightRow[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
 
   const byAd = new Map<string, MetaAdRankingRow>();
@@ -1217,6 +1231,7 @@ export async function fetchAbandoned(days: number = 30, from?: string, to?: stri
     all.push(...(data as AbandonedData[]));
     if (data.length < PAGE_SIZE) break;
     page++;
+    if (page >= MAX_PAGES) break;
   }
   return all;
 }

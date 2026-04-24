@@ -89,6 +89,9 @@ function chunkWindows(since: string, until: string): Window[] {
     cursor = new Date(end.getTime() + 24 * 60 * 60 * 1000);
   }
 
+  if (windows.length > 200) {
+    throw new Error(`chunkWindows: too many windows (${windows.length}) — check date range ${since} to ${until}`);
+  }
   return windows;
 }
 

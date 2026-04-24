@@ -46,7 +46,9 @@ async function verifySessionToken(token: string, secret: string): Promise<boolea
   if (payloadLastDot === -1) return false;
   const timestamp = Number(payload.slice(payloadLastDot + 1));
   if (!Number.isFinite(timestamp)) return false;
-  if (Date.now() - timestamp > SESSION_MAX_AGE * 1000) return false;
+  const now = Date.now();
+  if (timestamp > now) return false; // reject future timestamps
+  if (now - timestamp > SESSION_MAX_AGE * 1000) return false;
 
   return true;
 }
