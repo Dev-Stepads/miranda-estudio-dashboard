@@ -59,14 +59,45 @@ PENDENCIAS (requerem informacao da Miranda)
    com colunas (partner_name, monthly_fixed_value, revenue_pct)
    que a Miranda pode editar.
 
-5. PAPELARIA
+5. PAPELARIA — DECIDIDO (2026-04-24)
    A Nuvemshop tem uma categoria PAPELARIA (Agendas, Moleskines,
    Cartoes, Tatuagens) que nao foi mencionada pela Miranda.
+   DECISAO: manter como categoria separada por ora. Na proxima
+   apresentacao para a Miranda, confirmar se permanece assim,
+   agrupa com outra categoria, ou remove.
 
-   PARA RESOLVER: confirmar se Papelaria deve:
-   a) Aparecer como categoria separada (implementacao atual)
-   b) Ser agrupada com Casa ou Corpo
-   c) Ser ignorada
+6. FAIXA ETARIA NO CHECKOUT NUVEMSHOP (Gate N#2)
+   O dashboard poderia ter analise por faixa etaria (18-24, 25-34,
+   etc.) na aba Nuvemshop, mas a Nuvemshop NAO tem campo nativo
+   de data de nascimento. Para ter esse dado, a Miranda precisaria
+   criar um campo personalizado no painel da Nuvemshop:
+     Configuracoes > Checkout > Campos adicionais > "Data de nascimento"
+
+   IMPORTANTE: mesmo que configure agora, so afeta clientes NOVOS
+   a partir da ativacao. Historico nao tera esse dado.
+
+   PARA RESOLVER: perguntar a Miranda:
+   a) Ja tem campo de birthday configurado no checkout?
+   b) Quer configurar? (sabendo que so pega clientes novos)
+   c) Prefere tirar analise por faixa etaria do escopo?
+
+7. SEGUNDO ADMIN NA APP MARKETING DO FACEBOOK
+   A app "Miranda Dashboard ETL" no developers.facebook.com foi
+   criada sob a conta FB do Angelo Meirelles (porque dev@stepads
+   foi rejeitada pelo Facebook). O token do System User funciona
+   independente da conta que criou a app, mas se a conta do Angelo
+   for perdida (ban, exclusao, saida da empresa), perde-se o
+   controle administrativo da app (nao da pra regenerar app_secret,
+   editar configuracoes, submeter App Review).
+
+   NAO EH URGENTE — o ETL continua funcionando normalmente.
+   Mas eh bom resolver para evitar risco futuro.
+
+   PARA RESOLVER:
+   a) Acessar developers.facebook.com > Miranda Dashboard ETL
+   b) Configuracoes > Basico > Funcoes do app > Administradores
+   c) Adicionar uma segunda conta FB (Matheus ou outro membro)
+   Tempo estimado: ~5 minutos de UI.
 
 ========================================================
 ONDE AJUSTAR QUANDO TIVER AS RESPOSTAS

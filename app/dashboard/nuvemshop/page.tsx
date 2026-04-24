@@ -32,9 +32,9 @@ export default async function NuvemshopPage({
     fetchNuvemshopDaily(period.days, params.from, params.to),
     fetchNuvemshopDaily(period.days, prevSince, prevUntil),
     fetchTopProducts(50, period.days, params.from, params.to),
-    fetchGeography(15, period.days, params.from, params.to),
+    fetchGeography(50, period.days, params.from, params.to),
     fetchAbandoned(period.days, params.from, params.to),
-    fetchAbandonedDetails(period.days, params.from, params.to, 20),
+    fetchAbandonedDetails(period.days, params.from, params.to, 200),
     fetchTopCustomers(30, 'nuvemshop', period.days, params.from, params.to),
     fetchRevenueByCategory(period.days, params.from, params.to, 'nuvemshop'),
   ]);
@@ -138,7 +138,7 @@ export default async function NuvemshopPage({
         <BrazilMap data={geoData} />
 
         <SimpleTable
-          title="Top Cidades - Completo"
+          title="Top Cidades"
           subtitle="Ranking por faturamento (e-commerce)"
           columns={[
             { key: 'city', label: 'Cidade' },
@@ -146,15 +146,16 @@ export default async function NuvemshopPage({
             { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
             { key: 'revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
           ]}
-          rows={geography.slice(0, 15)}
+          rows={geography.map(g => ({ ...g, city: g.city || '—' }))}
           defaultSort={{ key: 'revenue', direction: 'desc' }}
+          pageSize={15}
         />
       </div>
 
       {/* Abandoned — detalhes individuais */}
       <SimpleTable
         title="Carrinhos Abandonados"
-        subtitle="Contato e produtos — para recuperação"
+        subtitle={`${abandonedDetails.length} carrinhos no período — contato e produtos para recuperação`}
         columns={[
           { key: 'date', label: 'Data', sortable: true, sortValue: 'created_at_raw' },
           { key: 'contact_name', label: 'Nome' },
@@ -173,6 +174,7 @@ export default async function NuvemshopPage({
           products_display: (c.products ?? []).map((p) => `${p.name} (${p.quantity}x)`).join(', ') || '—',
         }))}
         defaultSort={{ key: 'created_at_raw', direction: 'desc' }}
+        pageSize={20}
       />
 
       {/* Vendas de Produtos */}
@@ -201,25 +203,10 @@ export default async function NuvemshopPage({
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—', state: c.state ?? '—' }))}
         defaultSort={{ key: 'total_revenue', direction: 'desc' }}
       />
 
-      {/* Top Clientes — Empresas */}
-      <SimpleTable
-        title="Top Clientes — Empresas"
-        subtitle="Ranking por faturamento (pessoa jurídica)"
-        columns={[
-          { key: 'name', label: 'Empresa' },
-          { key: 'email', label: 'Email' },
-          { key: 'phone', label: 'Telefone' },
-          { key: 'state', label: 'UF' },
-          { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
-          { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
-        ]}
-        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
-        defaultSort={{ key: 'total_revenue', direction: 'desc' }}
-      />
     </div>
   );
 }

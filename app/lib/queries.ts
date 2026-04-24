@@ -505,18 +505,20 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
     page++;
   }
 
-  const byState = new Map<string, GeoData>();
+  const byCity = new Map<string, GeoData>();
   for (const row of allRows) {
     const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     const state = c?.state;
     if (!state) continue;
-    const existing = byState.get(state) ?? { state, city: '', orders_count: 0, revenue: 0 };
+    const city = c?.city ?? '';
+    const key = `${state}|${city}`;
+    const existing = byCity.get(key) ?? { state, city, orders_count: 0, revenue: 0 };
     existing.orders_count += 1;
     existing.revenue += row.gross_revenue;
-    byState.set(state, existing);
+    byCity.set(key, existing);
   }
 
-  return Array.from(byState.values())
+  return Array.from(byCity.values())
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, limit);
 }
@@ -1191,4 +1193,100 @@ export async function fetchAbandonedDetails(days: number = 30, from?: string, to
   const { data, error } = await query;
   if (error) throw new Error(`fetchAbandonedDetails: ${error.message}`);
   return (data ?? []) as AbandonedCheckoutDetail[];
+}
+
+// ---------------------------------------------------------------
+// Comportamento / Funil (Fase 5)
+// ---------------------------------------------------------------
+
+export interface FunnelData {
+  visitors: number;       // carrinhos criados (proxy de sessões com intenção)
+  addedToCart: number;     // carrinhos com produtos
+  reachedCheckout: number; // carrinhos com dados de contato
+  purchased: number;       // pedidos pagos no período
+}
+
+/** Funil de conversão Nuvemshop: carrinhos → checkout → compra */
+export async function fetchFunnelData(days: number = 30, from?: string, to?: string): Promise<FunnelData> {
+  const supabase = getSupabase();
+  const sinceStr = from ?? daysAgoSP(days);
+
+  // 1. Abandoned checkouts (carrinhos que NÃO converteram)
+  let acQuery = supabase
+    .from('abandoned_checkouts')
+    .select('checkout_id, contact_name, contact_email, products')
+    .gte('created_at', toSPTimestamp(sinceStr));
+  if (to) acQuery = acQuery.lt('created_at', toSPTimestampNextDay(to));
+  const { data: acData } = await acQuery;
+  const checkouts = acData ?? [];
+
+  const totalAbandoned = checkouts.length;
+  const withProducts = checkouts.filter(c => {
+    const prods = c.products as Array<{ name: string }> | null;
+    return prods && prods.length > 0;
+  }).length;
+  const withContact = checkouts.filter(c =>
+    (c.contact_name && c.contact_name.trim() !== '') ||
+    (c.contact_email && c.contact_email.trim() !== '')
+  ).length;
+
+  // 2. Pedidos pagos NS no mesmo período
+  let salesQuery = supabase
+    .from('sales')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'paid')
+    .eq('source', 'nuvemshop')
+    .gte('sale_date', toSPTimestamp(sinceStr));
+  if (to) salesQuery = salesQuery.lt('sale_date', toSPTimestampNextDay(to));
+  const { count: purchasedCount } = await salesQuery;
+
+  const purchased = purchasedCount ?? 0;
+
+  // Funil must be monotonically decreasing: visitors >= cart >= checkout >= purchased.
+  // In practice, some Nuvemshop checkouts have contact filled but no products
+  // (customer typed name/email before adding items), which can invert stages.
+  const rawCart = withProducts + purchased;
+  const rawCheckout = withContact + purchased;
+  const visitors = totalAbandoned + purchased;
+  const addedToCart = Math.min(rawCart, visitors);
+  const reachedCheckout = Math.min(rawCheckout, addedToCart);
+
+  return { visitors, addedToCart, reachedCheckout, purchased };
+}
+
+export interface AbandonedProduct {
+  name: string;
+  abandonedCount: number;
+  totalValue: number;
+}
+
+/** Produtos mais abandonados no carrinho */
+export async function fetchMostAbandonedProducts(days: number = 30, from?: string, to?: string, limit: number = 20): Promise<AbandonedProduct[]> {
+  const supabase = getSupabase();
+  const sinceStr = from ?? daysAgoSP(days);
+
+  let query = supabase
+    .from('abandoned_checkouts')
+    .select('products')
+    .gte('created_at', toSPTimestamp(sinceStr));
+  if (to) query = query.lt('created_at', toSPTimestampNextDay(to));
+  const { data } = await query;
+
+  const productMap = new Map<string, { count: number; value: number }>();
+  for (const row of data ?? []) {
+    const products = row.products as Array<{ name: string; quantity: number; price: number }> | null;
+    if (!products) continue;
+    for (const p of products) {
+      const name = p.name || 'Sem nome';
+      const existing = productMap.get(name) ?? { count: 0, value: 0 };
+      existing.count += p.quantity;
+      existing.value += p.price * p.quantity;
+      productMap.set(name, existing);
+    }
+  }
+
+  return Array.from(productMap.entries())
+    .map(([name, { count, value }]) => ({ name, abandonedCount: count, totalValue: value }))
+    .sort((a, b) => b.abandonedCount - a.abandonedCount)
+    .slice(0, limit);
 }

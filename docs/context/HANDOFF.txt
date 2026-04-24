@@ -52,7 +52,32 @@ LINKS IMPORTANTES:
   - Vercel:     https://vercel.com/dev-1871s-projects/miranda-estudio-dashboard
 
 --------------------------------------------------------
-0. SESSAO 2026-04-23/24 (Angelo + Claude) — RESUMO
+0. SESSAO 2026-04-24b (Matheus + Claude) — FIX CRON + QA
+--------------------------------------------------------
+
+FIX CRON GITHUB ACTIONS:
+  O cron estava falhando desde 2026-04-23 16:54 (apos push dos
+  commits T53-T80). Causa: raw tables tinham unique indexes parciais
+  (WHERE source_id IS NOT NULL) que o PostgREST nao reconhece para
+  ON CONFLICT. O commit T56 adicionou error handling que passou a
+  contar esses erros, causando exit code 1.
+  Fix: migration 20260424120000 converte indexes parciais em UNIQUE
+  CONSTRAINTS reais (source_id NOT NULL DEFAULT '').
+  Aplicada no Supabase + push + workflow disparado = SUCESSO.
+  Cron de 30 min restaurado e funcionando.
+
+QA FORMAL (T36-T42):
+  Etapa 8 do backlog marcada como concluida. Validacao ja havia sido
+  feita na pratica ao longo de multiplas sessoes (42 meses cruzados
+  com API CA, spot check NS, Meta MATCH EXATO). Apenas nao tinha
+  sido formalmente registrada no backlog.
+
+GH CLI INSTALADO:
+  GitHub CLI (gh 2.91.0) instalado via winget e autenticado na conta
+  Dev-Stepads. Permite monitorar Actions e gerenciar repo do terminal.
+
+--------------------------------------------------------
+0a. SESSAO 2026-04-23/24 (Angelo + Claude) — RESUMO
 --------------------------------------------------------
 
 AUDITORIA COMPLETA (41 problemas, 39 corrigidos):

@@ -9,6 +9,7 @@ const tabs = [
   { href: '/dashboard/nuvemshop', label: 'Nuvemshop' },
   { href: '/dashboard/loja-fisica', label: 'Loja Física' },
   { href: '/dashboard/meta-ads', label: 'Meta Ads' },
+  { href: '/dashboard/comportamento', label: 'Comportamento' },
 ];
 
 function TabLinks() {

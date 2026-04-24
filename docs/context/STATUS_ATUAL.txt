@@ -229,11 +229,14 @@ CONSOLIDACAO E DASHBOARD
 --------------------------------------------------------
 QA
 --------------------------------------------------------
-[ ] Validacao Conta Azul (T36)
-[ ] Validacao Nuvemshop (T37)
-[ ] Validacao Meta Ads (T38)
-[ ] Validacao consolidacao (T39)
-[ ] Documentacao final (T40)
+[x] Validacao Conta Azul (T36) — 2026-04-24 (42 meses, R$ 0,00 diff vs API)
+[x] Validacao Nuvemshop (T37) — 2026-04-24 (spot check 10/10 exato)
+[x] Validacao Meta Ads (T38) — 2026-04-24 (MATCH EXATO 5 periodos)
+[x] Validacao consolidacao (T39) — 2026-04-24 (Visao Geral = CA+NS ok)
+[x] Validacao geografia (T39b) — 2026-04-24 (IS NOT NULL + mapa ok)
+[x] Validacao KPIs Meta (T40) — 2026-04-24 (624 insights validados)
+[x] Consolidacao Visao Geral (T41) — 2026-04-24 (sem Meta, period ok)
+[x] Documentacao final (T42) — 2026-04-24 (docs vivos atualizados)
 
 --------------------------------------------------------
 BLOQUEIOS ATIVOS

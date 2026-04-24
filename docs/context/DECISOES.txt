@@ -1260,3 +1260,16 @@ DECISÕES REGISTRADAS
             + prefers-color-scheme e aplica classe `dark` no <html>
             antes do body renderizar. Zero dependencia de React.
   Impacto:  Transicao suave, sem flash. Funciona com e sem JS.
+
+[2026-04-24] [NEGOCIO] Papelaria mantida como categoria separada (provisorio)
+  Contexto: A Fase 4 (sessao Angelo 2026-04-23/24) extraiu 3 categorias
+            da Nuvemshop: CASA (7.770 items), CORPO (1.143) e PAPELARIA
+            (430 — Agendas, Moleskines, Cartoes, Tatuagens). A Miranda
+            nunca mencionou Papelaria como categoria. Duvida se deveria
+            aparecer separada, ser agrupada com outra, ou ignorada.
+  Decisao:  Manter Papelaria como categoria separada no dashboard.
+            Na proxima apresentacao para a Miranda, decidir junto com
+            ela se permanece assim, se agrupa com Casa ou Corpo, ou se
+            remove. Nenhuma alteracao de codigo necessaria agora.
+  Impacto:  Dashboard mostra 3 categorias NS. Se Miranda pedir mudanca,
+            ajustar mapeamento em src/etl/nuvemshop/sync.ts.

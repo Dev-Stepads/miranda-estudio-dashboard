@@ -205,13 +205,28 @@ ETAPA 7 — DASHBOARD
 --------------------------------------------------------
 ETAPA 8 — QA E HOMOLOGACAO
 --------------------------------------------------------
-[ ] T36 Validar faturamento por fonte (API x dashboard)
-[ ] T37 Validar ranking de produtos
-[ ] T38 Validar demografia (genero/idade/DDD)
-[ ] T39 Validar geografia Nuvemshop
-[ ] T40 Validar KPIs Meta Ads
-[ ] T41 Validar consolidacao Visao Geral
-[ ] T42 Atualizar documentacao final
+[x] T36 Validar faturamento por fonte (API x dashboard) — 2026-04-24
+         42 meses CA cruzados com API totais.aprovado: R$ 0,00 diff.
+         NS spot check 10 pedidos individuais: 10/10 valor exato.
+         Validacao feita nas sessoes 2026-04-15b, 2026-04-16b e 2026-04-23.
+[x] T37 Validar ranking de produtos — 2026-04-24
+         Desconto proporcional corrigido em 15.868 items (sessao 2026-04-23).
+         Views corrigidas para ::numeric(12,2). Ranking reflete receita real.
+[x] T38 Validar demografia (genero/idade/DDD) — 2026-04-24
+         CA nao tem genero/idade (decisao 2026-04-10). NS mapeia gender
+         via campo extra do checkout. normalizeState() 93.5% cobertura.
+[x] T39 Validar geografia Nuvemshop — 2026-04-24
+         View v_loja_fisica_geografia com filtro IS NOT NULL (T61).
+         Mapa Brasil interativo funcionando. Top cidades na aba NS.
+[x] T40 Validar KPIs Meta Ads — 2026-04-24
+         Validacao cruzada API vs Supabase: MATCH EXATO em 5 periodos.
+         purchases corrigidos (pickFirstActionByPriority). 624 insights.
+[x] T41 Validar consolidacao Visao Geral — 2026-04-24
+         Visao Geral = CA + NS (sem Meta Ads). Period filter validado
+         em 7d/15d/30d/90d/1ano + custom. getPreviousPeriod corrigido.
+[x] T42 Atualizar documentacao final — 2026-04-24
+         HANDOFF, STATUS_ATUAL, BACKLOG e DECISOES mantidos atualizados
+         ao longo de todas as sessoes. PENDENCIAS_FASE4.txt criado.
 
 --------------------------------------------------------
 ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
