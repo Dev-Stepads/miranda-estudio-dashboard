@@ -6,7 +6,12 @@ export function LogoutButton() {
   const router = useRouter();
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Network failure — redirect to login anyway; cookie may persist
+      // but middleware will reject the expired/invalid session on next visit
+    }
     router.push('/login');
   }
 

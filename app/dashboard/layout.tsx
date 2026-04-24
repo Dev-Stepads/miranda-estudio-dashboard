@@ -43,6 +43,8 @@ export default async function DashboardLayout({
               <img
                 src="/logo-miranda.jpg"
                 alt="Miranda Studio"
+                width={40}
+                height={40}
                 className="h-8 sm:h-10 w-auto shrink-0"
               />
               <div>

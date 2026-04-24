@@ -500,10 +500,14 @@ async function processVenda(
     const itemsRawSum = rawItems.reduce((s, i) => s + i.total_price, 0);
     let items = rawItems;
     if (itemsRawSum > 0 && Math.abs(itemsRawSum - grossRevenue) > 0.01) {
-      const adjusted = rawItems.map((item) => ({
-        ...item,
-        total_price: Math.round((item.total_price / itemsRawSum) * grossRevenue * 100) / 100,
-      }));
+      const adjusted = rawItems.map((item) => {
+        const adjTotal = Math.round((item.total_price / itemsRawSum) * grossRevenue * 100) / 100;
+        return {
+          ...item,
+          unit_price: item.quantity > 0 ? Math.round((adjTotal / item.quantity) * 100) / 100 : item.unit_price,
+          total_price: adjTotal,
+        };
+      });
       // Last item absorbs rounding residual so sum matches grossRevenue exactly
       const partialSum = adjusted.slice(0, -1).reduce((s, i) => s + i.total_price, 0);
       adjusted[adjusted.length - 1]!.total_price = Math.round((grossRevenue - partialSum) * 100) / 100;

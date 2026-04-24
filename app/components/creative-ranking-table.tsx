@@ -140,6 +140,8 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
     <img
       src={url}
       alt={alt}
+      width={40}
+      height={40}
       className="w-10 h-10 rounded-md object-cover bg-gray-100 dark:bg-gray-900"
       loading="lazy"
       referrerPolicy="no-referrer"

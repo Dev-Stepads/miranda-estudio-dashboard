@@ -43,6 +43,8 @@ export default function LoginPage() {
           <img
             src="/logo-miranda.jpg"
             alt="Miranda Studio"
+            width={48}
+            height={48}
             className="h-12 w-auto mx-auto mb-4 rounded-lg bg-white p-2"
           />
           <p className="text-gray-400 mt-2 text-sm">

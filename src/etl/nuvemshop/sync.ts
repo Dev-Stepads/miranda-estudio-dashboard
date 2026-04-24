@@ -364,13 +364,14 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
 
             for (let idx = 0; idx < validItems.length; idx++) {
               const item = validItems[idx]!;
+              const adjTotal = adjustedPrices[idx]!;
               allItems.push({
                 sale_id: saleId,
                 product_name: item.product_name,
                 sku: item.sku,
                 quantity: item.quantity,
-                unit_price: item.unit_price,
-                total_price: adjustedPrices[idx]!,
+                unit_price: item.quantity > 0 ? Math.round((adjTotal / item.quantity) * 100) / 100 : item.unit_price,
+                total_price: adjTotal,
               });
             }
           } else {
