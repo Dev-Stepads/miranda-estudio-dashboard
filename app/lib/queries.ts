@@ -55,6 +55,7 @@ export interface DailyRevenue {
 export interface TopProduct {
   product_name: string;
   sku: string | null;
+  category: string | null;
   quantity_total: number;
   revenue_total: number;
   quantity_loja_fisica: number;
@@ -210,6 +211,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
     sku: string | null;
     quantity: number;
     total_price: number;
+    category: string | null;
     sales: { source: string } | Array<{ source: string }>;
   }
 
@@ -219,7 +221,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
   while (true) {
     let q = supabase
       .from('sale_items')
-      .select('product_name, sku, quantity, total_price, sales!inner(source, source_sale_id, sale_date, status)')
+      .select('product_name, sku, quantity, total_price, category, sales!inner(source, source_sale_id, sale_date, status)')
       .eq('sales.status', 'paid')
       .not('product_name', 'is', null)
       .not('sales.source_sale_id', 'ilike', 'nstag-%')
@@ -241,7 +243,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
     const source = salesObj?.source ?? 'unknown';
     const key = row.product_name;
     const existing = byProduct.get(key) ?? {
-      product_name: key, sku: row.sku, quantity_total: 0, revenue_total: 0,
+      product_name: key, sku: row.sku, category: row.category, quantity_total: 0, revenue_total: 0,
       quantity_loja_fisica: 0, quantity_nuvemshop: 0, revenue_loja_fisica: 0, revenue_nuvemshop: 0,
     };
     existing.quantity_total += row.quantity;
@@ -254,6 +256,7 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
       existing.revenue_nuvemshop += row.total_price;
     }
     if (row.sku) existing.sku = row.sku;
+    existing.category = row.category ?? existing.category;
     byProduct.set(key, existing);
   }
 
@@ -268,6 +271,83 @@ export async function fetchTopProducts(limit: number = 20, days: number = 30, fr
     }))
     .sort((a, b) => b.revenue_total - a.revenue_total)
     .slice(0, limit);
+}
+
+// ============================================================
+// Revenue by category
+// ============================================================
+
+export interface CategoryRevenue {
+  category: string;
+  orders_count: number;
+  revenue: number;
+  items_count: number;
+}
+
+/**
+ * Revenue breakdown by product category (CASA, CORPO, PAPELARIA).
+ * Only includes sale_items that have a non-null category.
+ * Excludes CA nstag- rows (same rationale as fetchTopProducts).
+ */
+export async function fetchRevenueByCategory(
+  days: number = 30,
+  from?: string,
+  to?: string,
+  source?: string,
+): Promise<CategoryRevenue[]> {
+  const supabase = getSupabase();
+  const sinceStr = from ?? daysAgoSP(days);
+  const untilStr = to;
+
+  interface CategoryRow {
+    category: string;
+    quantity: number;
+    total_price: number;
+    sale_id: number;
+    sales: { source: string; sale_date: string; status: string } | Array<{ source: string; sale_date: string; status: string }>;
+  }
+
+  const allItems: CategoryRow[] = [];
+  let page = 0;
+  while (true) {
+    let q = supabase
+      .from('sale_items')
+      .select('category, quantity, total_price, sale_id, sales!inner(source, source_sale_id, sale_date, status)')
+      .eq('sales.status', 'paid')
+      .not('category', 'is', null)
+      .not('sales.source_sale_id', 'ilike', 'nstag-%')
+      .gte('sales.sale_date', toSPTimestamp(sinceStr))
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (untilStr) q = q.lt('sales.sale_date', toSPTimestampNextDay(untilStr));
+    if (source) q = q.eq('sales.source', source);
+    const { data, error } = await q;
+    if (error) throw new Error(`fetchRevenueByCategory: ${error.message}`);
+    if (!data || data.length === 0) break;
+    allItems.push(...(data as CategoryRow[]));
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
+
+  // Aggregate by category
+  const byCategory = new Map<string, { revenue: number; items_count: number; saleIds: Set<number> }>();
+  for (const row of allItems) {
+    const cat = row.category;
+    const existing = byCategory.get(cat) ?? { revenue: 0, items_count: 0, saleIds: new Set<number>() };
+    existing.revenue += row.total_price;
+    existing.items_count += row.quantity;
+    existing.saleIds.add(row.sale_id);
+    byCategory.set(cat, existing);
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return Array.from(byCategory.entries())
+    .map(([category, vals]) => ({
+      category,
+      revenue: round2(vals.revenue),
+      items_count: vals.items_count,
+      orders_count: vals.saleIds.size,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 }
 
 /** Nuvemshop daily for the Nuvemshop tab */

@@ -261,6 +261,27 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
   );
   ctx.log(`  Total orders fetched: ${rawOrders.length}`);
 
+  // Pre-load product categories from DB for enriching sale_items
+  const categoryByName = new Map<string, string>();
+  {
+    let catPage = 0;
+    const CAT_PAGE = 1000;
+    while (true) {
+      const { data: catRows } = await ctx.supabase
+        .from('products')
+        .select('canonical_name, category')
+        .not('category', 'is', null)
+        .range(catPage * CAT_PAGE, (catPage + 1) * CAT_PAGE - 1);
+      if (!catRows || catRows.length === 0) break;
+      for (const r of catRows) {
+        categoryByName.set(r.canonical_name as string, r.category as string);
+      }
+      if (catRows.length < CAT_PAGE) break;
+      catPage++;
+    }
+    ctx.log(`  Product categories loaded: ${categoryByName.size} products with category`);
+  }
+
   // 2. Map all orders to canonical shapes + resolve customer FKs
   const mappedOrders = rawOrders.map((raw) => {
     const canonical = mapOrderToCanonicalSale(raw);
@@ -338,6 +359,7 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
         quantity: number;
         unit_price: number;
         total_price: number;
+        category: string | null;
       }> = [];
 
       if (itemsDeleteOk) {
@@ -372,6 +394,7 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
                 quantity: item.quantity,
                 unit_price: item.quantity > 0 ? Math.round((adjTotal / item.quantity) * 100) / 100 : item.unit_price,
                 total_price: adjTotal,
+                category: categoryByName.get(item.product_name) ?? null,
               });
             }
           } else {
@@ -383,6 +406,7 @@ export async function syncOrders(ctx: SyncContext): Promise<SyncResult> {
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 total_price: item.total_price,
+                category: categoryByName.get(item.product_name) ?? null,
               });
             }
           }
@@ -546,11 +570,15 @@ export async function syncProducts(ctx: SyncContext): Promise<SyncResult> {
     canonical_name: string;
     sku: string;
     source_refs: Record<string, string>;
+    category: string | null;
   }> = [];
 
   for (const raw of rawProducts) {
     const productName = extractLocalized(raw.name, 'pt');
     const variants = raw.variants ?? [];
+    // Extract root category name (first category in the array)
+    const firstCat = raw.categories?.[0];
+    const category = firstCat ? (extractLocalized(firstCat.name, 'pt') || null) : null;
 
     if (variants.length === 0) {
       // No variants — skip (can't link to sale_items without SKU)
@@ -571,6 +599,7 @@ export async function syncProducts(ctx: SyncContext): Promise<SyncResult> {
         canonical_name: name,
         sku: variant.sku,
         source_refs: { nuvemshop: String(raw.id) },
+        category,
       });
     }
   }

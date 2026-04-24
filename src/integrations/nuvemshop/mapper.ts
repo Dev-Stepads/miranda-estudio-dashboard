@@ -157,12 +157,16 @@ export function mapGender(raw: string | undefined): Gender {
  */
 export function mapProductToCanonical(raw: RawNuvemshopProduct): CanonicalProduct {
   const firstVariant = raw.variants?.[0];
+  // Extract root category name (first category in the array)
+  const firstCategory = raw.categories?.[0];
+  const category = firstCategory ? (extractLocalized(firstCategory.name, 'pt') || null) : null;
   return {
     source: 'nuvemshop',
     source_id: String(raw.id),
     name: extractLocalized(raw.name, 'pt'),
     sku: firstVariant?.sku ?? null,
     price: firstVariant !== undefined ? safeParseMoney(firstVariant.price) : 0,
+    category,
   };
 }
 

@@ -1,0 +1,90 @@
+========================================================
+PENDENCIAS — Fase 4 (Categorias e Parceiros)
+========================================================
+Data: 2026-04-24
+Status: PARCIALMENTE IMPLEMENTADO
+
+O que FOI implementado:
+  - Categorias da Nuvemshop (CASA, CORPO, PAPELARIA)
+  - Coluna `category` em products e sale_items
+  - ETL sincroniza categorias automaticamente
+  - KPI cards por categoria na aba Nuvemshop
+  - Badge de categoria na tabela de produtos
+
+========================================================
+PENDENCIAS (requerem informacao da Miranda)
+========================================================
+
+1. CATEGORIAS DO CONTA AZUL
+   A API do Conta Azul NAO tem endpoint de categorias de produto.
+   O endpoint /v1/product-categories retorna 404.
+   O endpoint /v1/categorias retorna categorias FINANCEIRAS
+   (despesa/receita), nao categorias de produto.
+
+   OPCOES:
+   a) Mapeamento manual por nome de produto (fragil)
+   b) Miranda cadastrar categorias no Conta Azul (se possivel)
+   c) Deixar produtos CA sem categoria (atual)
+
+   PARA RESOLVER: perguntar a Miranda como ela categoriza
+   produtos da loja fisica hoje.
+
+2. PARCEIROS / MORADA
+   Nao existe categoria "Parceiros" ou "Morada" em nenhuma API.
+   Nao ficou claro como identificar vendas de parceiros:
+   - Eh pelo nome do cliente? (ex: "Morada" como cliente)
+   - Eh pelo nome do produto?
+   - Eh por um campo especifico na venda?
+
+   PARA RESOLVER: perguntar a Miranda:
+   a) Como ela identifica vendas do Morada no Conta Azul?
+   b) Os produtos do Morada tem algum nome padrao?
+   c) O 37% eh fixo para todos os parceiros ou so Morada?
+
+3. REGRA DOS 37%
+   Miranda quer que apenas 37% do faturamento de parceiros
+   conte como receita real. Precisa definir:
+   - Quais produtos/vendas sao de parceiros
+   - Se o 37% eh sobre gross_revenue ou net_revenue
+   - Se outros parceiros alem do Morada existem ou podem existir
+
+4. VALOR FIXO MENSAL DE PARCEIROS
+   Miranda mencionou R$ 1.000/mes do Morada.
+   Precisa definir:
+   - Esse valor eh fixo ou varia por mes?
+   - Vem de algum dado no sistema ou eh manual?
+   - Como deve ser exibido no dashboard?
+
+   Se for manual, sugestao: criar uma tabela `partner_config`
+   com colunas (partner_name, monthly_fixed_value, revenue_pct)
+   que a Miranda pode editar.
+
+5. PAPELARIA
+   A Nuvemshop tem uma categoria PAPELARIA (Agendas, Moleskines,
+   Cartoes, Tatuagens) que nao foi mencionada pela Miranda.
+
+   PARA RESOLVER: confirmar se Papelaria deve:
+   a) Aparecer como categoria separada (implementacao atual)
+   b) Ser agrupada com Casa ou Corpo
+   c) Ser ignorada
+
+========================================================
+ONDE AJUSTAR QUANDO TIVER AS RESPOSTAS
+========================================================
+
+Identificacao de parceiros:
+  - src/etl/conta-azul/sync.ts (filtrar vendas de parceiros)
+  - src/etl/nuvemshop/sync.ts (se parceiros tambem vendem online)
+
+Regra dos 37%:
+  - app/lib/queries.ts (nova funcao fetchPartnerRevenue)
+  - app/dashboard/ (nova aba ou secao "Vendas de Parceiros")
+
+Valor fixo mensal:
+  - supabase/migrations/ (tabela partner_config)
+  - app/lib/queries.ts (funcao fetchPartnerConfig)
+  - app/dashboard/ (exibir na secao de parceiros)
+
+Categorias CA:
+  - src/etl/conta-azul/sync.ts (adicionar category ao item)
+  - Mapeamento manual em arquivo de configuracao

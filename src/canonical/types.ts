@@ -109,6 +109,8 @@ export interface CanonicalProduct {
   name: string;
   sku: string | null;
   price: number;
+  /** Root category from Nuvemshop (CASA, CORPO, PAPELARIA). Null for CA or uncategorized. */
+  category: string | null;
 }
 
 /**

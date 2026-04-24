@@ -10,6 +10,12 @@ interface TopProductsTableProps {
   pageSize?: number;
 }
 
+const CATEGORY_BADGE: Record<string, string> = {
+  CASA: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  CORPO: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+  PAPELARIA: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+};
+
 export function TopProductsTable({ products, pageSize }: TopProductsTableProps) {
   const totalRevenue = products.reduce((sum, p) => sum + p.revenue_total, 0);
 
@@ -45,6 +51,7 @@ export function TopProductsTable({ products, pageSize }: TopProductsTableProps) 
             <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
               <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Produto</th>
+              <th scope="col" className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Categoria</th>
               <th
                 scope="col"
                 className={`px-6 py-3 text-right font-medium text-gray-500 dark:text-gray-400 ${sortableThClass}`}
@@ -77,6 +84,15 @@ export function TopProductsTable({ products, pageSize }: TopProductsTableProps) 
                 <td className="px-3 sm:px-6 py-2 sm:py-3 text-gray-400 font-mono text-xs">{i + 1}</td>
                 <td className="px-3 sm:px-6 py-2 sm:py-3">
                   <span className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm">{p.product_name}</span>
+                </td>
+                <td className="px-3 sm:px-6 py-2 sm:py-3">
+                  {p.category && CATEGORY_BADGE[p.category] ? (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_BADGE[p.category]}`}>
+                      {p.category}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs">&mdash;</span>
+                  )}
                 </td>
                 <td className="px-3 sm:px-6 py-2 sm:py-3 text-right text-gray-700 dark:text-gray-300 font-mono text-xs sm:text-sm">
                   {formatNumber(p.quantity_total)}

@@ -7,6 +7,7 @@ import {
   fetchAbandoned,
   fetchAbandonedDetails,
   fetchTopCustomers,
+  fetchRevenueByCategory,
   parsePeriod,
   getPreviousPeriod,
 } from '../../lib/queries';
@@ -27,7 +28,7 @@ export default async function NuvemshopPage({
   // Previous period = same-length window immediately before [since, until].
   // Explicit computation avoids the truncation bug that used `days * 2` + filter.
   const { prevSince, prevUntil } = getPreviousPeriod(period.since, period.until);
-  const [daily, prevDaily, topProducts, geography, abandoned, abandonedDetails, topCustomers] = await Promise.all([
+  const [daily, prevDaily, topProducts, geography, abandoned, abandonedDetails, topCustomers, categoryRevenue] = await Promise.all([
     fetchNuvemshopDaily(period.days, params.from, params.to),
     fetchNuvemshopDaily(period.days, prevSince, prevUntil),
     fetchTopProducts(50, period.days, params.from, params.to),
@@ -35,6 +36,7 @@ export default async function NuvemshopPage({
     fetchAbandoned(period.days, params.from, params.to),
     fetchAbandonedDetails(period.days, params.from, params.to, 20),
     fetchTopCustomers(30, 'nuvemshop', period.days, params.from, params.to),
+    fetchRevenueByCategory(period.days, params.from, params.to, 'nuvemshop'),
   ]);
 
   // KPIs
@@ -105,6 +107,24 @@ export default async function NuvemshopPage({
           value={geoData[0]?.state ?? '—'}
           subtitle={geoData[0] ? `${formatBRL(geoData[0].revenue)} | ${geoData[0].orders_count} pedidos` : ''}
         />
+      </section>
+
+      {/* Faturamento por Categoria */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">Faturamento por Categoria</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          {(['CASA', 'CORPO', 'PAPELARIA'] as const).map((cat) => {
+            const data = categoryRevenue.find((c) => c.category === cat);
+            return (
+              <KpiCard
+                key={cat}
+                title={cat.charAt(0) + cat.slice(1).toLowerCase()}
+                value={formatBRL(data?.revenue ?? 0)}
+                subtitle={`${formatNumber(data?.items_count ?? 0)} itens | ${formatNumber(data?.orders_count ?? 0)} pedidos`}
+              />
+            );
+          })}
+        </div>
       </section>
 
       {/* Revenue Chart */}

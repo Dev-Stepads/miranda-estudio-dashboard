@@ -255,6 +255,13 @@ export const RawNuvemshopProductSchema = z
     brand: z.string().nullable().optional(),
     variants: z.array(RawNuvemshopVariantSchema).optional(),
     images: z.array(RawNuvemshopImageSchema).optional(),
+    /** Product categories from Nuvemshop — array of objects with id + localized name. */
+    categories: z.array(
+      z.object({
+        id: z.number(),
+        name: NuvemshopI18nSchema,
+      }).passthrough()
+    ).optional(),
     created_at: z.string().optional(),
     updated_at: z.string().optional(),
   })
