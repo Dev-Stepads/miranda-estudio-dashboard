@@ -191,10 +191,10 @@ export default async function NuvemshopPage({
         pageSize={15}
       />
 
-      {/* Top Clientes — Pessoas */}
+      {/* Top Clientes */}
       <SimpleTable
-        title="Top Clientes — Pessoas"
-        subtitle="Ranking por faturamento (pessoa física)"
+        title="Top Clientes"
+        subtitle="Ranking por faturamento (e-commerce)"
         columns={[
           { key: 'name', label: 'Cliente' },
           { key: 'email', label: 'Email' },
@@ -202,9 +202,11 @@ export default async function NuvemshopPage({
           { key: 'state', label: 'UF' },
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
+          { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—', state: c.state ?? '—' }))}
+        rows={topCustomers.filter(c => !c.is_generic).slice(0, 15).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—', state: c.state ?? '—' }))}
         defaultSort={{ key: 'total_revenue', direction: 'desc' }}
+        pageSize={10}
       />
 
     </div>

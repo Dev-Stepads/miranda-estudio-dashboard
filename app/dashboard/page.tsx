@@ -241,13 +241,13 @@ export default async function VisaoGeralPage({
       {/* Monthly Comparison */}
       <MonthlyComparison data={monthly} />
 
-      {/* Recent Orders + Top Customers */}
       {/* Top Clientes */}
       <SimpleTable
           title="Top Clientes — Pessoas"
           subtitle="Ranking por faturamento (pessoa física)"
           columns={[
             { key: 'name', label: 'Cliente' },
+            { key: 'origin', label: 'Origem' },
             { key: 'email', label: 'Email' },
             { key: 'phone', label: 'Telefone' },
             { key: 'state', label: 'UF' },
@@ -255,14 +255,16 @@ export default async function VisaoGeralPage({
             { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
             { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
           ]}
-          rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+          rows={topCustomers.filter(c => c.customer_type === 'pessoa' && !c.is_generic).slice(0, 15).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—', state: c.state ?? '—' }))}
           defaultSort={{ key: 'total_revenue', direction: 'desc' }}
+          pageSize={10}
         />
         <SimpleTable
           title="Top Clientes — Empresas"
           subtitle="Ranking por faturamento (pessoa jurídica)"
           columns={[
             { key: 'name', label: 'Empresa' },
+            { key: 'origin', label: 'Origem' },
             { key: 'email', label: 'Email' },
             { key: 'phone', label: 'Telefone' },
             { key: 'state', label: 'UF' },
@@ -270,8 +272,9 @@ export default async function VisaoGeralPage({
             { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
             { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
           ]}
-          rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+          rows={topCustomers.filter(c => c.customer_type === 'empresa' && !c.is_generic).slice(0, 15).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—', state: c.state ?? '—' }))}
           defaultSort={{ key: 'total_revenue', direction: 'desc' }}
+          pageSize={10}
         />
 
     </div>

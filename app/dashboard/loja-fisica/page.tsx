@@ -136,12 +136,13 @@ export default async function LojaFisicaPage({
           { key: 'name', label: 'Cliente' },
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
-
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
+          { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'pessoa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        rows={topCustomers.filter(c => c.customer_type === 'pessoa' && !c.is_generic).slice(0, 15).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—' }))}
         defaultSort={{ key: 'total_revenue', direction: 'desc' }}
+        pageSize={10}
       />
 
       {/* Top Clientes — Empresas */}
@@ -152,12 +153,13 @@ export default async function LojaFisicaPage({
           { key: 'name', label: 'Empresa' },
           { key: 'email', label: 'Email' },
           { key: 'phone', label: 'Telefone' },
-
           { key: 'orders_count', label: 'Pedidos', align: 'right', format: 'number', sortable: true },
           { key: 'total_revenue', label: 'Faturamento', align: 'right', format: 'currency', sortable: true },
+          { key: 'avg_ticket', label: 'Ticket Médio', align: 'right', format: 'currency', sortable: true },
         ]}
-        rows={topCustomers.filter(c => c.customer_type === 'empresa').slice(0, 10).map(c => ({ ...c, email: c.email ?? '—', phone: c.phone ?? '—' }))}
+        rows={topCustomers.filter(c => c.customer_type === 'empresa' && !c.is_generic).slice(0, 15).map(c => ({ ...c, name: c.name || '—', email: c.email ?? '—', phone: c.phone ?? '—' }))}
         defaultSort={{ key: 'total_revenue', direction: 'desc' }}
+        pageSize={10}
       />
     </div>
   );

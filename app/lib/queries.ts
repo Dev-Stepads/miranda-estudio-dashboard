@@ -380,12 +380,14 @@ export interface TopCustomer {
   name: string;
   state: string | null;
   source: string;
+  origin: 'Nuvemshop' | 'Loja Física' | 'Ambos';
   orders_count: number;
   total_revenue: number;
   avg_ticket: number;
   customer_type: 'pessoa' | 'empresa';
   email: string | null;
   phone: string | null;
+  is_generic: boolean;
 }
 
 const BUSINESS_SUFFIXES = /\b(LTDA|S\.?A\.?|EIRELI|MEI|EPP|COMERCIO|SERVICOS|EMPREENDIMENTOS|PRODUCOES|INDUSTRIA|DISTRIBUIDORA|HOTELEIRA|MATERIAIS|INSTITUTO)\b/i;
@@ -448,26 +450,42 @@ export async function fetchTopCustomers(limit: number = 15, source?: string, day
     page++;
   }
 
-  const byCustomer = new Map<number, TopCustomer>();
+  const GENERIC_NAMES = /consumidor\s*final|nota\s*fiscal\s*de\s*consumidor|sem\s*nome|cliente\s*avulso|balcao|nao\s*identificado|pdv/i;
+
+  const byCustomer = new Map<number, TopCustomer & { _sources: Set<string> }>();
   for (const row of allRows) {
     const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
     if (!cust) continue;
     const existing = byCustomer.get(row.customer_id) ?? {
       customer_id: row.customer_id, name: cust.name,
       state: cust.state, source: row.source,
+      origin: 'Nuvemshop' as const,
       orders_count: 0, total_revenue: 0, avg_ticket: 0,
       customer_type: classifyCustomer(cust.name, row.source, cust.source_customer_id),
       email: cust.email, phone: cust.phone,
+      is_generic: GENERIC_NAMES.test(cust.name),
+      _sources: new Set<string>(),
     };
     existing.orders_count += 1;
     existing.total_revenue += row.gross_revenue;
+    existing._sources.add(row.source);
     byCustomer.set(row.customer_id, existing);
   }
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  function resolveOrigin(sources: Set<string>): 'Nuvemshop' | 'Loja Física' | 'Ambos' {
+    const hasNS = sources.has('nuvemshop');
+    const hasCA = sources.has('conta_azul');
+    if (hasNS && hasCA) return 'Ambos';
+    if (hasCA) return 'Loja Física';
+    return 'Nuvemshop';
+  }
+
   return Array.from(byCustomer.values())
-    .map(c => ({
+    .map(({ _sources, ...c }) => ({
       ...c,
+      origin: resolveOrigin(_sources),
       total_revenue: round2(c.total_revenue),
       avg_ticket: c.orders_count > 0 ? round2(c.total_revenue / c.orders_count) : 0,
     }))
