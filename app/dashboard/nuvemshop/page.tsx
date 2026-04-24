@@ -155,7 +155,7 @@ export default async function NuvemshopPage({
         defaultSort={{ key: 'created_at_raw', direction: 'desc' }}
       />
 
-      {/* Top Produtos */}
+      {/* Vendas de Produtos */}
       <SimpleTable
         title="Vendas de Produtos"
         subtitle="Ranking por faturamento (e-commerce)"

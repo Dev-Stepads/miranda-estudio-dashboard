@@ -89,15 +89,15 @@ export function SimpleTable({ title, subtitle, columns, rows, defaultSort, pageS
           <thead>
             <tr className="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               {columns.map((col) => {
-                const indicator = col.sortable && defaultSort ? getSortIndicator(col.key) : '';
+                const indicator = col.sortable ? getSortIndicator(col.key) : '';
                 return (
                   <th
                     key={col.key}
                     scope="col"
                     className={`px-3 sm:px-6 py-2 sm:py-3 font-medium text-gray-500 dark:text-gray-400 ${
                       col.align === 'right' ? 'text-right' : 'text-left'
-                    } ${col.sortable && defaultSort ? 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200' : ''}`}
-                    onClick={col.sortable && defaultSort ? () => requestSort(col.key) : undefined}
+                    } ${col.sortable ? 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200' : ''}`}
+                    onClick={col.sortable ? () => requestSort(col.key) : undefined}
                   >
                     {col.label}
                     {indicator && <span className="ml-1 text-[10px] opacity-60">{indicator}</span>}

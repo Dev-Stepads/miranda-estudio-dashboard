@@ -113,7 +113,7 @@ export default async function LojaFisicaPage({
         />
       )}
 
-      {/* Top Produtos */}
+      {/* Vendas de Produtos */}
       <SimpleTable
         title="Vendas de Produtos"
         subtitle="Ranking por faturamento"
