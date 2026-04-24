@@ -548,53 +548,6 @@ export async function fetchGeography(limit: number = 15, days: number = 30, from
     .slice(0, limit);
 }
 
-/** Geography (Conta Azul — Loja Física), filtered by period. Excludes nstag-. */
-export async function fetchGeographyCA(limit: number = 15, days: number = 30, from?: string, to?: string): Promise<GeoData[]> {
-  const supabase = getSupabase();
-  const sinceStr = from ?? daysAgoSP(days);
-
-  interface GeoCAJoinRow {
-    gross_revenue: number;
-    customers: { state: string; city: string } | Array<{ state: string; city: string }>;
-  }
-
-  const allRows: GeoCAJoinRow[] = [];
-  let page = 0;
-  while (true) {
-    let q = supabase
-      .from('sales')
-      .select('gross_revenue, source_sale_id, customers!inner(state, city)')
-      .eq('status', 'paid')
-      .eq('source', 'conta_azul')
-      .not('source_sale_id', 'ilike', 'nstag-%')
-      .not('customers.state', 'is', null)
-      .gte('sale_date', toSPTimestamp(sinceStr))
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (to) q = q.lt('sale_date', toSPTimestampNextDay(to));
-    const { data, error } = await q;
-    if (error) throw new Error(`fetchGeographyCA: ${error.message}`);
-    if (!data || data.length === 0) break;
-    allRows.push(...(data as GeoCAJoinRow[]));
-    if (data.length < PAGE_SIZE) break;
-    page++;
-    if (page >= MAX_PAGES) break;
-  }
-
-  const byState = new Map<string, GeoData>();
-  for (const row of allRows) {
-    const c = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-    const state = c?.state;
-    if (!state) continue;
-    const existing = byState.get(state) ?? { state, city: '', orders_count: 0, revenue: 0 };
-    existing.orders_count += 1;
-    existing.revenue += row.gross_revenue;
-    byState.set(state, existing);
-  }
-
-  return Array.from(byState.values())
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit);
-}
 
 export interface GeoConsolidated {
   state: string;
@@ -778,60 +731,6 @@ export async function fetchMonthlyComparison(months: number = 12): Promise<Month
   return result;
 }
 
-export interface RecentOrder {
-  sale_id: number;
-  source: string;
-  sale_date: string;
-  gross_revenue: number;
-  status: string;
-  payment_method: string | null;
-  customer_name: string | null;
-}
-
-/** Recent orders within the period. Excludes CA nstag- (NS duplicates). */
-export async function fetchRecentOrders(limit: number = 10, days: number = 30, from?: string, to?: string): Promise<RecentOrder[]> {
-  const supabase = getSupabase();
-
-  let query = supabase
-    .from('sales')
-    .select('sale_id, source, source_sale_id, sale_date, gross_revenue, status, payment_method, customers(name)')
-    .not('source_sale_id', 'ilike', 'nstag-%')
-    .order('sale_date', { ascending: false })
-    .limit(limit);
-
-  if (from && to) {
-    query = query.gte('sale_date', toSPTimestamp(from)).lt('sale_date', toSPTimestampNextDay(to));
-  } else {
-    query = query.gte('sale_date', toSPTimestamp(daysAgoSP(days)));
-  }
-
-  const { data, error } = await query;
-
-  if (error) throw new Error(`fetchRecentOrders: ${error.message}`);
-
-  interface RecentOrderRow {
-    sale_id: number;
-    source: string;
-    sale_date: string;
-    gross_revenue: number;
-    status: string;
-    payment_method: string | null;
-    customers: { name: string | null } | Array<{ name: string | null }> | null;
-  }
-
-  return ((data ?? []) as RecentOrderRow[]).map((row) => {
-    const cust = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-    return {
-      sale_id: row.sale_id,
-      source: row.source,
-      sale_date: row.sale_date,
-      gross_revenue: row.gross_revenue,
-      status: row.status,
-      payment_method: row.payment_method,
-      customer_name: cust?.name ?? null,
-    };
-  });
-}
 
 export interface CustomerRecurrence {
   source: string;

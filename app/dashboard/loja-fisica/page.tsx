@@ -97,18 +97,17 @@ export default async function LojaFisicaPage({
       {/* Avg Ticket — computed from loja física = CA − NS per day */}
       {chartData.length > 0 && (
         <AvgTicketChart
-          data={chartData.map(d => {
-            // loja orders(day) = CA orders(day) − NS orders(day). count(CA)
-            // already represents loja + nstag ≈ loja + NS orders, so
-            // subtracting NS orders isolates loja.
-            const caDayRow = caDaily.find(r => r.day === d.day);
-            const nsDayRow = nsDailyForSubtraction.find(r => r.day === d.day);
-            const lojaOrders = Math.max(0, (caDayRow?.orders_count ?? 0) - (nsDayRow?.orders_count ?? 0));
-            return {
-              day: d.day,
-              avg_ticket: lojaOrders > 0 ? d.conta_azul / lojaOrders : 0,
-            };
-          })}
+          data={(() => {
+            const caByDay = new Map(caDaily.map(r => [r.day, r.orders_count]));
+            const nsByDay2 = new Map(nsDailyForSubtraction.map(r => [r.day, r.orders_count]));
+            return chartData.map(d => {
+              const lojaOrders = Math.max(0, (caByDay.get(d.day) ?? 0) - (nsByDay2.get(d.day) ?? 0));
+              return {
+                day: d.day,
+                avg_ticket: lojaOrders > 0 ? d.conta_azul / lojaOrders : 0,
+              };
+            });
+          })()}
           color="#F59E0B"
         />
       )}

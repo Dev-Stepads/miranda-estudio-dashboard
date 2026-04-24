@@ -179,20 +179,27 @@ export default async function VisaoGeralPage({
           Orders identity: count(CA) = count(loja) + count(NS-tagged),
           so count(loja) = count(CA) − count(NS). Total orders = count(CA). */}
       <AvgTicketChart
-        data={chartData.map(d => {
-          const dayRows = currentRevenue.filter(r => r.day === d.day);
-          const dayNsOrders = dayRows.filter(r => r.source === 'nuvemshop').reduce((s, r) => s + r.orders_count, 0);
-          const dayCaOrders = dayRows.filter(r => r.source === 'conta_azul').reduce((s, r) => s + r.orders_count, 0);
-          const dayLojaOrders = Math.max(0, dayCaOrders - dayNsOrders);
-          const dayTotalOrders = dayCaOrders; // = loja + NS
-          const dayTotalRevenue = d.nuvemshop + d.conta_azul; // already = loja + NS
-          return {
-            day: d.day,
-            avg_ticket: dayTotalOrders > 0 ? dayTotalRevenue / dayTotalOrders : 0,
-            avg_ticket_nuvemshop: dayNsOrders > 0 ? d.nuvemshop / dayNsOrders : undefined,
-            avg_ticket_conta_azul: dayLojaOrders > 0 ? d.conta_azul / dayLojaOrders : undefined,
-          };
-        })}
+        data={(() => {
+          const ordersByDay = new Map<string, { ca: number; ns: number }>();
+          for (const r of currentRevenue) {
+            const existing = ordersByDay.get(r.day) ?? { ca: 0, ns: 0 };
+            if (r.source === 'conta_azul') existing.ca += r.orders_count;
+            if (r.source === 'nuvemshop') existing.ns += r.orders_count;
+            ordersByDay.set(r.day, existing);
+          }
+          return chartData.map(d => {
+            const orders = ordersByDay.get(d.day) ?? { ca: 0, ns: 0 };
+            const lojaOrders = Math.max(0, orders.ca - orders.ns);
+            const totalOrders = orders.ca;
+            const totalRevenue = d.nuvemshop + d.conta_azul;
+            return {
+              day: d.day,
+              avg_ticket: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+              avg_ticket_nuvemshop: orders.ns > 0 ? d.nuvemshop / orders.ns : undefined,
+              avg_ticket_conta_azul: lojaOrders > 0 ? d.conta_azul / lojaOrders : undefined,
+            };
+          });
+        })()}
       />
 
       {/* Recurrence */}

@@ -36,7 +36,7 @@ interface Props {
 }
 
 const SORTABLE_TH =
-  'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200';
+  'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400';
 
 export function CreativeRankingTable({ title, subtitle, rows, showPurchases = true }: Props) {
   const { sortedRows, requestSort, getSortIndicator } = useSortableTable(
@@ -206,6 +206,9 @@ function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
         <div
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 cursor-pointer"
           onClick={() => setZoomed(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setZoomed(false); }}
+          role="dialog"
+          aria-label="Imagem ampliada do criativo"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

@@ -25,7 +25,7 @@ export function KpiCard({ title, value, subtitle, change }: KpiCardProps) {
       </div>
       <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">{value}</p>
       {subtitle && (
-        <p className="mt-1 text-sm text-gray-400">{subtitle}</p>
+        <p className="mt-1 text-sm text-gray-400 dark:text-gray-300">{subtitle}</p>
       )}
     </div>
   );
