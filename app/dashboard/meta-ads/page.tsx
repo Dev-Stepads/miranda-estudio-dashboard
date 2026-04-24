@@ -35,13 +35,14 @@ export default async function MetaAdsPage({
   const vendasCampaigns = campaignRanking.filter(c => c.campaign_type === 'vendas');
   const lojaCampaigns = campaignRanking.filter(c => c.campaign_type === 'loja');
 
-  // Separate ads by campaign type
-  const vendasAdIds = new Set(vendasCampaigns.map(c => c.campaign_id));
-  const vendasAds = adRanking.filter(a => {
-    const campId = campaignRanking.find(c => c.campaign_name === a.campaign_name)?.campaign_id;
-    return campId ? vendasAdIds.has(campId) : classifyCampaign(a.campaign_name) === 'vendas';
-  });
-  const lojaAds = adRanking.filter(a => !vendasAds.includes(a));
+  // Separate ads by campaign type using ad_id Set for reliable filtering
+  const vendasCampaignIds = new Set(vendasCampaigns.map(c => c.campaign_id));
+  const vendasAds: typeof adRanking = [];
+  const lojaAds: typeof adRanking = [];
+  for (const a of adRanking) {
+    const isVendas = vendasCampaignIds.has(a.campaign_id) || classifyCampaign(a.campaign_name) === 'vendas';
+    (isVendas ? vendasAds : lojaAds).push(a);
+  }
 
   // ---- KPIs Vendas ----
   const vendasSpend = vendasCampaigns.reduce((s, c) => s + c.total_spend, 0);
@@ -91,13 +92,13 @@ export default async function MetaAdsPage({
         />
         <KpiCard
           title="ROAS Geral"
-          value={`${totalRoas.toFixed(2)}x`}
-          subtitle={totalRoas > 1 ? 'retorno positivo' : 'retorno abaixo do investido'}
+          value={totalRoas > 0 ? `${totalRoas.toFixed(2)}x` : '—'}
+          subtitle={totalRoas > 1 ? 'retorno positivo' : totalRoas > 0 ? 'retorno abaixo do investido' : 'sem compras no periodo'}
         />
         <KpiCard
           title="Split Investimento"
-          value={`${vendasSpend > 0 && totalSpend > 0 ? ((vendasSpend / totalSpend) * 100).toFixed(0) : 0}% vendas`}
-          subtitle={`${lojaSpend > 0 && totalSpend > 0 ? ((lojaSpend / totalSpend) * 100).toFixed(0) : 0}% loja/branding`}
+          value={totalSpend > 0 ? `${((vendasSpend / totalSpend) * 100).toFixed(0)}% vendas` : '—'}
+          subtitle={totalSpend > 0 ? `${((lojaSpend / totalSpend) * 100).toFixed(0)}% loja/branding` : 'sem investimento'}
         />
       </section>
 

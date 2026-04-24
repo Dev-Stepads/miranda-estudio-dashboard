@@ -515,3 +515,40 @@ ETAPA 9 — DIVIDA TECNICA / BLOQUEIOS PRE-PRODUCAO
 
 [x] T80 Flash de dark mode prevenido — 2026-04-23
          Inline script no <head> aplica classe dark antes do body.
+
+--------------------------------------------------------
+ETAPA 10 — FASES 5-8 (sessao 2026-04-24b Matheus)
+--------------------------------------------------------
+
+[x] T81 Fix cron GitHub Actions — 2026-04-24
+         Raw tables tinham unique indexes parciais incompativeis com
+         PostgREST ON CONFLICT. Migration converte para constraints.
+         Cron restaurado e funcionando.
+
+[x] T82 Fase 5: aba Comportamento + melhorias Nuvemshop — 2026-04-24
+         - Nova aba Comportamento com funil de conversao, etapas de
+           abandono e produtos mais abandonados
+         - Top Cidades com nome da cidade + paginacao (50 cidades)
+         - Carrinhos Abandonados ampliado (200 registros, pageSize 20)
+         - Removido box Top Clientes Empresas da Nuvemshop
+         - Dados incompletos tratados com fallback "—"
+
+[x] T83 Fase 6: melhorias Top Clientes — 2026-04-24
+         - Coluna Origem (Nuvemshop / Loja Fisica / Ambos) na Visao Geral
+         - Coluna Ticket Medio ordenavel em todas as abas
+         - Clientes genericos filtrados (Consumidor Final, 5011 vendas)
+         - Origem removida de abas especificas (redundante)
+
+[x] T84 Fase 7: reestruturacao Meta Ads — 2026-04-24
+         - Separacao em 2 blocos: Vendas (ROAS/CPA/compras) e
+           Loja/Branding (alcance/impressoes/CPM)
+         - Classificacao por nome da campanha (sem campo objective)
+         - Nomenclatura limpa (prefixos removidos, posts truncados)
+         - Zoom/lightbox ao clicar thumbnail do criativo
+         - Criativos de loja sem colunas Compras/Receita/ROAS
+
+[x] T85 Fase 8: auditoria final — 2026-04-24
+         - ROAS Geral mostra "—" quando 0 (era "0.00x")
+         - Split Investimento mostra "—" quando sem dados
+         - Fix filtro de ads vendas/loja (includes → Set)
+         - TypeScript 0 erros, 184 testes, build limpo

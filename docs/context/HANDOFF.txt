@@ -4,7 +4,7 @@ HANDOFF — Dashboard Miranda Studio
 
 PROJETO: Dashboard Miranda Studio
 DATA: 2026-04-24
-RESPONSAVEL: sessao 2026-04-23/24 — Angelo + Claude
+RESPONSAVEL: sessao 2026-04-24b — Matheus + Claude
 BRANCH: main
 
 ========================================================
@@ -14,6 +14,15 @@ LEIA ISTO PRIMEIRO — RESUMO PRA QUEM ESTA ASSUMINDO
 O DASHBOARD ESTA EM PRODUCAO E PASSOU POR AUDITORIA COMPLETA.
 URL: https://miranda-estudio-dashboard.vercel.app
 Login: mirandaestudio / DashMiranda@14
+
+SESSAO 2026-04-24b (Matheus + Claude) — Fases 5-8:
+  - Fix cron GitHub Actions (raw table constraints)
+  - Fase 5: aba Comportamento (funil conversao) + melhorias Nuvemshop
+  - Fase 6: origem + ticket medio + filtro generico em Top Clientes
+  - Fase 7: reestruturacao Meta Ads (vendas vs loja) + zoom criativos
+  - Fase 8: auditoria final + correcoes de qualidade
+  - QA formal T36-T42 marcada como concluida
+  - gh CLI instalado e autenticado (Dev-Stepads)
 
 SESSAO 2026-04-23/24 (Angelo):
   - Auditoria completa do codebase: 41 problemas encontrados, 39 corrigidos

@@ -1,7 +1,7 @@
 ========================================================
 STATUS ATUAL — Dashboard Miranda Studio
 ========================================================
-Ultima atualizacao: 2026-04-23 (sessao 2026-04-23c: T53-T80 — 31 fixes em 6 rodadas de auditoria: seguranca, resiliencia ETL, dark mode, mobile, acessibilidade, rate-limit Meta)
+Ultima atualizacao: 2026-04-24 (sessao 2026-04-24b Matheus: Fases 5-8 — aba Comportamento, melhorias Nuvemshop/Top Clientes/Meta Ads, auditoria final)
 
 --------------------------------------------------------
 ETAPA ATUAL
