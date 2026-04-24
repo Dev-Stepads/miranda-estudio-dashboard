@@ -1,103 +1,113 @@
 ========================================================
-PENDENCIAS — Fase 4 (Categorias e Parceiros)
+PENDENCIAS — Dashboard Miranda Studio
 ========================================================
-Data: 2026-04-24
-Status: PARCIALMENTE IMPLEMENTADO
-
-O que FOI implementado:
-  - Categorias da Nuvemshop (CASA, CORPO, PAPELARIA)
-  - Coluna `category` em products e sale_items
-  - ETL sincroniza categorias automaticamente
-  - KPI cards por categoria na aba Nuvemshop
-  - Badge de categoria na tabela de produtos
+Data: 2026-04-24 (atualizado pos-Fases 5-8)
+Status: DASHBOARD EM PRODUCAO — pendencias abaixo requerem
+        informacao da Miranda/Lana ou acao operacional humana
 
 ========================================================
-PENDENCIAS (requerem informacao da Miranda)
+RESUMO DO QUE FOI IMPLEMENTADO (Fases 1-8)
+========================================================
+
+  Dashboard completo com 5 abas:
+  - Visao Geral: KPIs consolidados CA+NS, comparativo mensal,
+    recorrencia, top clientes com origem e ticket medio
+  - Nuvemshop: faturamento, categorias (Casa/Corpo/Papelaria),
+    top cidades com nome, carrinhos abandonados ampliados
+  - Loja Fisica: faturamento, produtos, top clientes
+  - Meta Ads: separado em Vendas (ROAS/CPA) e Loja (alcance/CPM),
+    zoom em criativos, nomenclatura limpa
+  - Comportamento: funil de conversao, etapas de abandono,
+    produtos mais abandonados
+
+  ETL: 3 fontes sincronizadas a cada 30 min via GitHub Actions
+  Dados: 42 meses validados (2023-2026), 18.473 vendas
+  Testes: 184 passando, TypeScript 0 erros, build limpo
+
+========================================================
+PENDENCIAS QUE DEPENDEM DA MIRANDA / LANA
 ========================================================
 
 1. CATEGORIAS DO CONTA AZUL
    A API do Conta Azul NAO tem endpoint de categorias de produto.
-   O endpoint /v1/product-categories retorna 404.
-   O endpoint /v1/categorias retorna categorias FINANCEIRAS
-   (despesa/receita), nao categorias de produto.
 
-   OPCOES:
-   a) Mapeamento manual por nome de produto (fragil)
-   b) Miranda cadastrar categorias no Conta Azul (se possivel)
-   c) Deixar produtos CA sem categoria (atual)
-
-   PARA RESOLVER: perguntar a Miranda como ela categoriza
-   produtos da loja fisica hoje.
+   PERGUNTAR A MIRANDA:
+   a) Como voce categoriza os produtos da loja fisica hoje?
+   b) Seria possivel nos passar uma lista de produtos com
+      suas categorias para mapearmos manualmente?
+   c) Ou prefere deixar produtos da loja sem categoria?
 
 2. PARCEIROS / MORADA
    Nao existe categoria "Parceiros" ou "Morada" em nenhuma API.
-   Nao ficou claro como identificar vendas de parceiros:
-   - Eh pelo nome do cliente? (ex: "Morada" como cliente)
-   - Eh pelo nome do produto?
-   - Eh por um campo especifico na venda?
 
-   PARA RESOLVER: perguntar a Miranda:
-   a) Como ela identifica vendas do Morada no Conta Azul?
+   PERGUNTAR A MIRANDA:
+   a) Como identifica vendas do Morada no Conta Azul?
+      (pelo nome do cliente? nome do produto? campo especifico?)
    b) Os produtos do Morada tem algum nome padrao?
    c) O 37% eh fixo para todos os parceiros ou so Morada?
 
 3. REGRA DOS 37%
    Miranda quer que apenas 37% do faturamento de parceiros
-   conte como receita real. Precisa definir:
-   - Quais produtos/vendas sao de parceiros
-   - Se o 37% eh sobre gross_revenue ou net_revenue
-   - Se outros parceiros alem do Morada existem ou podem existir
+   conte como receita real.
+
+   PERGUNTAR A MIRANDA:
+   a) Quais produtos/vendas sao de parceiros?
+   b) O 37% eh sobre valor bruto ou liquido?
+   c) Existem outros parceiros alem do Morada?
 
 4. VALOR FIXO MENSAL DE PARCEIROS
    Miranda mencionou R$ 1.000/mes do Morada.
-   Precisa definir:
-   - Esse valor eh fixo ou varia por mes?
-   - Vem de algum dado no sistema ou eh manual?
-   - Como deve ser exibido no dashboard?
 
-   Se for manual, sugestao: criar uma tabela `partner_config`
-   com colunas (partner_name, monthly_fixed_value, revenue_pct)
-   que a Miranda pode editar.
+   PERGUNTAR A MIRANDA:
+   a) Esse valor eh fixo ou varia por mes?
+   b) Vem de algum dado no sistema ou eh manual?
+   c) Como deve ser exibido no dashboard?
 
 5. PAPELARIA — DECIDIDO (2026-04-24)
-   A Nuvemshop tem uma categoria PAPELARIA (Agendas, Moleskines,
-   Cartoes, Tatuagens) que nao foi mencionada pela Miranda.
-   DECISAO: manter como categoria separada por ora. Na proxima
-   apresentacao para a Miranda, confirmar se permanece assim,
-   agrupa com outra categoria, ou remove.
+   Mantida como categoria separada (Casa, Corpo, Papelaria).
+   Na apresentacao para a Miranda, confirmar se permanece assim.
 
-6. FAIXA ETARIA NO CHECKOUT NUVEMSHOP (Gate N#2)
-   O dashboard poderia ter analise por faixa etaria (18-24, 25-34,
-   etc.) na aba Nuvemshop, mas a Nuvemshop NAO tem campo nativo
-   de data de nascimento. Para ter esse dado, a Miranda precisaria
-   criar um campo personalizado no painel da Nuvemshop:
-     Configuracoes > Checkout > Campos adicionais > "Data de nascimento"
+6. FAIXA ETARIA NO CHECKOUT NUVEMSHOP
+   Para ter analise por faixa etaria, a Miranda precisaria
+   criar campo "Data de nascimento" no checkout da Nuvemshop:
+     Configuracoes > Checkout > Campos adicionais
 
-   IMPORTANTE: mesmo que configure agora, so afeta clientes NOVOS
-   a partir da ativacao. Historico nao tera esse dado.
+   PERGUNTAR A MIRANDA:
+   a) Ja tem esse campo configurado?
+   b) Quer configurar? (so pega clientes novos)
+   c) Prefere tirar do escopo?
 
-   PARA RESOLVER: perguntar a Miranda:
-   a) Ja tem campo de birthday configurado no checkout?
-   b) Quer configurar? (sabendo que so pega clientes novos)
-   c) Prefere tirar analise por faixa etaria do escopo?
+7. CLASSIFICACAO DE CAMPANHAS META ADS
+   Implementamos separacao Vendas vs Loja por nome da campanha:
+   - "Compras/Advantage+" = Vendas
+   - "Post Instagram/Engajamento/Mensagens" = Loja
 
-7. SEGUNDO ADMIN NA APP MARKETING DO FACEBOOK
-   A app "Miranda Dashboard ETL" no developers.facebook.com foi
-   criada sob a conta FB do Angelo Meirelles (porque dev@stepads
-   foi rejeitada pelo Facebook). O token do System User funciona
-   independente da conta que criou a app, mas se a conta do Angelo
-   for perdida (ban, exclusao, saida da empresa), perde-se o
-   controle administrativo da app (nao da pra regenerar app_secret,
-   editar configuracoes, submeter App Review).
+   CONFIRMAR COM MIRANDA/LANA:
+   a) Essa logica esta correta?
+   b) Existem campanhas que ficariam no grupo errado?
+   c) Querem renomear os blocos?
 
-   NAO EH URGENTE — o ETL continua funcionando normalmente.
-   Mas eh bom resolver para evitar risco futuro.
+========================================================
+PENDENCIAS OPERACIONAIS (acao humana)
+========================================================
 
-   PARA RESOLVER:
-   a) Acessar developers.facebook.com > Miranda Dashboard ETL
-   b) Configuracoes > Basico > Funcoes do app > Administradores
-   c) Adicionar uma segunda conta FB (Matheus ou outro membro)
-   Tempo estimado: ~5 minutos de UI.
+8. COFRE DE SENHAS (T46) — URGENCIA ALTA
+   Criar item no 1Password ou Bitwarden com conteudo do .env.local.
+   Sem isso, revezamento nao funciona com seguranca.
+   Tempo: ~15 min.
+
+9. ROTACAO DE SECRETS (T47) — URGENCIA MEDIA
+   3 secrets passaram pelo chat e devem ser rotacionados:
+   a) META_APP_SECRET — developers.facebook.com > App > Basico
+   b) META_SYSTEM_USER_TOKEN — business.facebook.com > BM > System Users
+   c) GitHub PAT — github.com/settings/tokens (revogar o de 2026-04-16)
+   Apos rotacionar: atualizar .env.local, cofre, GitHub Secrets, Vercel.
+   Tempo: ~30 min.
+
+10. SEGUNDO ADMIN NA APP FACEBOOK — URGENCIA BAIXA
+    Adicionar segunda conta FB como admin da app Marketing em
+    developers.facebook.com para mitigar risco de ownership.
+    Tempo: ~5 min.
 
 ========================================================
 ONDE AJUSTAR QUANDO TIVER AS RESPOSTAS
@@ -119,3 +129,11 @@ Valor fixo mensal:
 Categorias CA:
   - src/etl/conta-azul/sync.ts (adicionar category ao item)
   - Mapeamento manual em arquivo de configuracao
+
+Classificacao campanhas Meta:
+  - app/lib/queries.ts > classifyCampaign() (alterar regex)
+
+Faixa etaria:
+  - src/etl/nuvemshop/sync.ts (extrair birthday do checkout)
+  - app/lib/queries.ts (nova funcao fetchAgeDistribution)
+  - app/dashboard/nuvemshop/ (novo componente de faixa etaria)
